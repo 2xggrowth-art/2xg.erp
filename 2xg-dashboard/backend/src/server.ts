@@ -9,6 +9,14 @@ import erpRoutes from './routes/erp.routes';
 import logisticsRoutes from './routes/logistics.routes';
 import careRoutes from './routes/care.routes';
 import crmRoutes from './routes/crm.routes';
+import itemsRoutes from './routes/items.routes';
+import purchasesRoutes from './routes/purchases.routes';
+import salesRoutes from './routes/sales.routes';
+import expensesRoutes from './routes/expenses.routes';
+import tasksRoutes from './routes/tasks.routes';
+import reportsRoutes from './routes/reports.routes';
+import searchRoutes from './routes/search.routes';
+import aiInsightsRoutes from './routes/ai-insights.routes';
 
 // Load environment variables
 dotenv.config();
@@ -40,6 +48,14 @@ app.use('/api/erp', erpRoutes);
 app.use('/api/logistics', logisticsRoutes);
 app.use('/api/care', careRoutes);
 app.use('/api/crm', crmRoutes);
+app.use('/api/items', itemsRoutes);
+app.use('/api/purchases', purchasesRoutes);
+app.use('/api/sales', salesRoutes);
+app.use('/api/expenses', expensesRoutes);
+app.use('/api/tasks', tasksRoutes);
+app.use('/api/reports', reportsRoutes);
+app.use('/api/search', searchRoutes);
+app.use('/api/ai', aiInsightsRoutes);
 
 // 404 handler
 app.use((req: Request, res: Response) => {
