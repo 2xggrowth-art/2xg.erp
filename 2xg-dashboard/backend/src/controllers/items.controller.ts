@@ -38,3 +38,45 @@ export const getTopSellingItems = async (req: Request, res: Response) => {
     res.status(500).json({ success: false, error: error.message });
   }
 };
+
+export const getItemById = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const item = await itemsService.getItemById(id);
+    res.json({ success: true, data: item });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+};
+
+export const createItem = async (req: Request, res: Response) => {
+  try {
+    console.log('Creating item with data:', req.body);
+    const item = await itemsService.createItem(req.body);
+    console.log('Item created successfully:', item);
+    res.status(201).json({ success: true, data: item });
+  } catch (error: any) {
+    console.error('Error creating item:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+};
+
+export const updateItem = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const item = await itemsService.updateItem(id, req.body);
+    res.json({ success: true, data: item });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+};
+
+export const deleteItem = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const item = await itemsService.deleteItem(id);
+    res.json({ success: true, data: item });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+};

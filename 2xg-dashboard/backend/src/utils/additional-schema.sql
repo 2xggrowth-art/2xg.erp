@@ -20,11 +20,18 @@ CREATE TABLE IF NOT EXISTS items (
   barcode TEXT,
   supplier_id UUID,
   manufacturer TEXT,
+  brand TEXT,
   weight DECIMAL(10, 2),
   dimensions TEXT,
   is_active BOOLEAN DEFAULT TRUE,
   tax_rate DECIMAL(5, 2) DEFAULT 0,
   image_url TEXT,
+  hsn_code TEXT,
+  upc TEXT,
+  mpn TEXT,
+  ean TEXT,
+  isbn TEXT,
+  is_returnable BOOLEAN DEFAULT FALSE,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );

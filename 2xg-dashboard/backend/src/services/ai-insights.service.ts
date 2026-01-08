@@ -83,10 +83,11 @@ export class AIInsightsService {
 
     if (error) throw error;
 
-    const moduleMap = new Map<string, { module: string; predictions: any[] }>();
+    type PredictionType = { metric: any; value: any };
+    const moduleMap = new Map<string, { module: string; predictions: PredictionType[] }>();
 
     data.forEach((prediction: any) => {
-      const existing = moduleMap.get(prediction.module) || { module: prediction.module, predictions: [] };
+      const existing = moduleMap.get(prediction.module) || { module: prediction.module, predictions: [] as PredictionType[] };
       existing.predictions.push({
         metric: prediction.metric_name,
         value: prediction.predicted_value
