@@ -259,3 +259,4 @@ ON CONFLICT DO NOTHING;
 -- FROM information_schema.columns
 -- WHERE table_name = 'purchase_orders'
 -- ORDER BY ordinal_position;
+ 

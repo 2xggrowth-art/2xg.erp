@@ -1,7 +1,9 @@
-import { FileText, Package, Truck, CheckCircle, XCircle, Plus, ClipboardCheck } from 'lucide-react';
+import { FileText, Package, Truck, CheckCircle, Plus, ClipboardCheck } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import ProcessFlow from '../components/common/ProcessFlow';
 
 const TransferOrderPage = () => {
+  const navigate = useNavigate();
   const transferOrderSteps = [
     {
       icon: FileText,
@@ -42,7 +44,10 @@ const TransferOrderPage = () => {
               Transfer inventory between warehouses and locations.
             </p>
           </div>
-          <button className="flex items-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors shadow-md">
+          <button
+            onClick={() => navigate('/inventory/transfer-orders/new')}
+            className="flex items-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors shadow-md"
+          >
             <Plus size={20} />
             <span className="font-medium">New Transfer Order</span>
           </button>
@@ -56,7 +61,10 @@ const TransferOrderPage = () => {
           <p className="text-slate-600 mb-6">
             Transfer inventory between warehouses and track shipments.
           </p>
-          <button className="px-8 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium shadow-md">
+          <button
+            onClick={() => navigate('/inventory/transfer-orders/new')}
+            className="px-8 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium shadow-md"
+          >
             NEW TRANSFER ORDER
           </button>
         </div>

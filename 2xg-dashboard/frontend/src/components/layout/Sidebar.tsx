@@ -21,7 +21,7 @@ import {
   ArrowRightLeft,
   Tag,
   Ruler,
-  Award,
+  
   IndianRupee,
   TrendingUp,
   FileText as FileTax,
@@ -108,7 +108,7 @@ const Sidebar = () => {
                 <span>Stock Count</span>
               </Link>
               <Link
-                to="/items/transfer-order"
+                to="/inventory/transfer-orders"
                 className="flex items-center gap-3 px-6 py-2 pl-12 hover:bg-slate-700 transition-colors text-sm text-slate-300 hover:text-white"
               >
                 <ArrowRightLeft size={16} />
@@ -212,11 +212,11 @@ const Sidebar = () => {
                 <span>Sales</span>
               </Link>
               <Link
-                to="/sales/sales-order"
+                to="/sales/sales-orders"
                 className="flex items-center gap-3 px-6 py-2 pl-12 hover:bg-slate-700 transition-colors text-sm text-slate-300 hover:text-white"
               >
                 <FileEdit size={16} />
-                <span>Sales Order</span>
+                <span>Sales Orders</span>
               </Link>
               <Link
                 to="/sales/invoices"

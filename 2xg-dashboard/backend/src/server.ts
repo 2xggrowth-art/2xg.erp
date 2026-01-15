@@ -13,12 +13,19 @@ import itemsRoutes from './routes/items.routes';
 import purchasesRoutes from './routes/purchases.routes';
 import vendorsRoutes from './routes/vendors.routes';
 import purchaseOrdersRoutes from './routes/purchase-orders.routes';
+import billsRoutes from './routes/bills.routes';
 import salesRoutes from './routes/sales.routes';
 import expensesRoutes from './routes/expenses.routes';
 import tasksRoutes from './routes/tasks.routes';
 import reportsRoutes from './routes/reports.routes';
 import searchRoutes from './routes/search.routes';
 import aiInsightsRoutes from './routes/ai-insights.routes';
+import paymentsRoutes from './routes/payments.routes';
+import vendorCreditsRoutes from './routes/vendor-credits.routes';
+import transferOrdersRoutes from './routes/transfer-orders.routes';
+import invoicesRoutes from './routes/invoices.routes';
+import customersRoutes from './routes/customers.routes';
+import salesOrdersRoutes from './routes/sales-orders.routes';
 
 // Load environment variables
 dotenv.config();
@@ -28,10 +35,33 @@ const PORT = process.env.PORT || 5000;
 
 // Middleware
 app.use(helmet());
+
+// FIXED CORS: This function allows any localhost port automatically
 app.use(cors({
-  origin: process.env.FRONTEND_URL || 'http://localhost:3000',
-  credentials: true
+  origin: function (origin, callback) {
+    // Allow requests with no origin (like mobile apps or curl)
+    if (!origin) return callback(null, true);
+    
+    const allowedOrigins = [
+      'http://localhost:3000',
+      'http://localhost:3001',
+      'http://localhost:3002',
+      'http://localhost:3003',
+      process.env.FRONTEND_URL
+    ];
+
+    // Check if origin is in the list OR is any localhost port
+    if (allowedOrigins.indexOf(origin) !== -1 || origin.startsWith('http://localhost:')) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
 }));
+
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(morgan('dev'));
@@ -54,12 +84,19 @@ app.use('/api/items', itemsRoutes);
 app.use('/api/purchases', purchasesRoutes);
 app.use('/api/vendors', vendorsRoutes);
 app.use('/api/purchase-orders', purchaseOrdersRoutes);
+app.use('/api/bills', billsRoutes);
 app.use('/api/sales', salesRoutes);
 app.use('/api/expenses', expensesRoutes);
 app.use('/api/tasks', tasksRoutes);
 app.use('/api/reports', reportsRoutes);
 app.use('/api/search', searchRoutes);
 app.use('/api/ai', aiInsightsRoutes);
+app.use('/api/payments', paymentsRoutes);
+app.use('/api/vendor-credits', vendorCreditsRoutes);
+app.use('/api/transfer-orders', transferOrdersRoutes);
+app.use('/api/invoices', invoicesRoutes);
+app.use('/api/customers', customersRoutes);
+app.use('/api/sales-orders', salesOrdersRoutes);
 
 // 404 handler
 app.use((req: Request, res: Response) => {
@@ -95,3 +132,4 @@ process.on('SIGINT', () => {
   console.log('SIGINT signal received: closing HTTP server');
   process.exit(0);
 });
+// restart

@@ -13,6 +13,8 @@ import VendorManagementPage from './pages/VendorManagementPage';
 import NewVendorForm from './components/vendors/NewVendorForm';
 import PurchaseOrderPage from './pages/PurchaseOrderPage';
 import NewPurchaseOrderForm from './components/purchase-orders/NewPurchaseOrderForm';
+import BillsPage from './pages/BillsPage';
+import NewBillForm from './components/bills/NewBillForm';
 import SalesPage from './pages/SalesPage';
 import SalesOrderPage from './pages/SalesOrderPage';
 import InvoicesPage from './pages/InvoicesPage';
@@ -21,6 +23,15 @@ import TasksPage from './pages/TasksPage';
 import ReportsPage from './pages/ReportsPage';
 import SearchPage from './pages/SearchPage';
 import AIReportingPage from './pages/AIReportingPage';
+import PaymentMadePage from './pages/PaymentMadePage';
+import NewPaymentForm from './components/payments/NewPaymentForm';
+import VendorCreditsPage from './pages/VendorCreditsPage';
+import NewVendorCreditForm from './components/vendor-credits/NewVendorCreditForm';
+import TransferOrdersPage from './pages/TransferOrdersPage';
+import NewTransferOrderForm from './components/transfer-orders/NewTransferOrderForm';
+import NewInvoiceForm from './components/invoices/NewInvoiceForm';
+import SalesOrdersPage from './pages/SalesOrdersPage';
+import NewSalesOrderForm from './components/sales-orders/NewSalesOrderForm';
 
 function App() {
   return (
@@ -43,13 +54,21 @@ function App() {
             <Route path="/items/stock-count/new" element={<NewStockCountPage />} />
             <Route path="/items/transfer-order" element={<TransferOrderPage />} />
 
+            {/* Transfer Orders Routes (Inventory Module) */}
+            <Route path="/inventory/transfer-orders" element={<TransferOrdersPage />} />
+            <Route path="/inventory/transfer-orders/new" element={<NewTransferOrderForm />} />
+
             {/* Purchase Routes */}
             <Route path="/purchases" element={<PurchasesPage />} />
             <Route path="/purchases/vendor-management" element={<VendorManagementPage />} />
             <Route path="/purchases/po" element={<PurchaseOrderPage />} />
-            <Route path="/purchases/bills" element={<PurchasesPage />} />
-            <Route path="/purchases/payment-made" element={<PurchasesPage />} />
-            <Route path="/purchases/vendor-credits" element={<PurchasesPage />} />
+            <Route path="/purchases/bills" element={<BillsPage />} />
+            <Route path="/purchases/bills/new" element={<NewBillForm />} />
+            <Route path="/purchases/payment-made" element={<PaymentMadePage />} />
+            <Route path="/purchases/payments-made" element={<PaymentMadePage />} />
+            <Route path="/purchases/payments-made/new" element={<NewPaymentForm />} />
+            <Route path="/purchases/vendor-credits" element={<VendorCreditsPage />} />
+            <Route path="/purchases/vendor-credits/new" element={<NewVendorCreditForm />} />
             <Route path="/purchases/ledger-account" element={<PurchasesPage />} />
 
             {/* Vendor Management Routes */}
@@ -64,7 +83,10 @@ function App() {
             <Route path="/sales" element={<SalesPage />} />
             <Route path="/sales/sales" element={<SalesPage />} />
             <Route path="/sales/sales-order" element={<SalesOrderPage />} />
+            <Route path="/sales/sales-orders" element={<SalesOrdersPage />} />
+            <Route path="/sales/sales-orders/new" element={<NewSalesOrderForm />} />
             <Route path="/sales/invoices" element={<InvoicesPage />} />
+            <Route path="/sales/invoices/new" element={<NewInvoiceForm />} />
             <Route path="/sales/payment-received" element={<SalesPage />} />
 
             <Route path="/expenses" element={<ExpensesPage />} />
