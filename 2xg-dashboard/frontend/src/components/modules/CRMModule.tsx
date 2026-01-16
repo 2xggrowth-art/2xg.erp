@@ -27,9 +27,9 @@ const CRMModule = () => {
       ]);
 
       setCrm({
-        leadVolume: leads.data.volume,
-        totalValue: leads.data.totalValue,
-        customers: customers.data.slice(0, 20) // Limit to 20 for display
+        leadVolume: leads.data?.volume || 0,
+        totalValue: leads.data?.totalValue || 0,
+        customers: Array.isArray(customers.data) ? customers.data.slice(0, 20) : [] // Limit to 20 for display
       });
     } catch (error) {
       console.error('Error fetching CRM data:', error);

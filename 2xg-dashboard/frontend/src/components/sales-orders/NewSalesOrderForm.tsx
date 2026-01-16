@@ -120,13 +120,16 @@ const NewSalesOrderForm = () => {
         salesOrdersService.generateSalesOrderNumber()
       ]);
 
-      if (itemsRes.success) {
-        setItems(itemsRes.data || []);
+      const itemsApiResponse = itemsRes.data;
+      if (itemsApiResponse.success && itemsApiResponse.data) {
+        setItems(itemsApiResponse.data);
       }
-      if (salesOrderNumberRes.success) {
+
+      const salesOrderApiResponse = salesOrderNumberRes.data;
+      if (salesOrderApiResponse.success && salesOrderApiResponse.data) {
         setFormData(prev => ({
           ...prev,
-          sales_order_number: salesOrderNumberRes.data.sales_order_number
+          sales_order_number: salesOrderApiResponse.data.sales_order_number
         }));
       }
     } catch (error) {
@@ -283,14 +286,18 @@ const NewSalesOrderForm = () => {
   const handleSubmit = async (status: 'draft' | 'confirmed') => {
     try {
       setLoading(true);
+      console.log('=== SUBMIT STARTED ===');
+      console.log('Status:', status);
 
       if (!formData.customer_name || formData.customer_name.trim() === '') {
         alert('Please enter customer name');
+        setLoading(false);
         return;
       }
 
       if (salesOrderItems.filter(item => item.item_name && item.quantity > 0).length === 0) {
         alert('Please add at least one item');
+        setLoading(false);
         return;
       }
 
@@ -335,7 +342,11 @@ const NewSalesOrderForm = () => {
           }))
       };
 
+      console.log('Sales Order Data to Submit:', salesOrderData);
+
       const response = await salesOrdersService.createSalesOrder(salesOrderData);
+
+      console.log('Response from API:', response);
 
       if (response.success) {
         alert(`Sales Order ${status === 'draft' ? 'saved as draft' : 'confirmed'} successfully!`);
@@ -343,7 +354,12 @@ const NewSalesOrderForm = () => {
       }
     } catch (error: any) {
       console.error('Error creating sales order:', error);
-      alert(error.message || 'Failed to create sales order');
+      console.error('Error response:', error.response);
+      const errorMessage = error.response?.data?.error ||
+                          error.response?.data?.message ||
+                          error.message ||
+                          'Failed to create sales order';
+      alert(errorMessage);
     } finally {
       setLoading(false);
     }

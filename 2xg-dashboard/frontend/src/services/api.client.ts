@@ -1,5 +1,12 @@
 import axios from 'axios';
 
+export interface APIResponse<T> {
+  success: boolean;
+  data?: T;
+  error?: string;
+  message?: string;
+}
+
 const apiClient = axios.create({
   baseURL: import.meta.env.VITE_API_URL || 'http://localhost:5002/api',
   headers: {
@@ -8,9 +15,9 @@ const apiClient = axios.create({
   timeout: 10000
 });
 
-// Response interceptor to extract data
+// Response interceptor for error handling
 apiClient.interceptors.response.use(
-  (response) => response.data,
+  (response) => response,
   (error) => {
     console.error('API Error:', error);
     return Promise.reject(error);

@@ -140,8 +140,9 @@ const NewInvoiceForm = () => {
   const fetchCustomers = async () => {
     try {
       const response = await customersService.getAllCustomers({ isActive: true });
-      if (response.success && response.data) {
-        setCustomers(response.data);
+      const apiResponse = response.data;
+      if (apiResponse.success && apiResponse.data) {
+        setCustomers(apiResponse.data);
       }
     } catch (error) {
       console.error('Error fetching customers:', error);
@@ -151,8 +152,9 @@ const NewInvoiceForm = () => {
   const fetchItems = async () => {
     try {
       const response = await itemsService.getAllItems({ isActive: true });
-      if (response.success && response.data) {
-        setItems(response.data);
+      const apiResponse = response.data;
+      if (apiResponse.success && apiResponse.data) {
+        setItems(apiResponse.data);
       }
     } catch (error) {
       console.error('Error fetching items:', error);

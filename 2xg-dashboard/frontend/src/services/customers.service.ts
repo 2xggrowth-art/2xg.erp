@@ -1,128 +1,82 @@
-import axios from 'axios';
-
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5002/api';
+import apiClient, { APIResponse } from './api.client';
+import { AxiosPromise } from 'axios';
 
 export interface Customer {
   id: string;
   customer_name: string;
   company_name?: string;
+  contact_person?: string;
   email?: string;
   phone?: string;
   mobile?: string;
-  billing_address?: string;
-  billing_city?: string;
-  billing_state?: string;
-  billing_country?: string;
-  billing_pincode?: string;
-  shipping_address?: string;
-  shipping_city?: string;
-  shipping_state?: string;
-  shipping_country?: string;
-  shipping_pincode?: string;
+  work_phone?: string;
+  address?: string;
+  city?: string;
+  state?: string;
+  country?: string;
+  postal_code?: string;
+  gst_treatment?: string;
+  gstin?: string;
+  pan?: string;
+  source_of_supply?: string;
   payment_terms?: string;
+  currency?: string;
   credit_limit?: number;
-  tax_treatment?: string;
-  tax_id?: string;
-  is_active?: boolean;
+  current_balance?: number;
+  rating?: number;
+  is_active: boolean;
   notes?: string;
-  created_at?: string;
-  updated_at?: string;
+  created_at: string;
+  updated_at: string;
 }
 
-export interface CustomerFilters {
-  isActive?: boolean;
-  search?: string;
+export interface CreateCustomerData {
+  salutation?: string;
+  first_name?: string;
+  last_name?: string;
+  company_name?: string;
+  display_name: string;
+  email?: string;
+  work_phone?: string;
+  mobile?: string;
+  gst_treatment?: string;
+  source_of_supply?: string;
+  gstin?: string;
+  pan?: string;
+  currency?: string;
+  payment_terms?: string;
+  address?: string;
+  city?: string;
+  state?: string;
+  country?: string;
+  postal_code?: string;
+  notes?: string;
 }
 
-class CustomersService {
-  async getAllCustomers(filters?: CustomerFilters) {
-    try {
-      const params = new URLSearchParams();
-      if (filters?.isActive !== undefined) params.append('isActive', filters.isActive.toString());
-      if (filters?.search) params.append('search', filters.search);
+export const customersService = {
+  getAllCustomers: (filters?: {
+    isActive?: boolean;
+    search?: string;
+  }): AxiosPromise<APIResponse<Customer[]>> =>
+    apiClient.get('/customers', { params: filters }),
 
-      const response = await axios.get(`${API_BASE_URL}/customers?${params.toString()}`);
-      const result = response.data.data || response.data;
-      return {
-        success: true,
-        data: result.customers || result,
-        message: 'Customers retrieved successfully'
-      };
-    } catch (error: any) {
-      console.error('Error fetching customers:', error);
-      return {
-        success: false,
-        data: null,
-        message: error.response?.data?.message || 'Failed to fetch customers'
-      };
-    }
-  }
+  getCustomerById: (id: string): AxiosPromise<APIResponse<Customer>> =>
+    apiClient.get(`/customers/${id}`),
 
-  async getCustomerById(id: string) {
-    try {
-      const response = await axios.get(`${API_BASE_URL}/customers/${id}`);
-      return {
-        success: true,
-        data: response.data.data || response.data,
-        message: 'Customer retrieved successfully'
-      };
-    } catch (error: any) {
-      console.error('Error fetching customer:', error);
-      return {
-        success: false,
-        data: null,
-        message: error.response?.data?.message || 'Failed to fetch customer'
-      };
-    }
-  }
+  createCustomer: (customerData: CreateCustomerData): AxiosPromise<APIResponse<Customer>> =>
+    apiClient.post('/customers', customerData),
 
-  async createCustomer(customerData: Partial<Customer>) {
-    try {
-      const response = await axios.post(`${API_BASE_URL}/customers`, customerData);
-      return {
-        success: true,
-        data: response.data.data || response.data,
-        message: 'Customer created successfully'
-      };
-    } catch (error: any) {
-      console.error('Error creating customer:', error);
-      throw new Error(error.response?.data?.message || 'Failed to create customer');
-    }
-  }
+  updateCustomer: (id: string, customerData: Partial<CreateCustomerData>): AxiosPromise<APIResponse<Customer>> =>
+    apiClient.put(`/customers/${id}`, customerData),
 
-  async updateCustomer(id: string, customerData: Partial<Customer>) {
-    try {
-      const response = await axios.put(`${API_BASE_URL}/customers/${id}`, customerData);
-      return {
-        success: true,
-        data: response.data.data || response.data,
-        message: 'Customer updated successfully'
-      };
-    } catch (error: any) {
-      console.error('Error updating customer:', error);
-      return {
-        success: false,
-        data: null,
-        message: error.response?.data?.message || 'Failed to update customer'
-      };
-    }
-  }
+  deleteCustomer: (id: string): AxiosPromise<APIResponse<Customer>> =>
+    apiClient.delete(`/customers/${id}`),
 
-  async deleteCustomer(id: string) {
-    try {
-      await axios.delete(`${API_BASE_URL}/customers/${id}`);
-      return {
-        success: true,
-        message: 'Customer deleted successfully'
-      };
-    } catch (error: any) {
-      console.error('Error deleting customer:', error);
-      return {
-        success: false,
-        message: error.response?.data?.message || 'Failed to delete customer'
-      };
-    }
-  }
-}
-
-export const customersService = new CustomersService();
+  getCustomersSummary: (): AxiosPromise<APIResponse<{
+    totalCustomers: number;
+    activeCustomers: number;
+    totalReceivables: number;
+    currency: string;
+  }>> =>
+    apiClient.get('/customers/summary')
+};

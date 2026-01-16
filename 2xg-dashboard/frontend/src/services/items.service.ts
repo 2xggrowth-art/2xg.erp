@@ -1,5 +1,6 @@
 import apiClient from './api.client';
 import { APIResponse } from '../types';
+import { AxiosPromise } from 'axios';
 
 export interface Item {
   id: string;
@@ -73,24 +74,24 @@ export const itemsService = {
     category?: string;
     isActive?: boolean;
     lowStock?: boolean;
-  }): Promise<APIResponse<Item[]>> =>
+  }): AxiosPromise<APIResponse<Item[]>> =>
     apiClient.get('/items', { params: filters }),
 
-  getItemById: (id: string): Promise<APIResponse<Item>> =>
+  getItemById: (id: string): AxiosPromise<APIResponse<Item>> =>
     apiClient.get(`/items/${id}`),
 
-  createItem: (itemData: CreateItemData): Promise<APIResponse<Item>> =>
+  createItem: (itemData: CreateItemData): AxiosPromise<APIResponse<Item>> =>
     apiClient.post('/items', itemData),
 
-  updateItem: (id: string, itemData: Partial<CreateItemData>): Promise<APIResponse<Item>> =>
+  updateItem: (id: string, itemData: Partial<CreateItemData>): AxiosPromise<APIResponse<Item>> =>
     apiClient.put(`/items/${id}`, itemData),
 
-  deleteItem: (id: string): Promise<APIResponse<Item>> =>
+  deleteItem: (id: string): AxiosPromise<APIResponse<Item>> =>
     apiClient.delete(`/items/${id}`),
 
-  getItemsSummary: (): Promise<APIResponse<ItemsSummary>> =>
+  getItemsSummary: (): AxiosPromise<APIResponse<ItemsSummary>> =>
     apiClient.get('/items/summary'),
 
-  getTopSellingItems: (limit?: number): Promise<APIResponse<any[]>> =>
+  getTopSellingItems: (limit?: number): AxiosPromise<APIResponse<any[]>> =>
     apiClient.get('/items/top-selling', { params: { limit } })
 };

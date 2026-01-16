@@ -1,4 +1,5 @@
 import apiClient, { APIResponse } from './api.client';
+import { AxiosPromise } from 'axios';
 
 export interface Vendor {
   id: string;
@@ -56,22 +57,22 @@ export const vendorsService = {
   getAllVendors: (filters?: {
     isActive?: boolean;
     search?: string;
-  }): Promise<APIResponse<Vendor[]>> =>
+  }): AxiosPromise<APIResponse<Vendor[]>> =>
     apiClient.get('/vendors', { params: filters }),
 
-  getVendorById: (id: string): Promise<APIResponse<Vendor>> =>
+  getVendorById: (id: string): AxiosPromise<APIResponse<Vendor>> =>
     apiClient.get(`/vendors/${id}`),
 
-  createVendor: (vendorData: CreateVendorData): Promise<APIResponse<Vendor>> =>
+  createVendor: (vendorData: CreateVendorData): AxiosPromise<APIResponse<Vendor>> =>
     apiClient.post('/vendors', vendorData),
 
-  updateVendor: (id: string, vendorData: Partial<CreateVendorData>): Promise<APIResponse<Vendor>> =>
+  updateVendor: (id: string, vendorData: Partial<CreateVendorData>): AxiosPromise<APIResponse<Vendor>> =>
     apiClient.put(`/vendors/${id}`, vendorData),
 
-  deleteVendor: (id: string): Promise<APIResponse<Vendor>> =>
+  deleteVendor: (id: string): AxiosPromise<APIResponse<Vendor>> =>
     apiClient.delete(`/vendors/${id}`),
 
-  getVendorsSummary: (): Promise<APIResponse<{
+  getVendorsSummary: (): AxiosPromise<APIResponse<{
     totalVendors: number;
     activeVendors: number;
     totalPayables: number;

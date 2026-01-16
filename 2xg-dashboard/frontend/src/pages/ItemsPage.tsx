@@ -31,9 +31,12 @@ const ItemsPage = () => {
       setError(null);
       const response = await itemsService.getAllItems({ isActive: true });
 
-      if (response.success) {
+      console.log('Items API Response:', response);
+
+      // Axios response structure: response.data = { success: boolean, data: Item[] }
+      if (response.data.success && response.data.data) {
         // Map API response to ItemsPage interface
-        const mappedItems: Item[] = response.data.map((item: ItemType) => ({
+        const mappedItems: Item[] = response.data.data.map((item: ItemType) => ({
           id: item.id,
           name: item.item_name,
           sku: item.sku,

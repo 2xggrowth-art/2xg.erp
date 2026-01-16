@@ -1,11 +1,13 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { ArrowLeft, Package, Save } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { itemsService } from '../../services/items.service';
+import { vendorsService, Vendor } from '../../services/vendors.service';
 
 const NewItemForm = () => {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
+  const [vendors, setVendors] = useState<Vendor[]>([]);
   const [formData, setFormData] = useState({
     type: 'goods',
     name: '',
@@ -46,6 +48,22 @@ const NewItemForm = () => {
     valuationMethod: '',
     reorderPoint: ''
   });
+
+  useEffect(() => {
+    fetchVendors();
+  }, []);
+
+  const fetchVendors = async () => {
+    try {
+      const response = await vendorsService.getAllVendors({ isActive: true });
+      const apiResponse = response.data;
+      if (apiResponse.success && apiResponse.data) {
+        setVendors(apiResponse.data);
+      }
+    } catch (error) {
+      console.error('Error fetching vendors:', error);
+    }
+  };
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value, type } = e.target;
@@ -89,12 +107,14 @@ const NewItemForm = () => {
 
         // Sales Information
         is_sellable: formData.sellable,
+        unit_price: formData.sellingPrice ? parseFloat(formData.sellingPrice) : 0, // Map selling price to unit_price
         selling_price: formData.sellingPrice ? parseFloat(formData.sellingPrice) : undefined,
         sales_account: formData.salesAccount || undefined,
         sales_description: formData.salesDescription || undefined,
 
         // Purchase Information
         is_purchasable: formData.purchasable,
+        cost_price: formData.costPrice ? parseFloat(formData.costPrice) : 0, // Add cost_price mapping
         purchase_account: formData.purchaseAccount || undefined,
         purchase_description: formData.purchaseDescription || undefined,
         preferred_vendor_id: formData.preferredVendor || undefined, // TODO: Convert vendor name to UUID
@@ -106,20 +126,30 @@ const NewItemForm = () => {
         inventory_account: formData.inventoryAccount || undefined,
         valuation_method: formData.valuationMethod || undefined,
         reorder_point: formData.reorderPoint ? parseInt(formData.reorderPoint) : 10,
+        current_stock: 0, // Initialize with 0 stock
       };
+
+      // Log the data being sent for debugging
+      console.log('Sending item data:', itemData);
 
       // Call API to create item
       const response = await itemsService.createItem(itemData);
 
-      if (response.success) {
-        // Navigate to the item detail page
-        navigate(`/items/${response.data.id}`);
+      console.log('API Response:', response);
+
+      // Axios response structure: response.data = { success: boolean, data: Item, error?: string }
+      if (response.data.success && response.data.data) {
+        // Navigate to the items list page
+        navigate('/items');
       } else {
-        alert('Failed to save item. Please try again.');
+        const errorMsg = response.data.error || 'Failed to save item. Please try again.';
+        console.error('Save failed:', errorMsg);
+        alert(errorMsg);
       }
     } catch (error: any) {
       console.error('Error creating item:', error);
-      alert(error.message || 'Failed to save item. Please try again.');
+      const errorMsg = error.response?.data?.error || error.message || 'Failed to save item. Please try again.';
+      alert(errorMsg);
     } finally {
       setLoading(false);
     }
@@ -650,6 +680,11 @@ const NewItemForm = () => {
                         className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                       >
                         <option value="">Select a vendor</option>
+                        {vendors.map(vendor => (
+                          <option key={vendor.id} value={vendor.id}>
+                            {vendor.supplier_name}
+                          </option>
+                        ))}
                       </select>
                     </div>
                   </div>

@@ -33,7 +33,6 @@ import {
   CreditCard,
   Wallet,
   BookOpen,
-  ShoppingBag,
   FileText as Invoice,
   Banknote,
   FilePlus,
@@ -61,7 +60,7 @@ const Sidebar = () => {
   return (
     <aside className="w-64 bg-slate-800 h-screen text-white flex-shrink-0 sticky top-0 flex flex-col">
       <div className="p-6 border-b border-slate-700 flex-shrink-0">
-        <h1 className="text-2xl font-bold">2XG Dashboard</h1>
+        <h1 className="text-2xl font-bold">2XG</h1>
         <p className="text-slate-400 text-sm mt-1">Business Suite</p>
       </div>
       <nav className="mt-6 pb-6 overflow-y-auto flex-1">
@@ -205,11 +204,11 @@ const Sidebar = () => {
           {isSalesOpen && (
             <div className="bg-slate-900">
               <Link
-                to="/sales/sales"
+                to="/sales/customers"
                 className="flex items-center gap-3 px-6 py-2 pl-12 hover:bg-slate-700 transition-colors text-sm text-slate-300 hover:text-white"
               >
-                <ShoppingBag size={16} />
-                <span>Sales</span>
+                <Users size={16} />
+                <span>Customers</span>
               </Link>
               <Link
                 to="/sales/sales-orders"

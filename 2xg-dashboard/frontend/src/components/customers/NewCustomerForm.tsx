@@ -1,9 +1,9 @@
 import { useState } from 'react';
 import { ArrowLeft, User, Save } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { vendorsService } from '../../services/vendors.service';
+import { customersService } from '../../services/customers.service';
 
-const NewVendorForm = () => {
+const NewCustomerForm = () => {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
   const [activeTab, setActiveTab] = useState('other-details');
@@ -57,7 +57,7 @@ const NewVendorForm = () => {
     setLoading(true);
 
     try {
-      const vendorData = {
+      const customerData = {
         salutation: formData.salutation,
         first_name: formData.firstName,
         last_name: formData.lastName,
@@ -80,20 +80,20 @@ const NewVendorForm = () => {
         notes: formData.remarks || undefined
       };
 
-      console.log('Sending vendor data:', vendorData);
-      const response = await vendorsService.createVendor(vendorData);
-      console.log('Vendor API Response:', response);
+      console.log('Sending customer data:', customerData);
+      const response = await customersService.createCustomer(customerData);
+      console.log('Customer API Response:', response);
 
-      // Axios response structure: response.data = { success: boolean, data: Vendor }
+      // Axios response structure: response.data = { success: boolean, data: Customer }
       if (response.data.success && response.data.data) {
-        navigate('/vendor-management');
+        navigate('/sales/customers');
       } else {
-        const errorMsg = response.data.error || 'Failed to create vendor. Please try again.';
+        const errorMsg = response.data.error || 'Failed to create customer. Please try again.';
         alert(errorMsg);
       }
     } catch (error: any) {
-      console.error('Error creating vendor:', error);
-      const errorMsg = error.response?.data?.error || error.message || 'Failed to create vendor. Please try again.';
+      console.error('Error creating customer:', error);
+      const errorMsg = error.response?.data?.error || error.message || 'Failed to create customer. Please try again.';
       alert(errorMsg);
     } finally {
       setLoading(false);
@@ -101,7 +101,7 @@ const NewVendorForm = () => {
   };
 
   const handleCancel = () => {
-    navigate('/vendor-management');
+    navigate('/sales/customers');
   };
 
   return (
@@ -119,7 +119,7 @@ const NewVendorForm = () => {
               </button>
               <div className="flex items-center gap-2">
                 <User className="w-6 h-6 text-blue-600" />
-                <h1 className="text-2xl font-semibold text-gray-800">New Vendor</h1>
+                <h1 className="text-2xl font-semibold text-gray-800">New Customer</h1>
               </div>
             </div>
             <div className="flex items-center gap-3">
@@ -430,7 +430,7 @@ const NewVendorForm = () => {
                           onChange={handleInputChange}
                           className="w-4 h-4 text-blue-600 rounded"
                         />
-                        <span className="text-sm text-gray-700">This vendor is MSME registered</span>
+                        <span className="text-sm text-gray-700">This customer is MSME registered</span>
                       </label>
                     </div>
                   </div>
@@ -630,7 +630,7 @@ const NewVendorForm = () => {
               {activeTab === 'contact-persons' && (
                 <div className="text-center py-8 text-gray-500">
                   <p>Contact persons functionality coming soon</p>
-                  <p className="text-sm mt-2">You can add multiple contact persons for this vendor</p>
+                  <p className="text-sm mt-2">You can add multiple contact persons for this customer</p>
                 </div>
               )}
 
@@ -735,7 +735,7 @@ const NewVendorForm = () => {
                       onChange={handleInputChange}
                       rows={4}
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      placeholder="Add any additional notes about this vendor"
+                      placeholder="Add any additional notes about this customer"
                     />
                   </div>
                 </div>
@@ -765,7 +765,7 @@ const NewVendorForm = () => {
               ) : (
                 <>
                   <Save className="w-4 h-4" />
-                  Save Vendor
+                  Save Customer
                 </>
               )}
             </button>
@@ -776,4 +776,4 @@ const NewVendorForm = () => {
   );
 };
 
-export default NewVendorForm;
+export default NewCustomerForm;

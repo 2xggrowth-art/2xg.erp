@@ -163,8 +163,9 @@ const NewBillForm = () => {
   const fetchVendors = async () => {
     try {
       const response = await vendorsService.getAllVendors({ isActive: true });
-      if (response.success && response.data) {
-        setVendors(response.data);
+      const apiResponse = response.data;
+      if (apiResponse.success && apiResponse.data) {
+        setVendors(apiResponse.data);
       }
     } catch (error) {
       console.error('Error fetching vendors:', error);
@@ -174,8 +175,9 @@ const NewBillForm = () => {
   const fetchItems = async () => {
     try {
       const response = await itemsService.getAllItems({ isActive: true });
-      if (response.success && response.data) {
-        setItems(response.data);
+      const apiResponse = response.data;
+      if (apiResponse.success && apiResponse.data) {
+        setItems(apiResponse.data);
       }
     } catch (error) {
       console.error('Error fetching items:', error);

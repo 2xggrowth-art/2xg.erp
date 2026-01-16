@@ -1,44 +1,44 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Users, Plus, Search } from 'lucide-react';
-import { vendorsService, Vendor } from '../services/vendors.service';
+import { customersService, Customer } from '../services/customers.service';
 
-const VendorManagementPage = () => {
+const CustomerManagementPage = () => {
   const navigate = useNavigate();
-  const [vendors, setVendors] = useState<Vendor[]>([]);
+  const [customers, setCustomers] = useState<Customer[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    fetchVendors();
+    fetchCustomers();
   }, []);
 
-  const fetchVendors = async () => {
+  const fetchCustomers = async () => {
     try {
       setLoading(true);
       setError(null);
-      const response = await vendorsService.getAllVendors({ isActive: true });
+      const response = await customersService.getAllCustomers({ isActive: true });
 
-      console.log('Vendors API Response:', response);
+      console.log('Customers API Response:', response);
 
-      // Axios response structure: response.data = { success: boolean, data: Vendor[] }
+      // Axios response structure: response.data = { success: boolean, data: Customer[] }
       if (response.data.success && response.data.data) {
-        setVendors(response.data.data);
+        setCustomers(response.data.data);
       } else {
-        setError('Failed to load vendors');
+        setError('Failed to load customers');
       }
     } catch (err: any) {
-      console.error('Error fetching vendors:', err);
-      setError(err.message || 'Failed to load vendors');
+      console.error('Error fetching customers:', err);
+      setError(err.message || 'Failed to load customers');
     } finally {
       setLoading(false);
     }
   };
 
-  const filteredVendors = vendors.filter(vendor =>
-    vendor.supplier_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    (vendor.email && vendor.email.toLowerCase().includes(searchQuery.toLowerCase()))
+  const filteredCustomers = customers.filter(customer =>
+    customer.customer_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    (customer.email && customer.email.toLowerCase().includes(searchQuery.toLowerCase()))
   );
 
   return (
@@ -50,14 +50,14 @@ const VendorManagementPage = () => {
             <div className="flex items-center gap-3">
               <Users className="w-8 h-8 text-blue-600" />
               <div>
-                <h1 className="text-2xl font-semibold text-gray-800">All Vendors</h1>
+                <h1 className="text-2xl font-semibold text-gray-800">All Customers</h1>
                 <p className="text-sm text-gray-500 mt-1">
-                  Manage your vendor relationships and payments
+                  Manage your customer relationships and payments
                 </p>
               </div>
             </div>
             <button
-              onClick={() => navigate('/vendor-management/new')}
+              onClick={() => navigate('/sales/customers/new')}
               className="flex items-center gap-2 px-6 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors shadow-sm"
             >
               <Plus className="w-5 h-5" />
@@ -70,7 +70,7 @@ const VendorManagementPage = () => {
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
             <input
               type="text"
-              placeholder="Search vendors..."
+              placeholder="Search customers..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -79,23 +79,23 @@ const VendorManagementPage = () => {
         </div>
       </div>
 
-      {/* Vendors Table */}
+      {/* Customers Table */}
       <div className="flex-1 overflow-auto">
         <div className="p-6">
           {loading ? (
             <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-12 flex items-center justify-center">
               <div className="text-center">
                 <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-                <p className="text-gray-500">Loading vendors...</p>
+                <p className="text-gray-500">Loading customers...</p>
               </div>
             </div>
           ) : error ? (
             <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-12 flex items-center justify-center">
               <div className="text-center text-red-600">
-                <p className="text-lg font-medium mb-2">Error loading vendors</p>
+                <p className="text-lg font-medium mb-2">Error loading customers</p>
                 <p className="text-sm text-gray-600 mb-4">{error}</p>
                 <button
-                  onClick={fetchVendors}
+                  onClick={fetchCustomers}
                   className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
                 >
                   Try Again
@@ -134,48 +134,48 @@ const VendorManagementPage = () => {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-200">
-                  {filteredVendors.length === 0 ? (
+                  {filteredCustomers.length === 0 ? (
                     <tr>
                       <td colSpan={8} className="px-6 py-12 text-center">
                         <div className="flex flex-col items-center justify-center text-gray-400">
                           <Users className="w-12 h-12 mb-3" />
-                          <p className="text-lg font-medium">No vendors found</p>
+                          <p className="text-lg font-medium">No customers found</p>
                           <p className="text-sm mt-1">
-                            {searchQuery ? 'Try a different search term' : 'Click "+ New" to add your first vendor'}
+                            {searchQuery ? 'Try a different search term' : 'Click "+ New" to add your first customer'}
                           </p>
                         </div>
                       </td>
                     </tr>
                   ) : (
-                    filteredVendors.map((vendor) => (
+                    filteredCustomers.map((customer) => (
                       <tr
-                        key={vendor.id}
+                        key={customer.id}
                         className="hover:bg-gray-50 cursor-pointer transition-colors"
-                        onClick={() => navigate(`/vendor-management/${vendor.id}`)}
+                        onClick={() => navigate(`/customer-management/${customer.id}`)}
                       >
                         <td className="px-6 py-4" onClick={(e) => e.stopPropagation()}>
                           <input type="checkbox" className="rounded" />
                         </td>
                         <td className="px-6 py-4">
                           <div className="text-sm font-medium text-blue-600 hover:underline">
-                            {vendor.supplier_name}
+                            {customer.customer_name}
                           </div>
                         </td>
                         <td className="px-6 py-4">
-                          <div className="text-sm text-gray-900">{vendor.company_name || '-'}</div>
+                          <div className="text-sm text-gray-900">{customer.company_name || '-'}</div>
                         </td>
                         <td className="px-6 py-4">
-                          <div className="text-sm text-gray-900">{vendor.email || '-'}</div>
+                          <div className="text-sm text-gray-900">{customer.email || '-'}</div>
                         </td>
                         <td className="px-6 py-4">
-                          <div className="text-sm text-gray-900">{vendor.work_phone || '-'}</div>
+                          <div className="text-sm text-gray-900">{customer.work_phone || '-'}</div>
                         </td>
                         <td className="px-6 py-4">
-                          <div className="text-sm text-gray-900">{vendor.gst_treatment || '-'}</div>
+                          <div className="text-sm text-gray-900">{customer.gst_treatment || '-'}</div>
                         </td>
                         <td className="px-6 py-4 text-right">
                           <div className="text-sm text-gray-900">
-                            Rs {vendor.current_balance?.toFixed(2) || '0.00'}
+                            Rs {customer.current_balance?.toFixed(2) || '0.00'}
                           </div>
                         </td>
                         <td className="px-6 py-4 text-right">
@@ -194,4 +194,4 @@ const VendorManagementPage = () => {
   );
 };
 
-export default VendorManagementPage;
+export default CustomerManagementPage;

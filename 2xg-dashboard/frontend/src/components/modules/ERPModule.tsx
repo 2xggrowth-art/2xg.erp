@@ -32,11 +32,11 @@ const ERPModule = () => {
       ]);
 
       setData({
-        totalSales: sales.data.totalSales,
-        categorySales: categories.data,
-        overdueAmount: overdue.data.amount,
-        hotSelling: hot.data,
-        lowStock: low.data
+        totalSales: sales.data?.totalSales || 0,
+        categorySales: Array.isArray(categories.data) ? categories.data : [],
+        overdueAmount: overdue.data?.amount || 0,
+        hotSelling: Array.isArray(hot.data) ? hot.data : [],
+        lowStock: Array.isArray(low.data) ? low.data : []
       });
     } catch (error) {
       console.error('Error fetching ERP data:', error);
@@ -74,7 +74,7 @@ const ERPModule = () => {
         />
         <MetricCard
           title="Total Sales Value"
-          value={`₹${data.totalSales.toLocaleString('en-IN')}`}
+          value={`₹${(data.totalSales || 0).toLocaleString('en-IN')}`}
           icon={DollarSign}
           colorClass="green"
         />

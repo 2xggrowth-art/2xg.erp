@@ -11,6 +11,8 @@ import TransferOrderPage from './pages/TransferOrderPage';
 import PurchasesPage from './pages/PurchasesPage';
 import VendorManagementPage from './pages/VendorManagementPage';
 import NewVendorForm from './components/vendors/NewVendorForm';
+import CustomerManagementPage from './pages/CustomerManagementPage';
+import NewCustomerForm from './components/customers/NewCustomerForm';
 import PurchaseOrderPage from './pages/PurchaseOrderPage';
 import NewPurchaseOrderForm from './components/purchase-orders/NewPurchaseOrderForm';
 import BillsPage from './pages/BillsPage';
@@ -32,6 +34,11 @@ import NewTransferOrderForm from './components/transfer-orders/NewTransferOrderF
 import NewInvoiceForm from './components/invoices/NewInvoiceForm';
 import SalesOrdersPage from './pages/SalesOrdersPage';
 import NewSalesOrderForm from './components/sales-orders/NewSalesOrderForm';
+import PaymentsReceivedPage from './pages/PaymentsReceivedPage';
+import NewPaymentReceivedForm from './components/payments-received/NewPaymentReceivedForm';
+import DeliveryChallansPage from './pages/DeliveryChallansPage';
+import NewDeliveryChallanForm from './components/delivery-challans/NewDeliveryChallanForm';
+import NewExpenseForm from './components/expenses/NewExpenseForm';
 
 function App() {
   return (
@@ -75,6 +82,10 @@ function App() {
             <Route path="/vendor-management" element={<VendorManagementPage />} />
             <Route path="/vendor-management/new" element={<NewVendorForm />} />
 
+            {/* Customer Management Routes */}
+            <Route path="/sales/customers" element={<CustomerManagementPage />} />
+            <Route path="/sales/customers/new" element={<NewCustomerForm />} />
+
             {/* Purchase Order Routes */}
             <Route path="/purchase-orders" element={<PurchaseOrderPage />} />
             <Route path="/purchase-orders/new" element={<NewPurchaseOrderForm />} />
@@ -87,9 +98,15 @@ function App() {
             <Route path="/sales/sales-orders/new" element={<NewSalesOrderForm />} />
             <Route path="/sales/invoices" element={<InvoicesPage />} />
             <Route path="/sales/invoices/new" element={<NewInvoiceForm />} />
-            <Route path="/sales/payment-received" element={<SalesPage />} />
+            <Route path="/sales/payment-received" element={<PaymentsReceivedPage />} />
+            <Route path="/sales/payment-received/new" element={<NewPaymentReceivedForm />} />
+
+            {/* Delivery Challan Routes (Logistics Module) */}
+            <Route path="/logistics/delivery-challan" element={<DeliveryChallansPage />} />
+            <Route path="/logistics/create-delivery-challan" element={<NewDeliveryChallanForm />} />
 
             <Route path="/expenses" element={<ExpensesPage />} />
+            <Route path="/expenses/new" element={<NewExpenseForm />} />
             <Route path="/tasks" element={<TasksPage />} />
             <Route path="/reports" element={<ReportsPage />} />
             <Route path="/search" element={<SearchPage />} />
