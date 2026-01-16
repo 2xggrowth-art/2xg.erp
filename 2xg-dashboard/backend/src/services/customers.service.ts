@@ -1,18 +1,4 @@
-import { supabaseAdmin as supabase } from '../config/supabase';
-
-export interface CreateCustomerData {
-  customer_name: string;
-  company_name?: string;
-  email?: string;
-  phone?: string;
-  website?: string;
-  billing_address?: string;
-  shipping_address?: string;
-  payment_terms?: string;
-  credit_limit?: number;
-  notes?: string;
-  is_active?: boolean;
-}
+import { supabaseAdmin } from '../config/supabase';
 
 export class CustomersService {
   /**
@@ -21,132 +7,200 @@ export class CustomersService {
   async getAllCustomers(filters?: {
     isActive?: boolean;
     search?: string;
-    page?: number;
-    limit?: number;
   }) {
-    try {
-      let query = supabase
-        .from('customers')
-        .select('*', { count: 'exact' })
-        .order('created_at', { ascending: false });
+    let query = supabaseAdmin
+      .from('customers')
+      .select('*')
+      .order('created_at', { ascending: false });
 
-      // Apply filters
-      if (filters?.isActive !== undefined) {
-        query = query.eq('is_active', filters.isActive);
-      }
-      if (filters?.search) {
-        query = query.or(`customer_name.ilike.%${filters.search}%,email.ilike.%${filters.search}%`);
-      }
-
-      // Apply pagination
-      const page = filters?.page || 1;
-      const limit = filters?.limit || 50;
-      const offset = (page - 1) * limit;
-      query = query.range(offset, offset + limit - 1);
-
-      const { data, error, count } = await query;
-
-      if (error) {
-        throw error;
-      }
-
-      return {
-        customers: data || [],
-        total: count || 0,
-        page,
-        limit
-      };
-    } catch (error) {
-      console.error('Error fetching customers:', error);
-      throw error;
+    if (filters?.isActive !== undefined) {
+      query = query.eq('is_active', filters.isActive);
     }
+
+    if (filters?.search) {
+      query = query.or(`customer_name.ilike.%${filters.search}%,email.ilike.%${filters.search}%`);
+    }
+
+    const { data, error } = await query;
+
+    if (error) throw error;
+    return data;
   }
 
   /**
-   * Get a single customer by ID
+   * Get customer by ID
    */
   async getCustomerById(id: string) {
-    try {
-      const { data, error } = await supabase
-        .from('customers')
-        .select('*')
-        .eq('id', id)
-        .single();
+    const { data, error } = await supabaseAdmin
+      .from('customers')
+      .select('*')
+      .eq('id', id)
+      .single();
 
-      if (error) {
-        throw error;
-      }
+    if (error) throw error;
+    return data;
+  }
 
-      return data;
-    } catch (error) {
-      console.error('Error fetching customer:', error);
-      throw error;
-    }
+  /**
+   * Get customers summary
+   */
+  async getCustomersSummary() {
+    const { data, error } = await supabaseAdmin
+      .from('customers')
+      .select('current_balance, is_active');
+
+    if (error) throw error;
+
+    const totalCustomers = data.length;
+    const activeCustomers = data.filter(customer => customer.is_active).length;
+    const totalReceivables = data.reduce((sum, customer) => sum + (customer.current_balance || 0), 0);
+
+    return {
+      totalCustomers,
+      activeCustomers,
+      totalReceivables,
+      currency: 'INR'
+    };
   }
 
   /**
    * Create a new customer
    */
-  async createCustomer(data: CreateCustomerData) {
-    try {
-      const { data: customer, error } = await supabase
-        .from('customers')
-        .insert([data])
-        .select()
-        .single();
+  async createCustomer(customerData: any) {
+    // Get organization_id (default to first organization)
+    const { data: org } = await supabaseAdmin
+      .from('organizations')
+      .select('id')
+      .limit(1)
+      .single();
 
-      if (error) {
-        throw error;
+    // Build full name for customer_name
+    let customerName = customerData.display_name;
+    if (!customerName) {
+      if (customerData.company_name) {
+        customerName = customerData.company_name;
+      } else if (customerData.first_name || customerData.last_name) {
+        customerName = `${customerData.first_name || ''} ${customerData.last_name || ''}`.trim();
       }
-
-      return customer;
-    } catch (error) {
-      console.error('Error creating customer:', error);
-      throw error;
     }
+
+    // Build contact_person with all info
+    let contactPerson = '';
+    if (customerData.salutation || customerData.first_name || customerData.last_name) {
+      contactPerson = `${customerData.salutation || ''} ${customerData.first_name || ''} ${customerData.last_name || ''}`.trim();
+    }
+    if (customerData.company_name) {
+      contactPerson = contactPerson ? `${contactPerson} (${customerData.company_name})` : customerData.company_name;
+    }
+
+    // Store additional info in notes field
+    let notesText = customerData.notes || '';
+    if (customerData.gst_treatment) {
+      notesText += `\nGST Treatment: ${customerData.gst_treatment}`;
+    }
+    if (customerData.source_of_supply) {
+      notesText += `\nSource of Supply: ${customerData.source_of_supply}`;
+    }
+    if (customerData.pan) {
+      notesText += `\nPAN: ${customerData.pan}`;
+    }
+    if (customerData.currency) {
+      notesText += `\nCurrency: ${customerData.currency}`;
+    }
+    if (customerData.work_phone) {
+      notesText += `\nWork Phone: ${customerData.work_phone}`;
+    }
+    notesText = notesText.trim();
+
+    // Create customer object
+    const newCustomer = {
+      organization_id: org?.id,
+      customer_name: customerName,
+      company_name: customerData.company_name || null,
+      contact_person: contactPerson || null,
+      email: customerData.email || null,
+      phone: customerData.mobile || customerData.work_phone || null,
+      mobile: customerData.mobile || null,
+      work_phone: customerData.work_phone || null,
+      address: customerData.address || null,
+      city: customerData.city || null,
+      state: customerData.state || null,
+      country: customerData.country || null,
+      postal_code: customerData.postal_code || null,
+      gst_treatment: customerData.gst_treatment || null,
+      gstin: customerData.gstin || null,
+      pan: customerData.pan || null,
+      tax_id: customerData.pan || null,
+      source_of_supply: customerData.source_of_supply || null,
+      currency: customerData.currency || 'INR',
+      payment_terms: customerData.payment_terms || 'Due on Receipt',
+      credit_limit: customerData.credit_limit ? parseFloat(customerData.credit_limit) : null,
+      current_balance: 0,
+      is_active: true,
+      notes: notesText || null
+    };
+
+    const { data, error } = await supabaseAdmin
+      .from('customers')
+      .insert(newCustomer)
+      .select()
+      .single();
+
+    if (error) throw error;
+    return data;
   }
 
   /**
    * Update an existing customer
    */
-  async updateCustomer(id: string, data: Partial<CreateCustomerData>) {
-    try {
-      const { data: customer, error } = await supabase
-        .from('customers')
-        .update(data)
-        .eq('id', id)
-        .select()
-        .single();
+  async updateCustomer(id: string, customerData: any) {
+    const updateData: any = {};
 
-      if (error) {
-        throw error;
-      }
-
-      return customer;
-    } catch (error) {
-      console.error('Error updating customer:', error);
-      throw error;
+    if (customerData.display_name) updateData.customer_name = customerData.display_name;
+    if (customerData.company_name !== undefined) updateData.company_name = customerData.company_name;
+    if (customerData.email !== undefined) updateData.email = customerData.email;
+    if (customerData.mobile !== undefined) updateData.mobile = customerData.mobile;
+    if (customerData.work_phone !== undefined) updateData.work_phone = customerData.work_phone;
+    if (customerData.mobile !== undefined || customerData.work_phone !== undefined) {
+      updateData.phone = customerData.mobile || customerData.work_phone;
     }
+    if (customerData.address !== undefined) updateData.address = customerData.address;
+    if (customerData.city !== undefined) updateData.city = customerData.city;
+    if (customerData.state !== undefined) updateData.state = customerData.state;
+    if (customerData.country !== undefined) updateData.country = customerData.country;
+    if (customerData.postal_code !== undefined) updateData.postal_code = customerData.postal_code;
+    if (customerData.gstin !== undefined) updateData.gstin = customerData.gstin;
+    if (customerData.pan !== undefined) {
+      updateData.pan = customerData.pan;
+      updateData.tax_id = customerData.pan;
+    }
+    if (customerData.payment_terms !== undefined) updateData.payment_terms = customerData.payment_terms;
+    if (customerData.notes !== undefined) updateData.notes = customerData.notes;
+
+    const { data, error } = await supabaseAdmin
+      .from('customers')
+      .update(updateData)
+      .eq('id', id)
+      .select()
+      .single();
+
+    if (error) throw error;
+    return data;
   }
 
   /**
-   * Delete a customer
+   * Delete a customer (soft delete by marking as inactive)
    */
   async deleteCustomer(id: string) {
-    try {
-      const { error } = await supabase
-        .from('customers')
-        .delete()
-        .eq('id', id);
+    const { data, error } = await supabaseAdmin
+      .from('customers')
+      .update({ is_active: false })
+      .eq('id', id)
+      .select()
+      .single();
 
-      if (error) {
-        throw error;
-      }
-
-      return { success: true };
-    } catch (error) {
-      console.error('Error deleting customer:', error);
-      throw error;
-    }
+    if (error) throw error;
+    return data;
   }
 }
+

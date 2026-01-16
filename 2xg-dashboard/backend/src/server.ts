@@ -3,6 +3,7 @@ import cors from 'cors';
 import helmet from 'helmet';
 import morgan from 'morgan';
 import dotenv from 'dotenv';
+import path from 'path';
 
 // Import routes
 import erpRoutes from './routes/erp.routes';
@@ -26,6 +27,8 @@ import transferOrdersRoutes from './routes/transfer-orders.routes';
 import invoicesRoutes from './routes/invoices.routes';
 import customersRoutes from './routes/customers.routes';
 import salesOrdersRoutes from './routes/sales-orders.routes';
+import paymentsReceivedRoutes from './routes/payments-received.routes';
+import deliveryChallansRoutes from './routes/delivery-challans.routes';
 
 // Load environment variables
 dotenv.config();
@@ -66,6 +69,9 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(morgan('dev'));
 
+// Serve uploaded files statically
+app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
+
 // Health check route
 app.get('/api/health', (req: Request, res: Response) => {
   res.json({
@@ -97,6 +103,8 @@ app.use('/api/transfer-orders', transferOrdersRoutes);
 app.use('/api/invoices', invoicesRoutes);
 app.use('/api/customers', customersRoutes);
 app.use('/api/sales-orders', salesOrdersRoutes);
+app.use('/api/payments-received', paymentsReceivedRoutes);
+app.use('/api/delivery-challans', deliveryChallansRoutes);
 
 // 404 handler
 app.use((req: Request, res: Response) => {

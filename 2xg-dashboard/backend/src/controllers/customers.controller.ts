@@ -1,110 +1,71 @@
 import { Request, Response } from 'express';
 import { CustomersService } from '../services/customers.service';
 
-export class CustomersController {
-  private customersService: CustomersService;
+const customersService = new CustomersService();
 
-  constructor() {
-    this.customersService = new CustomersService();
+export const getAllCustomers = async (req: Request, res: Response) => {
+  try {
+    const { isActive, search } = req.query;
+
+    const filters = {
+      isActive: isActive === 'true' ? true : isActive === 'false' ? false : undefined,
+      search: search as string | undefined
+    };
+
+    const customers = await customersService.getAllCustomers(filters);
+    res.json({ success: true, data: customers });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
   }
+};
 
-  /**
-   * Get all customers
-   */
-  getAllCustomers = async (req: Request, res: Response) => {
-    try {
-      const filters = {
-        isActive: req.query.isActive === 'true',
-        search: req.query.search as string,
-        page: req.query.page ? parseInt(req.query.page as string) : 1,
-        limit: req.query.limit ? parseInt(req.query.limit as string) : 50
-      };
+export const getCustomersSummary = async (req: Request, res: Response) => {
+  try {
+    const summary = await customersService.getCustomersSummary();
+    res.json({ success: true, data: summary });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+};
 
-      const result = await this.customersService.getAllCustomers(filters);
-      res.json({
-        success: true,
-        data: result
-      });
-    } catch (error: any) {
-      res.status(500).json({
-        success: false,
-        error: error.message
-      });
-    }
-  };
+export const getCustomerById = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const customer = await customersService.getCustomerById(id);
+    res.json({ success: true, data: customer });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+};
 
-  /**
-   * Get a single customer by ID
-   */
-  getCustomerById = async (req: Request, res: Response) => {
-    try {
-      const customer = await this.customersService.getCustomerById(req.params.id);
-      res.json({
-        success: true,
-        data: customer
-      });
-    } catch (error: any) {
-      res.status(404).json({
-        success: false,
-        error: 'Customer not found'
-      });
-    }
-  };
+export const createCustomer = async (req: Request, res: Response) => {
+  try {
+    console.log('Creating customer with data:', req.body);
+    const customer = await customersService.createCustomer(req.body);
+    console.log('Customer created successfully:', customer);
+    res.status(201).json({ success: true, data: customer });
+  } catch (error: any) {
+    console.error('Error creating customer:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+};
 
-  /**
-   * Create a new customer
-   */
-  createCustomer = async (req: Request, res: Response) => {
-    try {
-      const customer = await this.customersService.createCustomer(req.body);
-      res.status(201).json({
-        success: true,
-        data: customer,
-        message: 'Customer created successfully'
-      });
-    } catch (error: any) {
-      console.error('Error creating customer:', error);
-      res.status(500).json({
-        success: false,
-        error: error.message
-      });
-    }
-  };
+export const updateCustomer = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const customer = await customersService.updateCustomer(id, req.body);
+    res.json({ success: true, data: customer });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+};
 
-  /**
-   * Update a customer
-   */
-  updateCustomer = async (req: Request, res: Response) => {
-    try {
-      const customer = await this.customersService.updateCustomer(req.params.id, req.body);
-      res.json({
-        success: true,
-        data: customer,
-        message: 'Customer updated successfully'
-      });
-    } catch (error: any) {
-      res.status(500).json({
-        success: false,
-        error: error.message
-      });
-    }
-  };
-
-  /**
-   * Delete a customer
-   */
-  deleteCustomer = async (req: Request, res: Response) => {
-    try {
-      await this.customersService.deleteCustomer(req.params.id);
-      res.json({
-        success: true,
-        message: 'Customer deleted successfully'
-      });
-    } catch (error: any) {
-      res.status(500).json({
-        success: false,
-        error: error.message
-      });
-    }
-  };
-}
+export const deleteCustomer = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const customer = await customersService.deleteCustomer(id);
+    res.json({ success: true, data: customer });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+};

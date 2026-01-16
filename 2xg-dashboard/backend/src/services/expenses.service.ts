@@ -1,5 +1,4 @@
 import { supabaseAdmin } from '../config/supabase';
-import { DateRangeParams } from '../types';
 
 export class ExpensesService {
   /**
@@ -10,7 +9,7 @@ export class ExpensesService {
       .from('expenses')
       .select(`
         *,
-        expense_categories (name)
+        expense_categories!fk_category (category_name)
       `)
       .order('expense_date', { ascending: false });
 
@@ -32,7 +31,7 @@ export class ExpensesService {
   async getExpensesSummary(startDate?: string, endDate?: string) {
     let query = supabaseAdmin
       .from('expenses')
-      .select('total_amount, status, is_billable');
+      .select('amount, approval_status');
 
     if (startDate) {
       query = query.gte('expense_date', startDate);
@@ -44,17 +43,16 @@ export class ExpensesService {
     const { data, error } = await query;
     if (error) throw error;
 
-    const totalExpenses = data.reduce((sum, exp) => sum + Number(exp.total_amount), 0);
-    const pendingExpenses = data.filter(exp => exp.status === 'pending').length;
-    const approvedExpenses = data.filter(exp => exp.status === 'approved').length;
-    const billableExpenses = data.filter(exp => exp.is_billable).reduce((sum, exp) => sum + Number(exp.total_amount), 0);
+    const totalExpenses = data.reduce((sum, exp) => sum + Number(exp.amount), 0);
+    const pendingExpenses = data.filter(exp => exp.approval_status === 'Pending').length;
+    const approvedExpenses = data.filter(exp => exp.approval_status === 'Approved').length;
 
     return {
       totalExpenses,
       expenseCount: data.length,
       pendingCount: pendingExpenses,
       approvedCount: approvedExpenses,
-      billableAmount: billableExpenses,
+      billableAmount: 0,
       currency: 'INR'
     };
   }
@@ -66,8 +64,9 @@ export class ExpensesService {
     let query = supabaseAdmin
       .from('expenses')
       .select(`
-        total_amount,
-        expense_categories (name)
+        amount,
+        category_id,
+        expense_categories!fk_category (category_name)
       `);
 
     if (startDate) {
@@ -83,9 +82,9 @@ export class ExpensesService {
     const categoryMap = new Map<string, { name: string; total: number; count: number }>();
 
     data.forEach((exp: any) => {
-      const categoryName = exp.expense_categories?.name || 'Uncategorized';
+      const categoryName = exp.expense_categories?.category_name || 'Uncategorized';
       const existing = categoryMap.get(categoryName) || { name: categoryName, total: 0, count: 0 };
-      existing.total += Number(exp.total_amount);
+      existing.total += Number(exp.amount);
       existing.count += 1;
       categoryMap.set(categoryName, existing);
     });
@@ -100,7 +99,61 @@ export class ExpensesService {
     const { data, error } = await supabaseAdmin
       .from('expense_categories')
       .select('*')
-      .order('name');
+      .order('category_name');
+
+    if (error) throw error;
+    return data;
+  }
+
+  /**
+   * Create a new expense
+   */
+  async createExpense(expenseData: any) {
+    // Generate expense number - get all expense numbers to find the max
+    const { data: expenses } = await supabaseAdmin
+      .from('expenses')
+      .select('expense_number')
+      .order('expense_number', { ascending: false })
+      .limit(1);
+
+    let nextNumber = 1;
+    if (expenses && expenses.length > 0 && expenses[0]?.expense_number) {
+      const match = expenses[0].expense_number.match(/EXP-(\d+)/);
+      if (match) {
+        nextNumber = parseInt(match[1]) + 1;
+      }
+    }
+
+    const expenseNumber = `EXP-${String(nextNumber).padStart(5, '0')}`;
+
+    // Prepare expense data with defaults
+    const expense = {
+      organization_id: 'c749c5f6-aee0-4191-8869-0e98db3c09ec',
+      expense_number: expenseNumber,
+      category_id: expenseData.category_id,
+      expense_item: expenseData.expense_item,
+      description: expenseData.description || null,
+      amount: expenseData.amount,
+      payment_mode: expenseData.payment_mode,
+      payment_voucher_number: expenseData.payment_voucher_number || null,
+      voucher_file_url: expenseData.voucher_file_url || null,
+      voucher_file_name: expenseData.voucher_file_name || null,
+      approval_status: 'Pending',
+      remarks: expenseData.remarks || null,
+      expense_date: expenseData.expense_date,
+      paid_by_id: expenseData.paid_by_id,
+      paid_by_name: expenseData.paid_by_name,
+      branch: expenseData.branch || null
+    };
+
+    const { data, error } = await supabaseAdmin
+      .from('expenses')
+      .insert(expense)
+      .select(`
+        *,
+        expense_categories!fk_category (category_name)
+      `)
+      .single();
 
     if (error) throw error;
     return data;
