@@ -95,12 +95,6 @@ export class CustomersService {
 
     // Store additional info in notes field
     let notesText = customerData.notes || '';
-    if (customerData.gst_treatment) {
-      notesText += `\nGST Treatment: ${customerData.gst_treatment}`;
-    }
-    if (customerData.source_of_supply) {
-      notesText += `\nSource of Supply: ${customerData.source_of_supply}`;
-    }
     if (customerData.pan) {
       notesText += `\nPAN: ${customerData.pan}`;
     }
@@ -127,12 +121,10 @@ export class CustomersService {
       state: customerData.state || null,
       country: customerData.country || null,
       postal_code: customerData.postal_code || null,
-      gst_treatment: customerData.gst_treatment || null,
       gstin: customerData.gstin || null,
       pan: customerData.pan || null,
       tax_id: customerData.pan || null,
-      source_of_supply: customerData.source_of_supply || null,
-      currency: customerData.currency || 'INR',
+      currency: customerData.currency ? customerData.currency.split('-')[0].trim() : 'INR',
       payment_terms: customerData.payment_terms || 'Due on Receipt',
       credit_limit: customerData.credit_limit ? parseFloat(customerData.credit_limit) : null,
       current_balance: 0,

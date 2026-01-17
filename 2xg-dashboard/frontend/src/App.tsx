@@ -1,6 +1,9 @@
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import { AuthProvider } from './contexts/AuthContext';
 import { DateFilterProvider } from './contexts/DateFilterContext';
+import ProtectedRoute from './components/auth/ProtectedRoute';
 import DashboardLayout from './components/layout/DashboardLayout';
+import LoginPage from './pages/LoginPage';
 import DashboardPage from './pages/DashboardPage';
 import ItemsPage from './pages/ItemsPage';
 import ItemDetailPage from './pages/ItemDetailPage';
@@ -39,81 +42,87 @@ import NewPaymentReceivedForm from './components/payments-received/NewPaymentRec
 import DeliveryChallansPage from './pages/DeliveryChallansPage';
 import NewDeliveryChallanForm from './components/delivery-challans/NewDeliveryChallanForm';
 import NewExpenseForm from './components/expenses/NewExpenseForm';
+import SettingsPage from './pages/SettingsPage';
 
 function App() {
   return (
     <Router>
-      <DateFilterProvider>
-        <DashboardLayout>
+      <AuthProvider>
+        <DateFilterProvider>
           <Routes>
-            <Route path="/" element={<DashboardPage />} />
-            <Route path="/erp" element={<DashboardPage />} />
-            <Route path="/logistics" element={<DashboardPage />} />
-            <Route path="/care" element={<DashboardPage />} />
-            <Route path="/crm" element={<DashboardPage />} />
+            {/* Public Routes */}
+            <Route path="/login" element={<LoginPage />} />
+
+            {/* Protected Routes - All wrapped with ProtectedRoute and DashboardLayout */}
+            <Route path="/" element={<ProtectedRoute><DashboardLayout><DashboardPage /></DashboardLayout></ProtectedRoute>} />
+            <Route path="/erp" element={<ProtectedRoute><DashboardLayout><DashboardPage /></DashboardLayout></ProtectedRoute>} />
+            <Route path="/logistics" element={<ProtectedRoute><DashboardLayout><DashboardPage /></DashboardLayout></ProtectedRoute>} />
+            <Route path="/care" element={<ProtectedRoute><DashboardLayout><DashboardPage /></DashboardLayout></ProtectedRoute>} />
+            <Route path="/crm" element={<ProtectedRoute><DashboardLayout><DashboardPage /></DashboardLayout></ProtectedRoute>} />
 
             {/* Items Routes */}
-            <Route path="/items" element={<ItemsPage />} />
-            <Route path="/items/new" element={<NewItemForm />} />
-            <Route path="/items/:id" element={<ItemDetailPage />} />
-            <Route path="/items/new-category" element={<ItemsPage />} />
-            <Route path="/items/stock-count" element={<StockCountPage />} />
-            <Route path="/items/stock-count/new" element={<NewStockCountPage />} />
-            <Route path="/items/transfer-order" element={<TransferOrderPage />} />
+            <Route path="/items" element={<ProtectedRoute><DashboardLayout><ItemsPage /></DashboardLayout></ProtectedRoute>} />
+            <Route path="/items/new" element={<ProtectedRoute><DashboardLayout><NewItemForm /></DashboardLayout></ProtectedRoute>} />
+            <Route path="/items/:id" element={<ProtectedRoute><DashboardLayout><ItemDetailPage /></DashboardLayout></ProtectedRoute>} />
+            <Route path="/items/new-category" element={<ProtectedRoute><DashboardLayout><ItemsPage /></DashboardLayout></ProtectedRoute>} />
+            <Route path="/items/stock-count" element={<ProtectedRoute><DashboardLayout><StockCountPage /></DashboardLayout></ProtectedRoute>} />
+            <Route path="/items/stock-count/new" element={<ProtectedRoute><DashboardLayout><NewStockCountPage /></DashboardLayout></ProtectedRoute>} />
+            <Route path="/items/transfer-order" element={<ProtectedRoute><DashboardLayout><TransferOrderPage /></DashboardLayout></ProtectedRoute>} />
 
             {/* Transfer Orders Routes (Inventory Module) */}
-            <Route path="/inventory/transfer-orders" element={<TransferOrdersPage />} />
-            <Route path="/inventory/transfer-orders/new" element={<NewTransferOrderForm />} />
+            <Route path="/inventory/transfer-orders" element={<ProtectedRoute><DashboardLayout><TransferOrdersPage /></DashboardLayout></ProtectedRoute>} />
+            <Route path="/inventory/transfer-orders/new" element={<ProtectedRoute><DashboardLayout><NewTransferOrderForm /></DashboardLayout></ProtectedRoute>} />
 
             {/* Purchase Routes */}
-            <Route path="/purchases" element={<PurchasesPage />} />
-            <Route path="/purchases/vendor-management" element={<VendorManagementPage />} />
-            <Route path="/purchases/po" element={<PurchaseOrderPage />} />
-            <Route path="/purchases/bills" element={<BillsPage />} />
-            <Route path="/purchases/bills/new" element={<NewBillForm />} />
-            <Route path="/purchases/payment-made" element={<PaymentMadePage />} />
-            <Route path="/purchases/payments-made" element={<PaymentMadePage />} />
-            <Route path="/purchases/payments-made/new" element={<NewPaymentForm />} />
-            <Route path="/purchases/vendor-credits" element={<VendorCreditsPage />} />
-            <Route path="/purchases/vendor-credits/new" element={<NewVendorCreditForm />} />
-            <Route path="/purchases/ledger-account" element={<PurchasesPage />} />
+            <Route path="/purchases" element={<ProtectedRoute><DashboardLayout><PurchasesPage /></DashboardLayout></ProtectedRoute>} />
+            <Route path="/purchases/vendor-management" element={<ProtectedRoute><DashboardLayout><VendorManagementPage /></DashboardLayout></ProtectedRoute>} />
+            <Route path="/purchases/po" element={<ProtectedRoute><DashboardLayout><PurchaseOrderPage /></DashboardLayout></ProtectedRoute>} />
+            <Route path="/purchases/bills" element={<ProtectedRoute><DashboardLayout><BillsPage /></DashboardLayout></ProtectedRoute>} />
+            <Route path="/purchases/bills/new" element={<ProtectedRoute><DashboardLayout><NewBillForm /></DashboardLayout></ProtectedRoute>} />
+            <Route path="/purchases/payment-made" element={<ProtectedRoute><DashboardLayout><PaymentMadePage /></DashboardLayout></ProtectedRoute>} />
+            <Route path="/purchases/payments-made" element={<ProtectedRoute><DashboardLayout><PaymentMadePage /></DashboardLayout></ProtectedRoute>} />
+            <Route path="/purchases/payments-made/new" element={<ProtectedRoute><DashboardLayout><NewPaymentForm /></DashboardLayout></ProtectedRoute>} />
+            <Route path="/purchases/vendor-credits" element={<ProtectedRoute><DashboardLayout><VendorCreditsPage /></DashboardLayout></ProtectedRoute>} />
+            <Route path="/purchases/vendor-credits/new" element={<ProtectedRoute><DashboardLayout><NewVendorCreditForm /></DashboardLayout></ProtectedRoute>} />
+            <Route path="/purchases/ledger-account" element={<ProtectedRoute><DashboardLayout><PurchasesPage /></DashboardLayout></ProtectedRoute>} />
 
             {/* Vendor Management Routes */}
-            <Route path="/vendor-management" element={<VendorManagementPage />} />
-            <Route path="/vendor-management/new" element={<NewVendorForm />} />
+            <Route path="/vendor-management" element={<ProtectedRoute><DashboardLayout><VendorManagementPage /></DashboardLayout></ProtectedRoute>} />
+            <Route path="/vendor-management/new" element={<ProtectedRoute><DashboardLayout><NewVendorForm /></DashboardLayout></ProtectedRoute>} />
 
             {/* Customer Management Routes */}
-            <Route path="/sales/customers" element={<CustomerManagementPage />} />
-            <Route path="/sales/customers/new" element={<NewCustomerForm />} />
+            <Route path="/sales/customers" element={<ProtectedRoute><DashboardLayout><CustomerManagementPage /></DashboardLayout></ProtectedRoute>} />
+            <Route path="/sales/customers/new" element={<ProtectedRoute><DashboardLayout><NewCustomerForm /></DashboardLayout></ProtectedRoute>} />
 
             {/* Purchase Order Routes */}
-            <Route path="/purchase-orders" element={<PurchaseOrderPage />} />
-            <Route path="/purchase-orders/new" element={<NewPurchaseOrderForm />} />
+            <Route path="/purchase-orders" element={<ProtectedRoute><DashboardLayout><PurchaseOrderPage /></DashboardLayout></ProtectedRoute>} />
+            <Route path="/purchase-orders/new" element={<ProtectedRoute><DashboardLayout><NewPurchaseOrderForm /></DashboardLayout></ProtectedRoute>} />
 
             {/* Sales Routes */}
-            <Route path="/sales" element={<SalesPage />} />
-            <Route path="/sales/sales" element={<SalesPage />} />
-            <Route path="/sales/sales-order" element={<SalesOrderPage />} />
-            <Route path="/sales/sales-orders" element={<SalesOrdersPage />} />
-            <Route path="/sales/sales-orders/new" element={<NewSalesOrderForm />} />
-            <Route path="/sales/invoices" element={<InvoicesPage />} />
-            <Route path="/sales/invoices/new" element={<NewInvoiceForm />} />
-            <Route path="/sales/payment-received" element={<PaymentsReceivedPage />} />
-            <Route path="/sales/payment-received/new" element={<NewPaymentReceivedForm />} />
+            <Route path="/sales" element={<ProtectedRoute><DashboardLayout><SalesPage /></DashboardLayout></ProtectedRoute>} />
+            <Route path="/sales/sales" element={<ProtectedRoute><DashboardLayout><SalesPage /></DashboardLayout></ProtectedRoute>} />
+            <Route path="/sales/sales-order" element={<ProtectedRoute><DashboardLayout><SalesOrderPage /></DashboardLayout></ProtectedRoute>} />
+            <Route path="/sales/sales-orders" element={<ProtectedRoute><DashboardLayout><SalesOrdersPage /></DashboardLayout></ProtectedRoute>} />
+            <Route path="/sales/sales-orders/new" element={<ProtectedRoute><DashboardLayout><NewSalesOrderForm /></DashboardLayout></ProtectedRoute>} />
+            <Route path="/sales/invoices" element={<ProtectedRoute><DashboardLayout><InvoicesPage /></DashboardLayout></ProtectedRoute>} />
+            <Route path="/sales/invoices/new" element={<ProtectedRoute><DashboardLayout><NewInvoiceForm /></DashboardLayout></ProtectedRoute>} />
+            <Route path="/sales/payment-received" element={<ProtectedRoute><DashboardLayout><PaymentsReceivedPage /></DashboardLayout></ProtectedRoute>} />
+            <Route path="/sales/payment-received/new" element={<ProtectedRoute><DashboardLayout><NewPaymentReceivedForm /></DashboardLayout></ProtectedRoute>} />
 
             {/* Delivery Challan Routes (Logistics Module) */}
-            <Route path="/logistics/delivery-challan" element={<DeliveryChallansPage />} />
-            <Route path="/logistics/create-delivery-challan" element={<NewDeliveryChallanForm />} />
+            <Route path="/logistics/delivery-challan" element={<ProtectedRoute><DashboardLayout><DeliveryChallansPage /></DashboardLayout></ProtectedRoute>} />
+            <Route path="/logistics/create-delivery-challan" element={<ProtectedRoute><DashboardLayout><NewDeliveryChallanForm /></DashboardLayout></ProtectedRoute>} />
 
-            <Route path="/expenses" element={<ExpensesPage />} />
-            <Route path="/expenses/new" element={<NewExpenseForm />} />
-            <Route path="/tasks" element={<TasksPage />} />
-            <Route path="/reports" element={<ReportsPage />} />
-            <Route path="/search" element={<SearchPage />} />
-            <Route path="/ai-reporting" element={<AIReportingPage />} />
+            <Route path="/expenses" element={<ProtectedRoute><DashboardLayout><ExpensesPage /></DashboardLayout></ProtectedRoute>} />
+            <Route path="/expenses/new" element={<ProtectedRoute><DashboardLayout><NewExpenseForm /></DashboardLayout></ProtectedRoute>} />
+            <Route path="/tasks" element={<ProtectedRoute><DashboardLayout><TasksPage /></DashboardLayout></ProtectedRoute>} />
+            <Route path="/reports" element={<ProtectedRoute><DashboardLayout><ReportsPage /></DashboardLayout></ProtectedRoute>} />
+            <Route path="/search" element={<ProtectedRoute><DashboardLayout><SearchPage /></DashboardLayout></ProtectedRoute>} />
+            <Route path="/ai-reporting" element={<ProtectedRoute><DashboardLayout><AIReportingPage /></DashboardLayout></ProtectedRoute>} />
+            <Route path="/settings" element={<ProtectedRoute><DashboardLayout><SettingsPage /></DashboardLayout></ProtectedRoute>} />
           </Routes>
-        </DashboardLayout>
-      </DateFilterProvider>
+        </DateFilterProvider>
+      </AuthProvider>
     </Router>
   );
 }

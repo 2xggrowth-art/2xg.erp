@@ -1,5 +1,6 @@
 import { Link, useLocation } from 'react-router-dom';
 import { useState } from 'react';
+import { usePermissions } from '../../hooks/usePermissions';
 import {
   Truck,
   Headphones,
@@ -15,19 +16,9 @@ import {
   ExternalLink,
   ChevronDown,
   ChevronRight,
-  Plus,
   FolderPlus,
   Package,
   ArrowRightLeft,
-  Tag,
-  Ruler,
-  
-  IndianRupee,
-  TrendingUp,
-  FileText as FileTax,
-  BarChart3,
-  AlertCircle,
-  Workflow,
   Building2,
   FileEdit,
   CreditCard,
@@ -42,19 +33,20 @@ import {
 
 const Sidebar = () => {
   const location = useLocation();
+  const { canAccessModule } = usePermissions();
   const [isItemsOpen, setIsItemsOpen] = useState(false);
   const [isPurchaseOpen, setIsPurchaseOpen] = useState(false);
   const [isSalesOpen, setIsSalesOpen] = useState(false);
   const [isLogisticsOpen, setIsLogisticsOpen] = useState(false);
 
   const navItems = [
-    { icon: Headphones, label: '2XG CARE', path: '/care' },
-    { icon: Receipt, label: 'Expenses', path: '/expenses' },
-    { icon: CheckSquare, label: 'Tasks', path: '/tasks' },
-    { icon: FileText, label: 'Reports', path: '/reports' },
-    { icon: Search, label: 'Search', path: '/search' },
-    { icon: Users, label: 'Sales Pipeline', path: '/crm' },
-    { icon: Brain, label: 'AI Advanced Reporting', path: '/ai-reporting' }
+    { icon: Headphones, label: '2XG CARE', path: '/care', module: 'Tasks' },
+    { icon: Receipt, label: 'Expenses', path: '/expenses', module: 'Expenses' },
+    { icon: CheckSquare, label: 'Tasks', path: '/tasks', module: 'Tasks' },
+    { icon: FileText, label: 'Reports', path: '/reports', module: 'Reports' },
+    { icon: Search, label: 'Search', path: '/search', module: 'Reports' },
+    { icon: Users, label: 'Sales Pipeline', path: '/crm', module: 'Customers' },
+    { icon: Brain, label: 'AI Advanced Reporting', path: '/ai-reporting', module: 'Reports' }
   ];
 
   return (
@@ -65,224 +57,235 @@ const Sidebar = () => {
       </div>
       <nav className="mt-6 pb-6 overflow-y-auto flex-1">
         {/* Item with Dropdown */}
-        <div>
-          <button
-            onClick={() => setIsItemsOpen(!isItemsOpen)}
-            className={`w-full flex items-center justify-between px-6 py-3 transition-colors border-l-4 ${
-              location.pathname.startsWith('/items')
-                ? 'bg-slate-700 border-blue-500 text-white'
-                : 'border-transparent hover:bg-slate-700 hover:border-blue-500'
-            }`}
-          >
-            <div className="flex items-center gap-3">
-              <Box size={20} />
-              <span className="font-medium">Item</span>
-            </div>
-            {isItemsOpen ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
-          </button>
+        {canAccessModule('Items') && (
+          <div>
+            <button
+              onClick={() => setIsItemsOpen(!isItemsOpen)}
+              className={`w-full flex items-center justify-between px-6 py-3 transition-colors border-l-4 ${
+                location.pathname.startsWith('/items')
+                  ? 'bg-slate-700 border-blue-500 text-white'
+                  : 'border-transparent hover:bg-slate-700 hover:border-blue-500'
+              }`}
+            >
+              <div className="flex items-center gap-3">
+                <Box size={20} />
+                <span className="font-medium">Item</span>
+              </div>
+              {isItemsOpen ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+            </button>
 
-          {/* Dropdown Items */}
-          {isItemsOpen && (
-            <div className="bg-slate-900">
-              {/* Items - Direct Link */}
-              <Link
-                to="/items"
-                className="flex items-center gap-3 px-6 py-2 pl-12 hover:bg-slate-700 transition-colors text-sm text-slate-300 hover:text-white"
-              >
-                <Box size={16} />
-                <span>Items</span>
-              </Link>
-              <Link
-                to="/items/new-category"
-                className="flex items-center gap-3 px-6 py-2 pl-12 hover:bg-slate-700 transition-colors text-sm text-slate-300 hover:text-white"
-              >
-                <FolderPlus size={16} />
-                <span>New Category</span>
-              </Link>
-              <Link
-                to="/items/stock-count"
-                className="flex items-center gap-3 px-6 py-2 pl-12 hover:bg-slate-700 transition-colors text-sm text-slate-300 hover:text-white"
-              >
-                <Package size={16} />
-                <span>Stock Count</span>
-              </Link>
-              <Link
-                to="/inventory/transfer-orders"
-                className="flex items-center gap-3 px-6 py-2 pl-12 hover:bg-slate-700 transition-colors text-sm text-slate-300 hover:text-white"
-              >
-                <ArrowRightLeft size={16} />
-                <span>Transfer Order</span>
-              </Link>
-            </div>
-          )}
-        </div>
+            {/* Dropdown Items */}
+            {isItemsOpen && (
+              <div className="bg-slate-900">
+                {/* Items - Direct Link */}
+                <Link
+                  to="/items"
+                  className="flex items-center gap-3 px-6 py-2 pl-12 hover:bg-slate-700 transition-colors text-sm text-slate-300 hover:text-white"
+                >
+                  <Box size={16} />
+                  <span>Items</span>
+                </Link>
+                <Link
+                  to="/items/new-category"
+                  className="flex items-center gap-3 px-6 py-2 pl-12 hover:bg-slate-700 transition-colors text-sm text-slate-300 hover:text-white"
+                >
+                  <FolderPlus size={16} />
+                  <span>New Category</span>
+                </Link>
+                <Link
+                  to="/items/stock-count"
+                  className="flex items-center gap-3 px-6 py-2 pl-12 hover:bg-slate-700 transition-colors text-sm text-slate-300 hover:text-white"
+                >
+                  <Package size={16} />
+                  <span>Stock Count</span>
+                </Link>
+                <Link
+                  to="/inventory/transfer-orders"
+                  className="flex items-center gap-3 px-6 py-2 pl-12 hover:bg-slate-700 transition-colors text-sm text-slate-300 hover:text-white"
+                >
+                  <ArrowRightLeft size={16} />
+                  <span>Transfer Order</span>
+                </Link>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Purchase with Dropdown */}
-        <div>
-          <button
-            onClick={() => setIsPurchaseOpen(!isPurchaseOpen)}
-            className={`w-full flex items-center justify-between px-6 py-3 transition-colors border-l-4 ${
-              location.pathname.startsWith('/purchases')
-                ? 'bg-slate-700 border-blue-500 text-white'
-                : 'border-transparent hover:bg-slate-700 hover:border-blue-500'
-            }`}
-          >
-            <div className="flex items-center gap-3">
-              <ShoppingCart size={20} />
-              <span className="font-medium">Purchase</span>
-            </div>
-            {isPurchaseOpen ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
-          </button>
+        {canAccessModule('Purchase') && (
+          <div>
+            <button
+              onClick={() => setIsPurchaseOpen(!isPurchaseOpen)}
+              className={`w-full flex items-center justify-between px-6 py-3 transition-colors border-l-4 ${
+                location.pathname.startsWith('/purchases')
+                  ? 'bg-slate-700 border-blue-500 text-white'
+                  : 'border-transparent hover:bg-slate-700 hover:border-blue-500'
+              }`}
+            >
+              <div className="flex items-center gap-3">
+                <ShoppingCart size={20} />
+                <span className="font-medium">Purchase</span>
+              </div>
+              {isPurchaseOpen ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+            </button>
 
-          {/* Dropdown Items */}
-          {isPurchaseOpen && (
-            <div className="bg-slate-900">
-              <Link
-                to="/purchases/vendor-management"
-                className="flex items-center gap-3 px-6 py-2 pl-12 hover:bg-slate-700 transition-colors text-sm text-slate-300 hover:text-white"
-              >
-                <Building2 size={16} />
-                <span>Vendor Management</span>
-              </Link>
-              <Link
-                to="/purchases/po"
-                className="flex items-center gap-3 px-6 py-2 pl-12 hover:bg-slate-700 transition-colors text-sm text-slate-300 hover:text-white"
-              >
-                <FileEdit size={16} />
-                <span>PO</span>
-              </Link>
-              <Link
-                to="/purchases/bills"
-                className="flex items-center gap-3 px-6 py-2 pl-12 hover:bg-slate-700 transition-colors text-sm text-slate-300 hover:text-white"
-              >
-                <Receipt size={16} />
-                <span>Bills</span>
-              </Link>
-              <Link
-                to="/purchases/payment-made"
-                className="flex items-center gap-3 px-6 py-2 pl-12 hover:bg-slate-700 transition-colors text-sm text-slate-300 hover:text-white"
-              >
-                <CreditCard size={16} />
-                <span>Payment Made</span>
-              </Link>
-              <Link
-                to="/purchases/vendor-credits"
-                className="flex items-center gap-3 px-6 py-2 pl-12 hover:bg-slate-700 transition-colors text-sm text-slate-300 hover:text-white"
-              >
-                <Wallet size={16} />
-                <span>Vendor Credits</span>
-              </Link>
-              <Link
-                to="/purchases/ledger-account"
-                className="flex items-center gap-3 px-6 py-2 pl-12 hover:bg-slate-700 transition-colors text-sm text-slate-300 hover:text-white"
-              >
-                <BookOpen size={16} />
-                <span>Ledger Account</span>
-              </Link>
-            </div>
-          )}
-        </div>
+            {/* Dropdown Items */}
+            {isPurchaseOpen && (
+              <div className="bg-slate-900">
+                <Link
+                  to="/purchases/vendor-management"
+                  className="flex items-center gap-3 px-6 py-2 pl-12 hover:bg-slate-700 transition-colors text-sm text-slate-300 hover:text-white"
+                >
+                  <Building2 size={16} />
+                  <span>Vendor Management</span>
+                </Link>
+                <Link
+                  to="/purchases/po"
+                  className="flex items-center gap-3 px-6 py-2 pl-12 hover:bg-slate-700 transition-colors text-sm text-slate-300 hover:text-white"
+                >
+                  <FileEdit size={16} />
+                  <span>PO</span>
+                </Link>
+                <Link
+                  to="/purchases/bills"
+                  className="flex items-center gap-3 px-6 py-2 pl-12 hover:bg-slate-700 transition-colors text-sm text-slate-300 hover:text-white"
+                >
+                  <Receipt size={16} />
+                  <span>Bills</span>
+                </Link>
+                <Link
+                  to="/purchases/payment-made"
+                  className="flex items-center gap-3 px-6 py-2 pl-12 hover:bg-slate-700 transition-colors text-sm text-slate-300 hover:text-white"
+                >
+                  <CreditCard size={16} />
+                  <span>Payment Made</span>
+                </Link>
+                <Link
+                  to="/purchases/vendor-credits"
+                  className="flex items-center gap-3 px-6 py-2 pl-12 hover:bg-slate-700 transition-colors text-sm text-slate-300 hover:text-white"
+                >
+                  <Wallet size={16} />
+                  <span>Vendor Credits</span>
+                </Link>
+                <Link
+                  to="/purchases/ledger-account"
+                  className="flex items-center gap-3 px-6 py-2 pl-12 hover:bg-slate-700 transition-colors text-sm text-slate-300 hover:text-white"
+                >
+                  <BookOpen size={16} />
+                  <span>Ledger Account</span>
+                </Link>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Sales with Dropdown */}
-        <div>
-          <button
-            onClick={() => setIsSalesOpen(!isSalesOpen)}
-            className={`w-full flex items-center justify-between px-6 py-3 transition-colors border-l-4 ${
-              location.pathname.startsWith('/sales')
-                ? 'bg-slate-700 border-blue-500 text-white'
-                : 'border-transparent hover:bg-slate-700 hover:border-blue-500'
-            }`}
-          >
-            <div className="flex items-center gap-3">
-              <DollarSign size={20} />
-              <span className="font-medium">Sales</span>
-            </div>
-            {isSalesOpen ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
-          </button>
+        {canAccessModule('Sales') && (
+          <div>
+            <button
+              onClick={() => setIsSalesOpen(!isSalesOpen)}
+              className={`w-full flex items-center justify-between px-6 py-3 transition-colors border-l-4 ${
+                location.pathname.startsWith('/sales')
+                  ? 'bg-slate-700 border-blue-500 text-white'
+                  : 'border-transparent hover:bg-slate-700 hover:border-blue-500'
+              }`}
+            >
+              <div className="flex items-center gap-3">
+                <DollarSign size={20} />
+                <span className="font-medium">Sales</span>
+              </div>
+              {isSalesOpen ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+            </button>
 
-          {/* Dropdown Items */}
-          {isSalesOpen && (
-            <div className="bg-slate-900">
-              <Link
-                to="/sales/customers"
-                className="flex items-center gap-3 px-6 py-2 pl-12 hover:bg-slate-700 transition-colors text-sm text-slate-300 hover:text-white"
-              >
-                <Users size={16} />
-                <span>Customers</span>
-              </Link>
-              <Link
-                to="/sales/sales-orders"
-                className="flex items-center gap-3 px-6 py-2 pl-12 hover:bg-slate-700 transition-colors text-sm text-slate-300 hover:text-white"
-              >
-                <FileEdit size={16} />
-                <span>Sales Orders</span>
-              </Link>
-              <Link
-                to="/sales/invoices"
-                className="flex items-center gap-3 px-6 py-2 pl-12 hover:bg-slate-700 transition-colors text-sm text-slate-300 hover:text-white"
-              >
-                <Invoice size={16} />
-                <span>Invoices</span>
-              </Link>
-              <Link
-                to="/sales/payment-received"
-                className="flex items-center gap-3 px-6 py-2 pl-12 hover:bg-slate-700 transition-colors text-sm text-slate-300 hover:text-white"
-              >
-                <Banknote size={16} />
-                <span>Payment Received</span>
-              </Link>
-            </div>
-          )}
-        </div>
+            {/* Dropdown Items */}
+            {isSalesOpen && (
+              <div className="bg-slate-900">
+                <Link
+                  to="/sales/customers"
+                  className="flex items-center gap-3 px-6 py-2 pl-12 hover:bg-slate-700 transition-colors text-sm text-slate-300 hover:text-white"
+                >
+                  <Users size={16} />
+                  <span>Customers</span>
+                </Link>
+                <Link
+                  to="/sales/sales-orders"
+                  className="flex items-center gap-3 px-6 py-2 pl-12 hover:bg-slate-700 transition-colors text-sm text-slate-300 hover:text-white"
+                >
+                  <FileEdit size={16} />
+                  <span>Sales Orders</span>
+                </Link>
+                <Link
+                  to="/sales/invoices"
+                  className="flex items-center gap-3 px-6 py-2 pl-12 hover:bg-slate-700 transition-colors text-sm text-slate-300 hover:text-white"
+                >
+                  <Invoice size={16} />
+                  <span>Invoices</span>
+                </Link>
+                <Link
+                  to="/sales/payment-received"
+                  className="flex items-center gap-3 px-6 py-2 pl-12 hover:bg-slate-700 transition-colors text-sm text-slate-300 hover:text-white"
+                >
+                  <Banknote size={16} />
+                  <span>Payment Received</span>
+                </Link>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* 2XG Logistics with Dropdown */}
-        <div>
-          <button
-            onClick={() => setIsLogisticsOpen(!isLogisticsOpen)}
-            className={`w-full flex items-center justify-between px-6 py-3 transition-colors border-l-4 ${
-              location.pathname.startsWith('/logistics')
-                ? 'bg-slate-700 border-blue-500 text-white'
-                : 'border-transparent hover:bg-slate-700 hover:border-blue-500'
-            }`}
-          >
-            <div className="flex items-center gap-3">
-              <Truck size={20} />
-              <span className="font-medium">2XG Logistics</span>
-            </div>
-            {isLogisticsOpen ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
-          </button>
+        {canAccessModule('Logistics') && (
+          <div>
+            <button
+              onClick={() => setIsLogisticsOpen(!isLogisticsOpen)}
+              className={`w-full flex items-center justify-between px-6 py-3 transition-colors border-l-4 ${
+                location.pathname.startsWith('/logistics')
+                  ? 'bg-slate-700 border-blue-500 text-white'
+                  : 'border-transparent hover:bg-slate-700 hover:border-blue-500'
+              }`}
+            >
+              <div className="flex items-center gap-3">
+                <Truck size={20} />
+                <span className="font-medium">2XG Logistics</span>
+              </div>
+              {isLogisticsOpen ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+            </button>
 
-          {/* Dropdown Items */}
-          {isLogisticsOpen && (
-            <div className="bg-slate-900">
-              <Link
-                to="/logistics/create-delivery-challan"
-                className="flex items-center gap-3 px-6 py-2 pl-12 hover:bg-slate-700 transition-colors text-sm text-slate-300 hover:text-white"
-              >
-                <FilePlus size={16} />
-                <span>Create Delivery Challan</span>
-              </Link>
-              <Link
-                to="/logistics/delivery-challan"
-                className="flex items-center gap-3 px-6 py-2 pl-12 hover:bg-slate-700 transition-colors text-sm text-slate-300 hover:text-white"
-              >
-                <FileCheck size={16} />
-                <span>Delivery Challan</span>
-              </Link>
-              <Link
-                to="/logistics/pending-delivery"
-                className="flex items-center gap-3 px-6 py-2 pl-12 hover:bg-slate-700 transition-colors text-sm text-slate-300 hover:text-white"
-              >
-                <Clock size={16} />
-                <span>Pending Delivery</span>
-              </Link>
-            </div>
-          )}
-        </div>
+            {/* Dropdown Items */}
+            {isLogisticsOpen && (
+              <div className="bg-slate-900">
+                <Link
+                  to="/logistics/create-delivery-challan"
+                  className="flex items-center gap-3 px-6 py-2 pl-12 hover:bg-slate-700 transition-colors text-sm text-slate-300 hover:text-white"
+                >
+                  <FilePlus size={16} />
+                  <span>Create Delivery Challan</span>
+                </Link>
+                <Link
+                  to="/logistics/delivery-challan"
+                  className="flex items-center gap-3 px-6 py-2 pl-12 hover:bg-slate-700 transition-colors text-sm text-slate-300 hover:text-white"
+                >
+                  <FileCheck size={16} />
+                  <span>Delivery Challan</span>
+                </Link>
+                <Link
+                  to="/logistics/pending-delivery"
+                  className="flex items-center gap-3 px-6 py-2 pl-12 hover:bg-slate-700 transition-colors text-sm text-slate-300 hover:text-white"
+                >
+                  <Clock size={16} />
+                  <span>Pending Delivery</span>
+                </Link>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Other Navigation Items */}
         {navItems.map((item) => {
           const isActive = location.pathname === item.path;
+          // Only show if user has access to the module
+          if (!canAccessModule(item.module)) return null;
+
           return (
             <Link
               key={item.path}

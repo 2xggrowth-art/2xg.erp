@@ -44,8 +44,8 @@ const NewTransferOrderForm = () => {
   const fetchItems = async () => {
     try {
       const response = await itemsService.getAllItems({ isActive: true });
-      if (response.success && response.data) {
-        setItems(response.data);
+      if (response.data.success && response.data.data) {
+        setItems(response.data.data);
       }
     } catch (error) {
       console.error('Error fetching items:', error);

@@ -1,6 +1,15 @@
-import { useState } from 'react';
-import { X, Settings } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { X, Settings, ShoppingBasket, Plus, Search } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { itemsService, Item as ItemType } from '../services/items.service';
+import { stockCountService, StockCountItem } from '../services/stockCount.service';
+
+interface Item {
+  id: string;
+  name: string;
+  sku: string;
+  currentStock: number;
+}
 
 const NewStockCountPage = () => {
   const navigate = useNavigate();
@@ -10,9 +19,55 @@ const NewStockCountPage = () => {
   const [assignTo, setAssignTo] = useState('');
   const [scheduleCounts, setScheduleCounts] = useState(false);
   const [currentStep, setCurrentStep] = useState('configure');
+  const [selectedItems, setSelectedItems] = useState<Item[]>([]);
+  const [showItemSelector, setShowItemSelector] = useState(false);
+  const [availableItems, setAvailableItems] = useState<Item[]>([]);
+  const [isLoadingItems, setIsLoadingItems] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+
+  // Fetch items from API
+  useEffect(() => {
+    const fetchItems = async () => {
+      setIsLoadingItems(true);
+      try {
+        const response = await itemsService.getAllItems({ isActive: true });
+        if (response.data.success && response.data.data) {
+          // Transform API items to our Item interface
+          const transformedItems: Item[] = response.data.data.map((item: ItemType) => ({
+            id: item.id,
+            name: item.item_name,
+            sku: item.sku,
+            currentStock: item.current_stock
+          }));
+          setAvailableItems(transformedItems);
+        }
+      } catch (error) {
+        console.error('Error fetching items:', error);
+        // Optionally show an error message to the user
+        alert('Failed to load items. Please try again.');
+      } finally {
+        setIsLoadingItems(false);
+      }
+    };
+
+    fetchItems();
+  }, []);
 
   const handleNext = () => {
     if (currentStep === 'configure') {
+      // Validate required fields
+      if (!stockCountNumber) {
+        alert('Please enter a Stock Count Number');
+        return;
+      }
+      if (!location) {
+        alert('Please select a Location');
+        return;
+      }
+      if (!assignTo) {
+        alert('Please assign to a user');
+        return;
+      }
       setCurrentStep('add-items');
     }
   };
@@ -152,24 +207,251 @@ const NewStockCountPage = () => {
 
         {currentStep === 'add-items' && (
           <div className="p-6">
-            <p className="text-slate-600">Add Items step coming soon...</p>
+            {/* Header */}
+            <div className="mb-6">
+              <h2 className="text-lg font-semibold text-slate-800 mb-2">
+                Total Added Items ({selectedItems.length})
+              </h2>
+              <p className="text-slate-600 text-sm">
+                Select the items you want to add to your count card, to start stock counting.
+              </p>
+            </div>
+
+            {/* Empty State */}
+            {selectedItems.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-16 bg-slate-50 rounded-lg border-2 border-dashed border-slate-200">
+                <div className="w-20 h-20 bg-blue-100 rounded-full flex items-center justify-center mb-4">
+                  <ShoppingBasket size={32} className="text-blue-600" />
+                </div>
+                <p className="text-slate-600 mb-4">Select items to be added in the stock count</p>
+                <button
+                  onClick={() => setShowItemSelector(true)}
+                  className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
+                >
+                  Select Items
+                </button>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-sm font-semibold text-slate-700">Selected Items</h3>
+                  <button
+                    onClick={() => setShowItemSelector(true)}
+                    className="flex items-center gap-2 px-4 py-2 text-blue-600 border border-blue-600 rounded-lg hover:bg-blue-50 transition-colors"
+                  >
+                    <Plus size={16} />
+                    Add More Items
+                  </button>
+                </div>
+                <div className="border border-slate-200 rounded-lg overflow-hidden">
+                  <table className="w-full">
+                    <thead className="bg-slate-50 border-b border-slate-200">
+                      <tr>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-slate-600 uppercase">Item Name</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-slate-600 uppercase">SKU</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-slate-600 uppercase">Current Stock</th>
+                        <th className="px-4 py-3 text-center text-xs font-medium text-slate-600 uppercase">Action</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-200">
+                      {selectedItems.map((item) => (
+                        <tr key={item.id} className="hover:bg-slate-50">
+                          <td className="px-4 py-3 text-sm text-slate-800">{item.name}</td>
+                          <td className="px-4 py-3 text-sm text-slate-600">{item.sku}</td>
+                          <td className="px-4 py-3 text-sm text-slate-600">{item.currentStock}</td>
+                          <td className="px-4 py-3 text-center">
+                            <button
+                              onClick={() => setSelectedItems(selectedItems.filter(i => i.id !== item.id))}
+                              className="text-red-600 hover:text-red-700 text-sm font-medium"
+                            >
+                              Remove
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Item Selector Modal */}
+        {showItemSelector && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div className="bg-white rounded-lg shadow-xl w-full max-w-2xl mx-4">
+              <div className="px-6 py-4 border-b border-slate-200">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-lg font-semibold text-slate-800">Select Items</h3>
+                  <button
+                    onClick={() => {
+                      setShowItemSelector(false);
+                      setSearchQuery('');
+                    }}
+                    className="text-slate-400 hover:text-slate-600"
+                  >
+                    <X size={20} />
+                  </button>
+                </div>
+                {/* Search Bar */}
+                <div className="relative">
+                  <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                  <input
+                    type="text"
+                    placeholder="Search by item name or SKU..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="w-full pl-10 pr-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+              </div>
+              <div className="p-6 max-h-96 overflow-y-auto">
+                {isLoadingItems ? (
+                  <div className="flex items-center justify-center py-12">
+                    <div className="text-center">
+                      <div className="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+                      <p className="text-slate-600">Loading items...</p>
+                    </div>
+                  </div>
+                ) : availableItems.length === 0 ? (
+                  <div className="flex items-center justify-center py-12">
+                    <div className="text-center">
+                      <ShoppingBasket size={48} className="text-slate-300 mx-auto mb-4" />
+                      <p className="text-slate-600 font-medium mb-2">No items found</p>
+                      <p className="text-sm text-slate-500">Please add items first before creating a stock count</p>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {availableItems
+                      .filter(item => {
+                        const query = searchQuery.toLowerCase();
+                        return item.name.toLowerCase().includes(query) ||
+                               item.sku.toLowerCase().includes(query);
+                      })
+                      .map((item) => {
+                        const isSelected = selectedItems.some(i => i.id === item.id);
+                        return (
+                        <div
+                          key={item.id}
+                          className={`p-4 border rounded-lg cursor-pointer transition-colors ${
+                            isSelected
+                              ? 'bg-blue-50 border-blue-300'
+                              : 'border-slate-200 hover:bg-slate-50'
+                          }`}
+                          onClick={() => {
+                            if (isSelected) {
+                              setSelectedItems(selectedItems.filter(i => i.id !== item.id));
+                            } else {
+                              setSelectedItems([...selectedItems, item]);
+                            }
+                          }}
+                        >
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <h4 className="font-medium text-slate-800">{item.name}</h4>
+                              <p className="text-sm text-slate-600">SKU: {item.sku} • Stock: {item.currentStock}</p>
+                            </div>
+                            <input
+                              type="checkbox"
+                              checked={isSelected}
+                              onChange={() => {}}
+                              className="w-5 h-5 text-blue-600 border-slate-300 rounded focus:ring-blue-500"
+                            />
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+              <div className="px-6 py-4 border-t border-slate-200 flex justify-end gap-3">
+                <button
+                  onClick={() => setShowItemSelector(false)}
+                  className="px-6 py-2 border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50 transition-colors font-medium"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => setShowItemSelector(false)}
+                  className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
+                >
+                  Add Selected ({selectedItems.length})
+                </button>
+              </div>
+            </div>
           </div>
         )}
 
         {/* Footer Buttons */}
         <div className="flex items-center gap-3 px-6 py-4 border-t border-slate-200">
-          <button
-            onClick={handleNext}
-            className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
-          >
-            Next
-          </button>
-          <button
-            onClick={handleCancel}
-            className="px-6 py-2 border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50 transition-colors font-medium"
-          >
-            Cancel
-          </button>
+          {currentStep === 'configure' ? (
+            <>
+              <button
+                onClick={handleNext}
+                className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
+              >
+                Next
+              </button>
+              <button
+                onClick={handleCancel}
+                className="px-6 py-2 border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50 transition-colors font-medium"
+              >
+                Cancel
+              </button>
+            </>
+          ) : (
+            <>
+              <button
+                onClick={() => setCurrentStep('configure')}
+                className="px-6 py-2 border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50 transition-colors font-medium"
+              >
+                Back
+              </button>
+              <button
+                onClick={async () => {
+                  if (selectedItems.length === 0) {
+                    alert('Please add at least one item to the stock count');
+                    return;
+                  }
+
+                  try {
+                    // Transform selected items to StockCountItem format
+                    const stockCountItems: StockCountItem[] = selectedItems.map(item => ({
+                      id: item.id,
+                      name: item.name,
+                      sku: item.sku,
+                      currentStock: item.currentStock
+                    }));
+
+                    // Create stock count
+                    await stockCountService.createStockCount({
+                      description,
+                      location,
+                      assignTo,
+                      items: stockCountItems
+                    });
+
+                    alert('Stock Count saved successfully!');
+                    navigate('/items/stock-count');
+                  } catch (error) {
+                    console.error('Error saving stock count:', error);
+                    alert('Failed to save stock count. Please try again.');
+                  }
+                }}
+                className="px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-medium"
+              >
+                Save
+              </button>
+              <button
+                onClick={handleCancel}
+                className="px-6 py-2 border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50 transition-colors font-medium"
+              >
+                Cancel
+              </button>
+            </>
+          )}
         </div>
       </div>
     </div>

@@ -1,4 +1,4 @@
-import { FileEdit, Send, CheckCircle, Package, Truck, Receipt, Plus } from 'lucide-react';
+import { FileEdit, CheckCircle, Package, Truck, Receipt, Plus } from 'lucide-react';
 import ProcessFlow from '../components/common/ProcessFlow';
 
 const SalesOrderPage = () => {

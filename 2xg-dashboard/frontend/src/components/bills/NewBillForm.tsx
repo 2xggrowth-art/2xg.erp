@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { X, Plus, Upload, Search, Settings } from 'lucide-react';
+import { X, Plus, Upload, Search } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { billsService, BillItem } from '../../services/bills.service';
 import { vendorsService, Vendor } from '../../services/vendors.service';

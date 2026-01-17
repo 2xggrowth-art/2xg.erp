@@ -2,11 +2,13 @@ import { useState, useEffect } from 'react';
 import { ArrowLeft, Save, AlertCircle } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { paymentsReceivedService } from '../../services/payments-received.service';
+import { customersService, Customer } from '../../services/customers.service';
 
 const NewPaymentReceivedForm = () => {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
   const [showExcessPaymentModal, setShowExcessPaymentModal] = useState(false);
+  const [customers, setCustomers] = useState<Customer[]>([]);
 
   const [formData, setFormData] = useState({
     customer_name: '',
@@ -52,13 +54,21 @@ const NewPaymentReceivedForm = () => {
 
   const fetchInitialData = async () => {
     try {
-      const paymentNumberRes = await paymentsReceivedService.generatePaymentNumber();
+      const [paymentNumberRes, customersRes] = await Promise.all([
+        paymentsReceivedService.generatePaymentNumber(),
+        customersService.getAllCustomers({ isActive: true })
+      ]);
 
       if (paymentNumberRes.success) {
         setFormData(prev => ({
           ...prev,
           payment_number: paymentNumberRes.data.payment_number
         }));
+      }
+
+      const customersApiResponse = customersRes.data;
+      if (customersApiResponse.success && customersApiResponse.data) {
+        setCustomers(customersApiResponse.data);
       }
     } catch (error) {
       console.error('Error fetching initial data:', error);
@@ -205,13 +215,19 @@ const NewPaymentReceivedForm = () => {
                 <label className="block text-sm font-medium text-slate-700 mb-2">
                   Customer Name <span className="text-red-500">*</span>
                 </label>
-                <input
-                  type="text"
+                <select
                   value={formData.customer_name}
                   onChange={(e) => setFormData({ ...formData, customer_name: e.target.value })}
-                  placeholder="Enter customer name"
                   className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                />
+                  required
+                >
+                  <option value="">Select a customer</option>
+                  {customers.map(customer => (
+                    <option key={customer.id} value={customer.customer_name}>
+                      {customer.customer_name}
+                    </option>
+                  ))}
+                </select>
               </div>
 
               {/* Payment Number */}

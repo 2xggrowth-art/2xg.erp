@@ -15,10 +15,8 @@ export interface Customer {
   state?: string;
   country?: string;
   postal_code?: string;
-  gst_treatment?: string;
   gstin?: string;
   pan?: string;
-  source_of_supply?: string;
   payment_terms?: string;
   currency?: string;
   credit_limit?: number;
@@ -39,8 +37,6 @@ export interface CreateCustomerData {
   email?: string;
   work_phone?: string;
   mobile?: string;
-  gst_treatment?: string;
-  source_of_supply?: string;
   gstin?: string;
   pan?: string;
   currency?: string;

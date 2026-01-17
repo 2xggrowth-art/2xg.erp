@@ -17,8 +17,6 @@ const NewCustomerForm = () => {
     email: '',
     workPhone: '',
     mobile: '',
-    gstTreatment: '',
-    sourceOfSupply: '',
     pan: '',
     isMsmeRegistered: false,
     currency: 'INR- Indian Rupee',
@@ -66,8 +64,6 @@ const NewCustomerForm = () => {
         email: formData.email || undefined,
         work_phone: formData.workPhone || undefined,
         mobile: formData.mobile || undefined,
-        gst_treatment: formData.gstTreatment || undefined,
-        source_of_supply: formData.sourceOfSupply || undefined,
         pan: formData.pan || undefined,
         is_msme_registered: formData.isMsmeRegistered,
         currency: formData.currency,
@@ -354,51 +350,6 @@ const NewCustomerForm = () => {
             <div className="mt-6 space-y-4">
               {activeTab === 'other-details' && (
                 <>
-                  {/* GST Treatment */}
-                  <div className="grid grid-cols-12 gap-4 items-center">
-                    <label className="col-span-3 text-sm font-medium text-red-500">
-                      GST Treatment<span>*</span>
-                    </label>
-                    <div className="col-span-9">
-                      <select
-                        name="gstTreatment"
-                        value={formData.gstTreatment}
-                        onChange={handleInputChange}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        required
-                      >
-                        <option value="">Select a GST treatment</option>
-                        <option value="Registered Business - Regular">Registered Business - Regular</option>
-                        <option value="Registered Business - Composition">Registered Business - Composition</option>
-                        <option value="Unregistered Business">Unregistered Business</option>
-                        <option value="Consumer">Consumer</option>
-                        <option value="Overseas">Overseas</option>
-                      </select>
-                    </div>
-                  </div>
-
-                  {/* Source of Supply */}
-                  <div className="grid grid-cols-12 gap-4 items-center">
-                    <label className="col-span-3 text-sm font-medium text-red-500">
-                      Source of Supply<span>*</span>
-                    </label>
-                    <div className="col-span-9">
-                      <select
-                        name="sourceOfSupply"
-                        value={formData.sourceOfSupply}
-                        onChange={handleInputChange}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        required
-                      >
-                        <option value="">Select</option>
-                        <option value="Karnataka">Karnataka</option>
-                        <option value="Maharashtra">Maharashtra</option>
-                        <option value="Tamil Nadu">Tamil Nadu</option>
-                        <option value="Delhi">Delhi</option>
-                      </select>
-                    </div>
-                  </div>
-
                   {/* PAN */}
                   <div className="grid grid-cols-12 gap-4 items-center">
                     <label className="col-span-3 text-sm font-medium text-gray-700">

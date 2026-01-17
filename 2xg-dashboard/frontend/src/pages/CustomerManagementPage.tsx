@@ -122,9 +122,6 @@ const CustomerManagementPage = () => {
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       WORK PHONE
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      GST TREATMENT
-                    </th>
                     <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
                       PAYABLES (INR)
                     </th>
@@ -136,7 +133,7 @@ const CustomerManagementPage = () => {
                 <tbody className="divide-y divide-gray-200">
                   {filteredCustomers.length === 0 ? (
                     <tr>
-                      <td colSpan={8} className="px-6 py-12 text-center">
+                      <td colSpan={7} className="px-6 py-12 text-center">
                         <div className="flex flex-col items-center justify-center text-gray-400">
                           <Users className="w-12 h-12 mb-3" />
                           <p className="text-lg font-medium">No customers found</p>
@@ -169,9 +166,6 @@ const CustomerManagementPage = () => {
                         </td>
                         <td className="px-6 py-4">
                           <div className="text-sm text-gray-900">{customer.work_phone || '-'}</div>
-                        </td>
-                        <td className="px-6 py-4">
-                          <div className="text-sm text-gray-900">{customer.gst_treatment || '-'}</div>
                         </td>
                         <td className="px-6 py-4 text-right">
                           <div className="text-sm text-gray-900">

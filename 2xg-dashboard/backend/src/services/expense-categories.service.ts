@@ -1,4 +1,4 @@
-import { pool } from '../config/database';
+import { supabaseAdmin } from '../config/supabase';
 
 export interface ExpenseCategory {
   id: string;
@@ -22,18 +22,20 @@ export const expenseCategoriesService = {
    */
   async getAllCategories(organizationId: string, filters?: { isActive?: boolean }) {
     try {
-      let query = 'SELECT * FROM expense_categories WHERE organization_id = $1';
-      const params: any[] = [organizationId];
+      let query = supabaseAdmin
+        .from('expense_categories')
+        .select('*')
+        .eq('organization_id', organizationId)
+        .order('category_name', { ascending: true });
 
       if (filters?.isActive !== undefined) {
-        query += ' AND is_active = $2';
-        params.push(filters.isActive);
+        query = query.eq('is_active', filters.isActive);
       }
 
-      query += ' ORDER BY category_name ASC';
+      const { data, error } = await query;
 
-      const result = await pool.query(query, params);
-      return result.rows;
+      if (error) throw error;
+      return data;
     } catch (error) {
       console.error('Error fetching expense categories:', error);
       throw error;
@@ -45,11 +47,15 @@ export const expenseCategoriesService = {
    */
   async getCategoryById(id: string, organizationId: string) {
     try {
-      const result = await pool.query(
-        'SELECT * FROM expense_categories WHERE id = $1 AND organization_id = $2',
-        [id, organizationId]
-      );
-      return result.rows[0];
+      const { data, error } = await supabaseAdmin
+        .from('expense_categories')
+        .select('*')
+        .eq('id', id)
+        .eq('organization_id', organizationId)
+        .single();
+
+      if (error) throw error;
+      return data;
     } catch (error) {
       console.error('Error fetching expense category:', error);
       throw error;
@@ -61,17 +67,26 @@ export const expenseCategoriesService = {
    */
   async createCategory(organizationId: string, data: CreateExpenseCategoryData) {
     try {
-      const result = await pool.query(
-        `INSERT INTO expense_categories (organization_id, category_name, description, is_active)
-         VALUES ($1, $2, $3, $4)
-         RETURNING *`,
-        [organizationId, data.category_name, data.description, data.is_active ?? true]
-      );
-      return result.rows[0];
-    } catch (error: any) {
-      if (error.code === '23505') { // Unique constraint violation
-        throw new Error('Category name already exists');
+      const { data: newCategory, error } = await supabaseAdmin
+        .from('expense_categories')
+        .insert({
+          organization_id: organizationId,
+          category_name: data.category_name,
+          description: data.description,
+          is_active: data.is_active ?? true
+        })
+        .select()
+        .single();
+
+      if (error) {
+        if (error.code === '23505') { // Unique constraint violation
+          throw new Error('Category name already exists');
+        }
+        throw error;
       }
+
+      return newCategory;
+    } catch (error) {
       console.error('Error creating expense category:', error);
       throw error;
     }
@@ -82,42 +97,39 @@ export const expenseCategoriesService = {
    */
   async updateCategory(id: string, organizationId: string, data: Partial<CreateExpenseCategoryData>) {
     try {
-      const fields: string[] = [];
-      const values: any[] = [];
-      let paramCounter = 1;
+      const updateData: any = {};
 
       if (data.category_name !== undefined) {
-        fields.push(`category_name = $${paramCounter++}`);
-        values.push(data.category_name);
+        updateData.category_name = data.category_name;
       }
       if (data.description !== undefined) {
-        fields.push(`description = $${paramCounter++}`);
-        values.push(data.description);
+        updateData.description = data.description;
       }
       if (data.is_active !== undefined) {
-        fields.push(`is_active = $${paramCounter++}`);
-        values.push(data.is_active);
+        updateData.is_active = data.is_active;
       }
 
-      if (fields.length === 0) {
+      if (Object.keys(updateData).length === 0) {
         throw new Error('No fields to update');
       }
 
-      values.push(id, organizationId);
+      const { data: updatedCategory, error } = await supabaseAdmin
+        .from('expense_categories')
+        .update(updateData)
+        .eq('id', id)
+        .eq('organization_id', organizationId)
+        .select()
+        .single();
 
-      const result = await pool.query(
-        `UPDATE expense_categories
-         SET ${fields.join(', ')}
-         WHERE id = $${paramCounter} AND organization_id = $${paramCounter + 1}
-         RETURNING *`,
-        values
-      );
-
-      return result.rows[0];
-    } catch (error: any) {
-      if (error.code === '23505') {
-        throw new Error('Category name already exists');
+      if (error) {
+        if (error.code === '23505') {
+          throw new Error('Category name already exists');
+        }
+        throw error;
       }
+
+      return updatedCategory;
+    } catch (error) {
       console.error('Error updating expense category:', error);
       throw error;
     }
@@ -129,21 +141,27 @@ export const expenseCategoriesService = {
   async deleteCategory(id: string, organizationId: string) {
     try {
       // Check if category is used in any expenses
-      const expenseCheck = await pool.query(
-        'SELECT COUNT(*) as count FROM expenses WHERE category_id = $1',
-        [id]
-      );
+      const { count, error: countError } = await supabaseAdmin
+        .from('expenses')
+        .select('*', { count: 'exact', head: true })
+        .eq('category_id', id);
 
-      if (parseInt(expenseCheck.rows[0].count) > 0) {
+      if (countError) throw countError;
+
+      if (count && count > 0) {
         throw new Error('Cannot delete category that is used in expenses. Deactivate it instead.');
       }
 
-      const result = await pool.query(
-        'DELETE FROM expense_categories WHERE id = $1 AND organization_id = $2 RETURNING *',
-        [id, organizationId]
-      );
+      const { data, error } = await supabaseAdmin
+        .from('expense_categories')
+        .delete()
+        .eq('id', id)
+        .eq('organization_id', organizationId)
+        .select()
+        .single();
 
-      return result.rows[0];
+      if (error) throw error;
+      return data;
     } catch (error) {
       console.error('Error deleting expense category:', error);
       throw error;

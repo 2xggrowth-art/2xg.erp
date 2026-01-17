@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { ArrowLeft, Save, Send, Plus, Trash2, Upload, AlertTriangle } from 'lucide-react';
+import { ArrowLeft, Save, Send, Plus, Trash2, AlertTriangle } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { invoicesService, InvoiceItem } from '../../services/invoices.service';
 import { customersService, Customer } from '../../services/customers.service';
@@ -45,7 +45,7 @@ const NewInvoiceForm = () => {
     { id: '2', name: 'ssss', email: 'sss@gmail.com' },
     { id: '3', name: 'serdty', email: 'esrty@gmail.com' }
   ]);
-  const [locations, setLocations] = useState<Location[]>([
+  const [locations] = useState<Location[]>([
     { id: '1', name: 'Head Office', address: 'Karnataka, Bangalore, Karnataka, India - 560001' }
   ]);
   const [showStockWarning, setShowStockWarning] = useState(false);
@@ -217,41 +217,26 @@ const NewInvoiceForm = () => {
     }
   };
 
-  const handleCustomerChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const customerId = e.target.value;
-    const selectedCustomer = customers.find(c => c.id === customerId);
+  const handleCustomerSelect = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const selectedCustomerId = e.target.value;
 
-    setFormData(prev => ({
-      ...prev,
-      customer_id: customerId,
-      customer_name: selectedCustomer?.customer_name || '',
-      customer_email: selectedCustomer?.email || '',
-      payment_terms: selectedCustomer?.payment_terms || 'due_on_receipt'
-    }));
-  };
-
-  const handleCustomerNameInput = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const inputName = e.target.value;
-
-    // Check if the input matches an existing customer
-    const matchedCustomer = customers.find(
-      c => c.customer_name.toLowerCase() === inputName.toLowerCase()
-    );
-
-    if (matchedCustomer) {
-      setFormData(prev => ({
-        ...prev,
-        customer_id: matchedCustomer.id,
-        customer_name: matchedCustomer.customer_name,
-        customer_email: matchedCustomer.email || '',
-        payment_terms: matchedCustomer.payment_terms || 'due_on_receipt'
-      }));
+    if (selectedCustomerId) {
+      const selectedCustomer = customers.find(c => c.id === selectedCustomerId);
+      if (selectedCustomer) {
+        setFormData(prev => ({
+          ...prev,
+          customer_id: selectedCustomer.id,
+          customer_name: selectedCustomer.customer_name,
+          customer_email: selectedCustomer.email || '',
+          payment_terms: selectedCustomer.payment_terms || 'due_on_receipt'
+        }));
+      }
     } else {
-      // Manual entry - clear customer_id but keep the name
+      // Clear customer selection
       setFormData(prev => ({
         ...prev,
         customer_id: '',
-        customer_name: inputName,
+        customer_name: '',
         customer_email: '',
         payment_terms: 'due_on_receipt'
       }));
@@ -740,21 +725,20 @@ const NewInvoiceForm = () => {
               <label className="block text-sm font-medium text-slate-700 mb-2">
                 Customer Name <span className="text-red-500">*</span>
               </label>
-              <input
-                type="text"
-                name="customer_name"
-                value={formData.customer_name}
-                onChange={handleCustomerNameInput}
-                list="customers-list"
-                placeholder="Type or select customer name"
+              <select
+                name="customer_id"
+                value={formData.customer_id}
+                onChange={handleCustomerSelect}
                 className="w-full px-4 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 required
-              />
-              <datalist id="customers-list">
+              >
+                <option value="">Select a customer</option>
                 {customers.map(customer => (
-                  <option key={customer.id} value={customer.customer_name} />
+                  <option key={customer.id} value={customer.id}>
+                    {customer.customer_name}
+                  </option>
                 ))}
-              </datalist>
+              </select>
             </div>
 
             <div>

@@ -3,6 +3,7 @@ import { ArrowLeft, Save, Send, Plus, Trash2, X } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { salesOrdersService, SalesOrderItem } from '../../services/sales-orders.service';
 import { itemsService, Item } from '../../services/items.service';
+import { customersService, Customer } from '../../services/customers.service';
 
 interface Salesperson {
   id: string;
@@ -30,6 +31,7 @@ const NewSalesOrderForm = () => {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
   const [items, setItems] = useState<Item[]>([]);
+  const [customers, setCustomers] = useState<Customer[]>([]);
   const [showItemDropdown, setShowItemDropdown] = useState<number | null>(null);
   const [itemSearchQuery, setItemSearchQuery] = useState<{ [key: number]: string }>({});
 
@@ -53,7 +55,7 @@ const NewSalesOrderForm = () => {
   // TDS/TCS State
   const [showTDSModal, setShowTDSModal] = useState(false);
   const [showTCSModal, setShowTCSModal] = useState(false);
-  const [tdsTaxes, setTdsTaxes] = useState<TDSTax[]>([
+  const [tdsTaxes, _setTdsTaxes] = useState<TDSTax[]>([
     { id: '1', name: 'Commission or Brokerage [2%]', rate: 2, section: 'Section 194 H', status: 'Active' },
     { id: '2', name: 'Commission or Brokerage (Reduced) [3.75%]', rate: 3.75, section: 'Section 194 H', status: 'Active' },
     { id: '3', name: 'Dividend [10%]', rate: 10, section: 'Section 194', status: 'Active' },
@@ -70,7 +72,7 @@ const NewSalesOrderForm = () => {
     { id: '14', name: 'Rent on land or furniture etc (Reduced) [7.5%]', rate: 7.5, section: 'Section 194I', status: 'Active' },
     { id: '15', name: 'Technical Fees (2%) [2%]', rate: 2, section: 'Section 194J', status: 'Active' },
   ]);
-  const [tcsTaxes, setTcsTaxes] = useState<TCSTax[]>([]);
+  const [tcsTaxes, _setTcsTaxes] = useState<TCSTax[]>([]);
   const [selectedTDSTax, setSelectedTDSTax] = useState<string>('');
   const [selectedTCSTax, setSelectedTCSTax] = useState<string>('');
 
@@ -115,9 +117,10 @@ const NewSalesOrderForm = () => {
 
   const fetchInitialData = async () => {
     try {
-      const [itemsRes, salesOrderNumberRes] = await Promise.all([
+      const [itemsRes, salesOrderNumberRes, customersRes] = await Promise.all([
         itemsService.getAllItems({ isActive: true }),
-        salesOrdersService.generateSalesOrderNumber()
+        salesOrdersService.generateSalesOrderNumber(),
+        customersService.getAllCustomers({ isActive: true })
       ]);
 
       const itemsApiResponse = itemsRes.data;
@@ -125,12 +128,17 @@ const NewSalesOrderForm = () => {
         setItems(itemsApiResponse.data);
       }
 
-      const salesOrderApiResponse = salesOrderNumberRes.data;
-      if (salesOrderApiResponse.success && salesOrderApiResponse.data) {
+      // salesOrderNumberRes returns { success, data } directly (not wrapped in .data)
+      if (salesOrderNumberRes.success && salesOrderNumberRes.data) {
         setFormData(prev => ({
           ...prev,
-          sales_order_number: salesOrderApiResponse.data.sales_order_number
+          sales_order_number: salesOrderNumberRes.data.sales_order_number
         }));
+      }
+
+      const customersApiResponse = customersRes.data;
+      if (customersApiResponse.success && customersApiResponse.data) {
+        setCustomers(customersApiResponse.data);
       }
     } catch (error) {
       console.error('Error fetching initial data:', error);
@@ -418,18 +426,24 @@ const NewSalesOrderForm = () => {
             <h2 className="text-xl font-semibold text-slate-800 mb-6">Customer Information</h2>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {/* Customer Name - Manual Only */}
+              {/* Customer Name */}
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-2">
                   Customer Name <span className="text-red-500">*</span>
                 </label>
-                <input
-                  type="text"
+                <select
                   value={formData.customer_name}
                   onChange={(e) => setFormData({ ...formData, customer_name: e.target.value })}
-                  placeholder="Enter customer name"
                   className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                />
+                  required
+                >
+                  <option value="">Select a customer</option>
+                  {customers.map(customer => (
+                    <option key={customer.id} value={customer.customer_name}>
+                      {customer.customer_name}
+                    </option>
+                  ))}
+                </select>
               </div>
 
               {/* Sales Order Number */}

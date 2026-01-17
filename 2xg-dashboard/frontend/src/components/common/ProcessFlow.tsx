@@ -1,4 +1,4 @@
-import { LucideIcon, ArrowRight, ArrowDown } from 'lucide-react';
+import { LucideIcon, ArrowRight } from 'lucide-react';
 
 interface ProcessStep {
   icon: LucideIcon;

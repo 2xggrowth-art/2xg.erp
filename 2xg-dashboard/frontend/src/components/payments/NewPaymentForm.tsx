@@ -85,7 +85,9 @@ const NewPaymentForm = () => {
   const fetchVendors = async () => {
     try {
       const response = await vendorsService.getAllVendors({ isActive: true });
-      setVendors(response.data);
+      if (response.data.success && response.data.data) {
+        setVendors(response.data.data);
+      }
     } catch (error) {
       console.error('Error fetching vendors:', error);
     }
@@ -181,7 +183,7 @@ const NewPaymentForm = () => {
     return Object.keys(newErrors).length === 0;
   };
 
-  const handleSubmit = async (saveType: 'draft' | 'paid') => {
+  const handleSubmit = async (_saveType: 'draft' | 'paid') => {
     if (!validateForm()) {
       return;
     }

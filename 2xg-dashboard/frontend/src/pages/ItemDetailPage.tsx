@@ -21,8 +21,8 @@ const ItemDetailPage: React.FC = () => {
       setLoading(true);
       setError(null);
       const response = await itemsService.getItemById(itemId);
-      if (response.success) {
-        setItem(response.data);
+      if (response.data.success && response.data.data) {
+        setItem(response.data.data);
       } else {
         setError('Failed to load item details');
       }

@@ -59,7 +59,8 @@ export const generateVendorCreditPDF = (credit: VendorCredit) => {
   doc.setFont('helvetica', 'bold');
   doc.text('Status:', rightColumn, 70);
   doc.setFont('helvetica', 'normal');
-  doc.setTextColor(getStatusColor(credit.status));
+  const statusColor = getStatusColor(credit.status);
+  doc.setTextColor(statusColor[0], statusColor[1], statusColor[2]);
   doc.text(credit.status.toUpperCase(), rightColumn + 35, 70);
   doc.setTextColor(0, 0, 0);
 

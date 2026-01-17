@@ -124,8 +124,8 @@ const NewVendorCreditForm = () => {
   const fetchVendors = async () => {
     try {
       const response = await vendorsService.getAllVendors({ isActive: true });
-      if (response.success && response.data) {
-        setVendors(response.data);
+      if (response.data.success && response.data.data) {
+        setVendors(response.data.data);
       }
     } catch (error) {
       console.error('Error fetching vendors:', error);
@@ -135,8 +135,8 @@ const NewVendorCreditForm = () => {
   const fetchItems = async () => {
     try {
       const response = await itemsService.getAllItems({ isActive: true });
-      if (response.success && response.data) {
-        setItems(response.data);
+      if (response.data.success && response.data.data) {
+        setItems(response.data.data);
       }
     } catch (error) {
       console.error('Error fetching items:', error);
