@@ -14,12 +14,7 @@ export class PurchaseOrdersService {
       .from('purchase_orders')
       .select(`
         *,
-        purchase_order_items (*),
-        vendors:supplier_id (
-          id,
-          vendor_name,
-          email
-        )
+        purchase_order_items (*)
       `)
       .order('created_at', { ascending: false});
 
@@ -49,12 +44,7 @@ export class PurchaseOrdersService {
       .from('purchase_orders')
       .select(`
         *,
-        purchase_order_items (*),
-        vendors:supplier_id (
-          id,
-          vendor_name,
-          email
-        )
+        purchase_order_items (*)
       `)
       .eq('id', id)
       .single();

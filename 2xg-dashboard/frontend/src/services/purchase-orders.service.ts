@@ -18,6 +18,8 @@ export interface PurchaseOrder {
   id: string;
   organization_id: string;
   supplier_id: string;
+  supplier_name?: string;
+  supplier_email?: string;
   po_number: string;
   order_date: string;
   expected_delivery_date?: string;

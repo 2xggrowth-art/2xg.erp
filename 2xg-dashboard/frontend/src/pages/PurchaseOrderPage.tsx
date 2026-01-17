@@ -201,7 +201,7 @@ const PurchaseOrderPage = () => {
                           {new Date(po.order_date).toLocaleDateString()}
                         </td>
                         <td className="px-6 py-4 text-slate-800">
-                          {po.supplier_id}
+                          {po.supplier_name || po.supplier_id}
                         </td>
                         <td className="px-6 py-4">
                           {getStatusBadge(po.status)}
