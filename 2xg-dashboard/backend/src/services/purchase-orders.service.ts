@@ -14,9 +14,14 @@ export class PurchaseOrdersService {
       .from('purchase_orders')
       .select(`
         *,
-        purchase_order_items (*)
+        purchase_order_items (*),
+        vendors:supplier_id (
+          id,
+          vendor_name,
+          email
+        )
       `)
-      .order('created_at', { ascending: false });
+      .order('created_at', { ascending: false});
 
     if (filters?.status) {
       query = query.eq('status', filters.status);
@@ -44,7 +49,12 @@ export class PurchaseOrdersService {
       .from('purchase_orders')
       .select(`
         *,
-        purchase_order_items (*)
+        purchase_order_items (*),
+        vendors:supplier_id (
+          id,
+          vendor_name,
+          email
+        )
       `)
       .eq('id', id)
       .single();
