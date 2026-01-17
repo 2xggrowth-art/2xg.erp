@@ -50,6 +50,7 @@ app.use(cors({
       'http://localhost:3001',
       'http://localhost:3002',
       'http://localhost:3003',
+      'https://2xg-erp.vercel.app',
       process.env.FRONTEND_URL
     ];
 
@@ -105,6 +106,15 @@ app.use('/api/customers', customersRoutes);
 app.use('/api/sales-orders', salesOrdersRoutes);
 app.use('/api/payments-received', paymentsReceivedRoutes);
 app.use('/api/delivery-challans', deliveryChallansRoutes);
+
+// Health check endpoint for deployment platforms
+app.get('/health', (_req: Request, res: Response) => {
+  res.status(200).json({
+    success: true,
+    message: '2XG ERP API is healthy',
+    timestamp: new Date().toISOString()
+  });
+});
 
 // 404 handler
 app.use((req: Request, res: Response) => {
