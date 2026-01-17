@@ -83,29 +83,43 @@ export interface PurchaseOrdersSummary {
 }
 
 export const purchaseOrdersService = {
-  getAllPurchaseOrders: (filters?: {
+  getAllPurchaseOrders: async (filters?: {
     status?: string;
     supplier_id?: string;
     startDate?: string;
     endDate?: string;
-  }): Promise<APIResponse<PurchaseOrder[]>> =>
-    apiClient.get('/purchase-orders', { params: filters }),
+  }): Promise<APIResponse<PurchaseOrder[]>> => {
+    const response = await apiClient.get('/purchase-orders', { params: filters });
+    return response.data;
+  },
 
-  getPurchaseOrderById: (id: string): Promise<APIResponse<PurchaseOrder>> =>
-    apiClient.get(`/purchase-orders/${id}`),
+  getPurchaseOrderById: async (id: string): Promise<APIResponse<PurchaseOrder>> => {
+    const response = await apiClient.get(`/purchase-orders/${id}`);
+    return response.data;
+  },
 
-  generatePONumber: (): Promise<APIResponse<{ po_number: string }>> =>
-    apiClient.get('/purchase-orders/generate-po-number'),
+  generatePONumber: async (): Promise<APIResponse<{ po_number: string }>> => {
+    const response = await apiClient.get('/purchase-orders/generate-po-number');
+    return response.data;
+  },
 
-  createPurchaseOrder: (poData: CreatePurchaseOrderData): Promise<APIResponse<PurchaseOrder>> =>
-    apiClient.post('/purchase-orders', poData),
+  createPurchaseOrder: async (poData: CreatePurchaseOrderData): Promise<APIResponse<PurchaseOrder>> => {
+    const response = await apiClient.post('/purchase-orders', poData);
+    return response.data;
+  },
 
-  updatePurchaseOrder: (id: string, poData: Partial<CreatePurchaseOrderData>): Promise<APIResponse<PurchaseOrder>> =>
-    apiClient.put(`/purchase-orders/${id}`, poData),
+  updatePurchaseOrder: async (id: string, poData: Partial<CreatePurchaseOrderData>): Promise<APIResponse<PurchaseOrder>> => {
+    const response = await apiClient.put(`/purchase-orders/${id}`, poData);
+    return response.data;
+  },
 
-  deletePurchaseOrder: (id: string): Promise<APIResponse<PurchaseOrder>> =>
-    apiClient.delete(`/purchase-orders/${id}`),
+  deletePurchaseOrder: async (id: string): Promise<APIResponse<PurchaseOrder>> => {
+    const response = await apiClient.delete(`/purchase-orders/${id}`);
+    return response.data;
+  },
 
-  getPurchaseOrdersSummary: (): Promise<APIResponse<PurchaseOrdersSummary>> =>
-    apiClient.get('/purchase-orders/summary')
+  getPurchaseOrdersSummary: async (): Promise<APIResponse<PurchaseOrdersSummary>> => {
+    const response = await apiClient.get('/purchase-orders/summary');
+    return response.data;
+  }
 };
