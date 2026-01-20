@@ -3,6 +3,7 @@ import { FileText, Package, Truck, CheckCircle, Plus, Filter, Download, Mail, Pr
 import { useNavigate } from 'react-router-dom';
 import ProcessFlow from '../components/common/ProcessFlow';
 import { salesOrdersService, SalesOrder } from '../services/sales-orders.service';
+import BulkActionBar, { createBulkDeleteAction, createBulkExportAction, createBulkPrintAction, createBulkInvoiceAction } from '../components/common/BulkActionBar';
 
 const SalesOrdersPage = () => {
   const navigate = useNavigate();
@@ -97,6 +98,61 @@ const SalesOrdersPage = () => {
       }
     }
   };
+
+  const handleBulkDelete = async () => {
+    if (window.confirm(`Are you sure you want to delete ${selectedOrders.length} sales order(s)?`)) {
+      try {
+        await Promise.all(selectedOrders.map(id => salesOrdersService.deleteSalesOrder(id)));
+        setSelectedOrders([]);
+        fetchSalesOrders();
+      } catch (error) {
+        console.error('Error deleting sales orders:', error);
+        alert('Failed to delete some sales orders');
+      }
+    }
+  };
+
+  const handleBulkExport = () => {
+    const selectedData = salesOrders.filter(order => selectedOrders.includes(order.id!));
+    const csv = [
+      ['Order Number', 'Date', 'Customer', 'Status', 'Amount'].join(','),
+      ...selectedData.map(order => [
+        order.sales_order_number,
+        formatDate(order.sales_order_date),
+        order.customer_name,
+        order.status,
+        order.total_amount
+      ].join(','))
+    ].join('\n');
+
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'sales_orders_export.csv';
+    a.click();
+    window.URL.revokeObjectURL(url);
+  };
+
+  const handleBulkPrint = () => {
+    window.print();
+  };
+
+  const handleBulkCreateInvoice = () => {
+    alert(`Creating invoices for ${selectedOrders.length} order(s)...`);
+    // Navigate to bulk invoice creation or show modal
+  };
+
+  const clearSelection = () => {
+    setSelectedOrders([]);
+  };
+
+  const bulkActions = [
+    createBulkInvoiceAction(handleBulkCreateInvoice),
+    createBulkExportAction(handleBulkExport),
+    createBulkPrintAction(handleBulkPrint),
+    createBulkDeleteAction(handleBulkDelete),
+  ];
 
   const getStatusBadge = (status: string) => {
     const statusLower = status.toLowerCase();
@@ -397,6 +453,16 @@ const SalesOrdersPage = () => {
             </div>
           </div>
         </div>
+
+        {/* Bulk Action Bar */}
+        <BulkActionBar
+          selectedCount={selectedOrders.length}
+          totalCount={salesOrders.length}
+          onClearSelection={clearSelection}
+          onSelectAll={handleSelectAll}
+          actions={bulkActions}
+          entityName="order"
+        />
       </div>
     </div>
   );

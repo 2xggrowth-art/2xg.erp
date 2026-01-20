@@ -36,8 +36,14 @@ import TransferOrdersPage from './pages/TransferOrdersPage';
 import NewTransferOrderForm from './components/transfer-orders/NewTransferOrderForm';
 import NewInvoiceForm from './components/invoices/NewInvoiceForm';
 import SalesOrdersPage from './pages/SalesOrdersPage';
+import SalesOrderDetailPage from './pages/SalesOrderDetailPage';
 import NewSalesOrderForm from './components/sales-orders/NewSalesOrderForm';
 import PaymentsReceivedPage from './pages/PaymentsReceivedPage';
+import InvoiceDetailPage from './pages/InvoiceDetailPage';
+import PurchaseOrderDetailPage from './pages/PurchaseOrderDetailPage';
+import BillDetailPage from './pages/BillDetailPage';
+import CustomerDetailPage from './pages/CustomerDetailPage';
+import VendorDetailPage from './pages/VendorDetailPage';
 import NewPaymentReceivedForm from './components/payments-received/NewPaymentReceivedForm';
 import DeliveryChallansPage from './pages/DeliveryChallansPage';
 import NewDeliveryChallanForm from './components/delivery-challans/NewDeliveryChallanForm';
@@ -83,6 +89,7 @@ function App() {
             <Route path="/purchases/po" element={<ProtectedRoute><DashboardLayout><PurchaseOrderPage /></DashboardLayout></ProtectedRoute>} />
             <Route path="/purchases/bills" element={<ProtectedRoute><DashboardLayout><BillsPage /></DashboardLayout></ProtectedRoute>} />
             <Route path="/purchases/bills/new" element={<ProtectedRoute><DashboardLayout><NewBillForm /></DashboardLayout></ProtectedRoute>} />
+            <Route path="/purchases/bills/:id" element={<ProtectedRoute><DashboardLayout><BillDetailPage /></DashboardLayout></ProtectedRoute>} />
             <Route path="/purchases/payment-made" element={<ProtectedRoute><DashboardLayout><PaymentMadePage /></DashboardLayout></ProtectedRoute>} />
             <Route path="/purchases/payments-made" element={<ProtectedRoute><DashboardLayout><PaymentMadePage /></DashboardLayout></ProtectedRoute>} />
             <Route path="/purchases/payments-made/new" element={<ProtectedRoute><DashboardLayout><NewPaymentForm /></DashboardLayout></ProtectedRoute>} />
@@ -93,14 +100,17 @@ function App() {
             {/* Vendor Management Routes */}
             <Route path="/vendor-management" element={<ProtectedRoute><DashboardLayout><VendorManagementPage /></DashboardLayout></ProtectedRoute>} />
             <Route path="/vendor-management/new" element={<ProtectedRoute><DashboardLayout><NewVendorForm /></DashboardLayout></ProtectedRoute>} />
+            <Route path="/vendor-management/:id" element={<ProtectedRoute><DashboardLayout><VendorDetailPage /></DashboardLayout></ProtectedRoute>} />
 
             {/* Customer Management Routes */}
             <Route path="/sales/customers" element={<ProtectedRoute><DashboardLayout><CustomerManagementPage /></DashboardLayout></ProtectedRoute>} />
             <Route path="/sales/customers/new" element={<ProtectedRoute><DashboardLayout><NewCustomerForm /></DashboardLayout></ProtectedRoute>} />
+            <Route path="/sales/customers/:id" element={<ProtectedRoute><DashboardLayout><CustomerDetailPage /></DashboardLayout></ProtectedRoute>} />
 
             {/* Purchase Order Routes */}
             <Route path="/purchase-orders" element={<ProtectedRoute><DashboardLayout><PurchaseOrderPage /></DashboardLayout></ProtectedRoute>} />
             <Route path="/purchase-orders/new" element={<ProtectedRoute><DashboardLayout><NewPurchaseOrderForm /></DashboardLayout></ProtectedRoute>} />
+            <Route path="/purchase-orders/:id" element={<ProtectedRoute><DashboardLayout><PurchaseOrderDetailPage /></DashboardLayout></ProtectedRoute>} />
 
             {/* Sales Routes */}
             <Route path="/sales" element={<ProtectedRoute><DashboardLayout><SalesPage /></DashboardLayout></ProtectedRoute>} />
@@ -113,8 +123,10 @@ function App() {
             <Route path="/sales/sales-order" element={<ProtectedRoute><DashboardLayout><SalesOrderPage /></DashboardLayout></ProtectedRoute>} />
             <Route path="/sales/sales-orders" element={<ProtectedRoute><DashboardLayout><SalesOrdersPage /></DashboardLayout></ProtectedRoute>} />
             <Route path="/sales/sales-orders/new" element={<ProtectedRoute><DashboardLayout><NewSalesOrderForm /></DashboardLayout></ProtectedRoute>} />
+            <Route path="/sales/sales-orders/:id" element={<ProtectedRoute><DashboardLayout><SalesOrderDetailPage /></DashboardLayout></ProtectedRoute>} />
             <Route path="/sales/invoices" element={<ProtectedRoute><DashboardLayout><InvoicesPage /></DashboardLayout></ProtectedRoute>} />
             <Route path="/sales/invoices/new" element={<ProtectedRoute><DashboardLayout><NewInvoiceForm /></DashboardLayout></ProtectedRoute>} />
+            <Route path="/sales/invoices/:id" element={<ProtectedRoute><DashboardLayout><InvoiceDetailPage /></DashboardLayout></ProtectedRoute>} />
             <Route path="/sales/payment-received" element={<ProtectedRoute><DashboardLayout><PaymentsReceivedPage /></DashboardLayout></ProtectedRoute>} />
             <Route path="/sales/payment-received/new" element={<ProtectedRoute><DashboardLayout><NewPaymentReceivedForm /></DashboardLayout></ProtectedRoute>} />
 
