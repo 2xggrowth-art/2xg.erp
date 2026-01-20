@@ -44,6 +44,10 @@ import NewDeliveryChallanForm from './components/delivery-challans/NewDeliveryCh
 import NewExpenseForm from './components/expenses/NewExpenseForm';
 import SettingsPage from './pages/SettingsPage';
 
+// ONLY ADDED THIS POS IMPORT
+import PosCreate from './pages/PosCreate';
+import PosPage from './pages/PosPage';
+
 function App() {
   return (
     <Router>
@@ -101,6 +105,11 @@ function App() {
             {/* Sales Routes */}
             <Route path="/sales" element={<ProtectedRoute><DashboardLayout><SalesPage /></DashboardLayout></ProtectedRoute>} />
             <Route path="/sales/sales" element={<ProtectedRoute><DashboardLayout><SalesPage /></DashboardLayout></ProtectedRoute>} />
+
+            {/* ONLY ADDED THIS POS ROUTE */}
+            <Route path="/sales/pos" element={<ProtectedRoute><DashboardLayout><PosPage /></DashboardLayout></ProtectedRoute>} />
+            <Route path="/sales/pos/new" element={<ProtectedRoute><DashboardLayout><PosCreate /></DashboardLayout></ProtectedRoute>} />
+
             <Route path="/sales/sales-order" element={<ProtectedRoute><DashboardLayout><SalesOrderPage /></DashboardLayout></ProtectedRoute>} />
             <Route path="/sales/sales-orders" element={<ProtectedRoute><DashboardLayout><SalesOrdersPage /></DashboardLayout></ProtectedRoute>} />
             <Route path="/sales/sales-orders/new" element={<ProtectedRoute><DashboardLayout><NewSalesOrderForm /></DashboardLayout></ProtectedRoute>} />

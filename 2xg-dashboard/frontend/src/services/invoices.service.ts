@@ -60,11 +60,9 @@ class InvoicesService {
       if (filters?.to_date) params.append('to_date', filters.to_date);
 
       const response = await axios.get(`${API_BASE_URL}/invoices?${params.toString()}`);
-      return {
-        success: true,
-        data: response.data.data || response.data,
-        message: 'Invoices retrieved successfully'
-      };
+
+      // Return the response as-is since backend returns {success: true, data: {invoices: [...], total: 5}}
+      return response.data;
     } catch (error: any) {
       console.error('Error fetching invoices:', error);
       return {

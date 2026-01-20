@@ -4,12 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { salesOrdersService, SalesOrderItem } from '../../services/sales-orders.service';
 import { itemsService, Item } from '../../services/items.service';
 import { customersService, Customer } from '../../services/customers.service';
-
-interface Salesperson {
-  id: string;
-  name: string;
-  email: string;
-}
+import { salespersonService, Salesperson } from '../../services/salesperson.service';
 
 interface TDSTax {
   id: string;
@@ -35,11 +30,7 @@ const NewSalesOrderForm = () => {
   const [showItemDropdown, setShowItemDropdown] = useState<number | null>(null);
   const [itemSearchQuery, setItemSearchQuery] = useState<{ [key: number]: string }>({});
 
-  const [salespersons, setSalespersons] = useState<Salesperson[]>([
-    { id: '1', name: 'Zaheer', email: 'mohd.zaheer@gmail.com' },
-    { id: '2', name: 'Rahul Kumar', email: 'rahul@gmail.com' },
-    { id: '3', name: 'Priya Sharma', email: 'priya@gmail.com' }
-  ]);
+  const [salespersons, setSalespersons] = useState<Salesperson[]>([]);
   const [showSalespersonModal, setShowSalespersonModal] = useState(false);
   const [showAddSalespersonForm, setShowAddSalespersonForm] = useState(false);
   const [newSalesperson, setNewSalesperson] = useState({ name: '', email: '' });
@@ -140,6 +131,10 @@ const NewSalesOrderForm = () => {
       if (customersApiResponse.success && customersApiResponse.data) {
         setCustomers(customersApiResponse.data);
       }
+
+      // Fetch salespersons from service
+      const allSalespersons = salespersonService.getAllSalespersons();
+      setSalespersons(allSalespersons);
     } catch (error) {
       console.error('Error fetching initial data:', error);
     }
@@ -243,14 +238,16 @@ const NewSalesOrderForm = () => {
   const totals = calculateTotals();
 
   const handleAddSalesperson = () => {
-    if (newSalesperson.name && newSalesperson.email) {
-      const newId = (salespersons.length + 1).toString();
-      const salesperson = { id: newId, ...newSalesperson };
-      setSalespersons([...salespersons, salesperson]);
-      setFormData({ ...formData, salesperson_id: newId, salesperson_name: newSalesperson.name });
+    if (newSalesperson.name.trim() && newSalesperson.email.trim()) {
+      const addedSalesperson = salespersonService.addSalesperson(newSalesperson);
+      setSalespersons([...salespersons, addedSalesperson]);
+      setFormData({ ...formData, salesperson_id: addedSalesperson.id, salesperson_name: addedSalesperson.name });
       setNewSalesperson({ name: '', email: '' });
       setShowAddSalespersonForm(false);
       setShowSalespersonModal(false);
+      alert('Salesperson added successfully!');
+    } else {
+      alert('Please fill in both name and email');
     }
   };
 

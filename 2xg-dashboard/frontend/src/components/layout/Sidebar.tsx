@@ -28,7 +28,8 @@ import {
   Banknote,
   FilePlus,
   FileCheck,
-  Clock
+  Clock,
+  Calculator // Added for the POS icon
 } from 'lucide-react';
 
 const Sidebar = () => {
@@ -77,7 +78,6 @@ const Sidebar = () => {
             {/* Dropdown Items */}
             {isItemsOpen && (
               <div className="bg-slate-900">
-                {/* Items - Direct Link */}
                 <Link
                   to="/items"
                   className="flex items-center gap-3 px-6 py-2 pl-12 hover:bg-slate-700 transition-colors text-sm text-slate-300 hover:text-white"
@@ -200,6 +200,16 @@ const Sidebar = () => {
             {/* Dropdown Items */}
             {isSalesOpen && (
               <div className="bg-slate-900">
+                {/* POS Link Added Below */}
+                <Link
+                  to="/sales/pos"
+                  className={`flex items-center gap-3 px-6 py-2 pl-12 hover:bg-slate-700 transition-colors text-sm ${
+                    location.pathname === '/sales/pos' ? 'text-white' : 'text-slate-300'
+                  } hover:text-white`}
+                >
+                  <Calculator size={16} />
+                  <span>POS</span>
+                </Link>
                 <Link
                   to="/sales/customers"
                   className="flex items-center gap-3 px-6 py-2 pl-12 hover:bg-slate-700 transition-colors text-sm text-slate-300 hover:text-white"

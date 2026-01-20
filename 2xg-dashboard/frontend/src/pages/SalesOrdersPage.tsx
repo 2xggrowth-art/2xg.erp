@@ -257,6 +257,7 @@ const SalesOrdersPage = () => {
                   <th className="px-4 py-3 text-left text-sm font-semibold text-slate-700">SALES ORDER#</th>
                   <th className="px-4 py-3 text-left text-sm font-semibold text-slate-700">REFERENCE#</th>
                   <th className="px-4 py-3 text-left text-sm font-semibold text-slate-700">CUSTOMER NAME</th>
+                  <th className="px-4 py-3 text-left text-sm font-semibold text-slate-700">SALESPERSON</th>
                   <th className="px-4 py-3 text-left text-sm font-semibold text-slate-700">STATUS</th>
                   <th className="px-4 py-3 text-left text-sm font-semibold text-slate-700">SHIPMENT DATE</th>
                   <th className="px-4 py-3 text-right text-sm font-semibold text-slate-700">AMOUNT</th>
@@ -291,6 +292,9 @@ const SalesOrdersPage = () => {
                     </td>
                     <td className="px-4 py-4 text-sm text-slate-800 font-medium">
                       {order.customer_name}
+                    </td>
+                    <td className="px-4 py-4 text-sm text-slate-600">
+                      {order.salesperson_name || '-'}
                     </td>
                     <td className="px-4 py-4">
                       {getStatusBadge(order.status || 'draft')}
