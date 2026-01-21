@@ -16,7 +16,7 @@ export interface InvoiceItem {
 
 export interface Invoice {
   id: string;
-  customer_id: string;
+  customer_id?: string;
   customer_name: string;
   customer_email?: string;
   invoice_number: string;
@@ -35,7 +35,11 @@ export interface Invoice {
   adjustment: number;
   sub_total: number;
   total_amount: number;
-  status: 'draft' | 'sent' | 'paid' | 'overdue' | 'cancelled';
+  amount_paid?: number;
+  balance_due?: number;
+  status: 'draft' | 'sent' | 'paid' | 'partially_paid' | 'overdue' | 'cancelled';
+  payment_status?: 'Paid' | 'Partially Paid' | 'Unpaid';
+  customer_notes?: string;
   notes?: string;
   terms_and_conditions?: string;
   items: InvoiceItem[];

@@ -3,6 +3,7 @@ import { FileText, Send, Eye, CreditCard, CheckCircle, Plus, Filter, Download, M
 import { useNavigate } from 'react-router-dom';
 import ProcessFlow from '../components/common/ProcessFlow';
 import { invoicesService } from '../services/invoices.service';
+import BulkActionBar, { createBulkDeleteAction, createBulkExportAction, createBulkPrintAction, createBulkEmailAction } from '../components/common/BulkActionBar';
 
 interface Invoice {
   id: string;
@@ -94,6 +95,62 @@ const InvoicesPage = () => {
     }
   };
 
+  const clearSelection = () => {
+    setSelectedInvoices([]);
+  };
+
+  const handleBulkDelete = async () => {
+    if (window.confirm(`Are you sure you want to delete ${selectedInvoices.length} invoice(s)?`)) {
+      try {
+        await Promise.all(selectedInvoices.map(id => invoicesService.deleteInvoice(id)));
+        setSelectedInvoices([]);
+        fetchInvoices();
+      } catch (error) {
+        console.error('Error deleting invoices:', error);
+        alert('Failed to delete some invoices. Please try again.');
+      }
+    }
+  };
+
+  const handleBulkExport = () => {
+    const selectedData = invoices.filter(invoice => selectedInvoices.includes(invoice.id));
+    const csv = [
+      ['Date', 'Invoice#', 'Order#', 'Customer Name', 'Status', 'Due Date', 'Amount', 'Balance Due'].join(','),
+      ...selectedData.map(invoice => [
+        invoice.invoice_date,
+        invoice.invoice_number,
+        invoice.order_number || '',
+        invoice.customer_name,
+        invoice.status,
+        invoice.due_date || '',
+        invoice.total_amount.toString(),
+        invoice.balance_due.toString()
+      ].join(','))
+    ].join('\n');
+
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `invoices_export_${new Date().toISOString().split('T')[0]}.csv`;
+    a.click();
+  };
+
+  const handleBulkPrint = () => {
+    window.print();
+  };
+
+  const handleBulkEmail = () => {
+    alert(`Sending ${selectedInvoices.length} invoice(s) via email...`);
+  };
+
+  const bulkActions = [
+    createBulkEmailAction(handleBulkEmail),
+    createBulkExportAction(handleBulkExport),
+    createBulkPrintAction(handleBulkPrint),
+    createBulkDeleteAction(handleBulkDelete)
+  ];
+
   const handleViewInvoice = (invoiceId: string) => {
     navigate(`/sales/invoices/${invoiceId}`);
   };
@@ -114,12 +171,13 @@ const InvoicesPage = () => {
     }
   };
 
-  const getStatusBadge = (status: string) => {
+  const getStatusBadge = (status: string, paymentStatus?: string) => {
     const statusLower = status.toLowerCase();
     const statusMap: Record<string, { bg: string; text: string; label: string }> = {
       draft: { bg: 'bg-slate-100', text: 'text-slate-700', label: 'Draft' },
       sent: { bg: 'bg-blue-100', text: 'text-blue-700', label: 'Sent' },
       paid: { bg: 'bg-green-100', text: 'text-green-700', label: 'Paid' },
+      partially_paid: { bg: 'bg-orange-100', text: 'text-orange-700', label: 'Partially Paid' },
       overdue: { bg: 'bg-red-100', text: 'text-red-700', label: 'Overdue' },
       cancelled: { bg: 'bg-gray-100', text: 'text-gray-700', label: 'Cancelled' },
     };
@@ -129,6 +187,31 @@ const InvoicesPage = () => {
       <span className={`px-3 py-1 rounded-full text-xs font-medium ${style.bg} ${style.text}`}>
         {style.label}
       </span>
+    );
+  };
+
+  const getPaymentStatusBadge = (paymentStatus?: string, balanceDue?: number) => {
+    if (!paymentStatus) return null;
+
+    const statusMap: Record<string, { bg: string; text: string }> = {
+      'Paid': { bg: 'bg-green-100', text: 'text-green-700' },
+      'Partially Paid': { bg: 'bg-orange-100', text: 'text-orange-700' },
+      'Unpaid': { bg: 'bg-red-100', text: 'text-red-700' },
+    };
+
+    const style = statusMap[paymentStatus] || statusMap['Unpaid'];
+
+    return (
+      <div className="flex flex-col gap-1">
+        <span className={`px-3 py-1 rounded-full text-xs font-medium ${style.bg} ${style.text}`}>
+          {paymentStatus}
+        </span>
+        {paymentStatus === 'Partially Paid' && balanceDue && balanceDue > 0 && (
+          <span className="text-xs text-orange-600 font-medium">
+            Credit Sale Pending
+          </span>
+        )}
+      </div>
     );
   };
 
@@ -234,6 +317,7 @@ const InvoicesPage = () => {
                 <option value="draft">Draft</option>
                 <option value="sent">Sent</option>
                 <option value="paid">Paid</option>
+                <option value="partially_paid">Partially Paid / Credit Sale</option>
                 <option value="overdue">Overdue</option>
                 <option value="cancelled">Cancelled</option>
               </select>
@@ -272,6 +356,7 @@ const InvoicesPage = () => {
                   <th className="px-4 py-3 text-left text-sm font-semibold text-slate-700">ORDER NUMBER</th>
                   <th className="px-4 py-3 text-left text-sm font-semibold text-slate-700">CUSTOMER NAME</th>
                   <th className="px-4 py-3 text-left text-sm font-semibold text-slate-700">STATUS</th>
+                  <th className="px-4 py-3 text-left text-sm font-semibold text-slate-700">PAYMENT STATUS</th>
                   <th className="px-4 py-3 text-left text-sm font-semibold text-slate-700">DUE DATE</th>
                   <th className="px-4 py-3 text-right text-sm font-semibold text-slate-700">AMOUNT</th>
                   <th className="px-4 py-3 text-right text-sm font-semibold text-slate-700">BALANCE DUE</th>
@@ -308,7 +393,10 @@ const InvoicesPage = () => {
                       {invoice.customer_name}
                     </td>
                     <td className="px-4 py-4">
-                      {getStatusBadge(invoice.status)}
+                      {getStatusBadge(invoice.status, invoice.payment_status)}
+                    </td>
+                    <td className="px-4 py-4">
+                      {getPaymentStatusBadge(invoice.payment_status, invoice.balance_due)}
                     </td>
                     <td className="px-4 py-4 text-sm text-slate-600">
                       {formatDate(invoice.due_date || '')}
@@ -412,6 +500,18 @@ const InvoicesPage = () => {
           </div>
         </div>
       </div>
+
+      {/* Bulk Action Bar */}
+      {selectedInvoices.length > 0 && (
+        <BulkActionBar
+          selectedCount={selectedInvoices.length}
+          totalCount={invoices.length}
+          onClearSelection={clearSelection}
+          onSelectAll={handleSelectAll}
+          actions={bulkActions}
+          entityName="invoice"
+        />
+      )}
     </div>
   );
 };
