@@ -15,10 +15,8 @@ import {
   FileText,
   Truck,
   CheckCircle,
-  Clock,
   XCircle,
   Copy,
-  Share2,
   Receipt
 } from 'lucide-react';
 import { purchaseOrdersService } from '../services/purchase-orders.service';
@@ -76,47 +74,42 @@ const PurchaseOrderDetailPage: React.FC = () => {
   const fetchOrderDetails = async () => {
     try {
       setLoading(true);
-      try {
-        const response = await purchaseOrdersService.getById(id!);
-        if (response) {
-          setOrder(response);
-          return;
-        }
-      } catch (error) {
-        console.log('Using mock data');
+      const response = await purchaseOrdersService.getPurchaseOrderById(id!);
+      if (response.success && response.data) {
+        // Map the API response to match our interface
+        const poData = response.data;
+        setOrder({
+          id: poData.id,
+          po_number: poData.po_number,
+          vendor_name: poData.supplier_name || 'Unknown Vendor',
+          vendor_email: poData.supplier_email,
+          vendor_phone: '',
+          vendor_address: poData.delivery_address || '',
+          order_date: poData.order_date,
+          expected_date: poData.expected_delivery_date,
+          status: poData.status as any,
+          subtotal: poData.subtotal,
+          discount_amount: poData.discount_amount,
+          total_amount: poData.total_amount,
+          notes: poData.notes,
+          terms_conditions: poData.terms_and_conditions,
+          line_items: (poData.items || []).map((item: any) => ({
+            id: item.id,
+            item_name: item.item_name,
+            quantity: item.quantity,
+            unit_price: item.rate,
+            total: item.amount
+          })),
+          created_at: poData.created_at,
+          updated_at: poData.updated_at
+        });
+      } else {
+        console.error('Failed to fetch purchase order');
+        setOrder(null);
       }
-
-      // Mock data
-      setOrder({
-        id: id!,
-        po_number: `PO-${id?.slice(0, 8).toUpperCase()}`,
-        vendor_name: 'Hero Cycles Ltd',
-        vendor_email: 'orders@herocycles.com',
-        vendor_phone: '+91 98765 12345',
-        vendor_address: 'Industrial Area Phase II, Ludhiana, Punjab 141003',
-        order_date: new Date().toISOString(),
-        expected_date: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString(),
-        status: 'confirmed',
-        payment_status: 'pending',
-        subtotal: 125000,
-        tax_amount: 22500,
-        discount_amount: 5000,
-        shipping_charges: 2500,
-        total_amount: 145000,
-        amount_paid: 50000,
-        balance_due: 95000,
-        notes: 'Urgent order for festive season stock',
-        terms_conditions: 'Payment: 50% advance, 50% on delivery',
-        line_items: [
-          { id: '1', item_name: 'Hero Sprint Pro 26T Frame', sku: 'HRO-FRM-26T', quantity: 20, received_quantity: 0, unit_price: 5000, discount: 0, tax_rate: 18, total: 100000 },
-          { id: '2', item_name: 'Hero Wheel Set 26"', sku: 'HRO-WHL-26', quantity: 10, received_quantity: 0, unit_price: 2500, discount: 0, tax_rate: 18, total: 25000 },
-        ],
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-        created_by: 'Admin User'
-      });
     } catch (error) {
       console.error('Error fetching order:', error);
+      setOrder(null);
     } finally {
       setLoading(false);
     }
@@ -153,12 +146,158 @@ const PurchaseOrderDetailPage: React.FC = () => {
   const handleDelete = async () => {
     if (window.confirm('Are you sure you want to delete this purchase order?')) {
       try {
-        await purchaseOrdersService.delete(id!);
-        navigate('/purchase-orders');
+        const response = await purchaseOrdersService.deletePurchaseOrder(id!);
+        if (response.success) {
+          navigate('/purchase-orders');
+        } else {
+          alert('Failed to delete purchase order');
+        }
       } catch (error) {
         console.error('Error deleting order:', error);
+        alert('Failed to delete purchase order');
       }
     }
+  };
+
+  const handlePrint = () => {
+    window.print();
+  };
+
+  const handleDownloadPDF = () => {
+    if (!order) return;
+
+    const htmlContent = `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>Purchase Order - ${order.po_number}</title>
+          <style>
+            body { font-family: Arial, sans-serif; padding: 20px; }
+            h1 { color: #333; margin-bottom: 5px; }
+            .header { margin-bottom: 30px; }
+            .section { margin-bottom: 20px; }
+            .section-title { font-weight: bold; font-size: 18px; margin-bottom: 10px; color: #2563eb; }
+            table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+            th, td { border: 1px solid #ddd; padding: 10px; text-align: left; }
+            th { background-color: #f9fafb; font-weight: bold; }
+            .text-right { text-align: right; }
+            .summary { float: right; width: 300px; margin-top: 20px; }
+            .summary-row { display: flex; justify-content: space-between; padding: 8px 0; }
+            .summary-total { font-weight: bold; font-size: 18px; border-top: 2px solid #333; padding-top: 10px; }
+          </style>
+        </head>
+        <body>
+          <div class="header">
+            <h1>Purchase Order: ${order.po_number}</h1>
+            <p>Status: ${order.status.toUpperCase()}</p>
+            <p>Order Date: ${formatDate(order.order_date)}</p>
+            ${order.expected_date ? `<p>Expected Delivery: ${formatDate(order.expected_date)}</p>` : ''}
+          </div>
+
+          <div class="section">
+            <div class="section-title">Vendor Information</div>
+            <p><strong>Vendor:</strong> ${order.vendor_name}</p>
+            ${order.vendor_email ? `<p><strong>Email:</strong> ${order.vendor_email}</p>` : ''}
+            ${order.vendor_phone ? `<p><strong>Phone:</strong> ${order.vendor_phone}</p>` : ''}
+            ${order.vendor_address ? `<p><strong>Address:</strong> ${order.vendor_address}</p>` : ''}
+          </div>
+
+          <div class="section">
+            <div class="section-title">Order Items</div>
+            <table>
+              <thead>
+                <tr>
+                  <th>#</th>
+                  <th>Item</th>
+                  <th class="text-right">Quantity</th>
+                  <th class="text-right">Rate</th>
+                  <th class="text-right">Amount</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${order.line_items.map((item, index) => `
+                  <tr>
+                    <td>${index + 1}</td>
+                    <td>${item.item_name}</td>
+                    <td class="text-right">${item.quantity}</td>
+                    <td class="text-right">${formatCurrency(item.unit_price)}</td>
+                    <td class="text-right">${formatCurrency(item.total)}</td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+          </div>
+
+          <div class="summary">
+            <div class="summary-row">
+              <span>Subtotal:</span>
+              <span>${formatCurrency(order.subtotal)}</span>
+            </div>
+            ${order.discount_amount ? `
+            <div class="summary-row">
+              <span>Discount:</span>
+              <span>-${formatCurrency(order.discount_amount)}</span>
+            </div>
+            ` : ''}
+            ${order.tax_amount ? `
+            <div class="summary-row">
+              <span>Tax:</span>
+              <span>${formatCurrency(order.tax_amount)}</span>
+            </div>
+            ` : ''}
+            ${order.shipping_charges ? `
+            <div class="summary-row">
+              <span>Shipping:</span>
+              <span>${formatCurrency(order.shipping_charges)}</span>
+            </div>
+            ` : ''}
+            <div class="summary-row summary-total">
+              <span>Total:</span>
+              <span>${formatCurrency(order.total_amount)}</span>
+            </div>
+          </div>
+
+          <div style="clear: both; margin-top: 40px;">
+            ${order.notes ? `<p><strong>Notes:</strong> ${order.notes}</p>` : ''}
+            ${order.terms_conditions ? `<p><strong>Terms & Conditions:</strong> ${order.terms_conditions}</p>` : ''}
+          </div>
+        </body>
+      </html>
+    `;
+
+    const blob = new Blob([htmlContent], { type: 'text/html' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `po-${order.po_number}-${new Date().toISOString().split('T')[0]}.html`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
+  const handleEmail = () => {
+    if (!order) return;
+
+    // Create email template
+    const subject = `Purchase Order ${order.po_number}`;
+    const body = `Dear ${order.vendor_name},
+
+Please find attached our Purchase Order ${order.po_number} dated ${formatDate(order.order_date)}.
+
+Order Details:
+- Total Amount: ${formatCurrency(order.total_amount)}
+- Expected Delivery: ${order.expected_date ? formatDate(order.expected_date) : 'TBD'}
+- Items: ${order.line_items.length} item(s)
+
+Please confirm receipt of this purchase order.
+
+Best regards,
+2XG Business Suite`;
+
+    // Open email client
+    const mailtoLink = `mailto:${order.vendor_email || ''}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+    window.location.href = mailtoLink;
   };
 
   if (loading) {
@@ -215,13 +354,25 @@ const PurchaseOrderDetailPage: React.FC = () => {
             </div>
 
             <div className="flex items-center gap-2">
-              <button className="p-2 hover:bg-gray-100 rounded-lg transition-colors" title="Print">
+              <button
+                onClick={handlePrint}
+                className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                title="Print"
+              >
                 <Printer size={20} className="text-gray-600" />
               </button>
-              <button className="p-2 hover:bg-gray-100 rounded-lg transition-colors" title="Email to Vendor">
+              <button
+                onClick={handleEmail}
+                className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                title="Email to Vendor"
+              >
                 <Mail size={20} className="text-gray-600" />
               </button>
-              <button className="p-2 hover:bg-gray-100 rounded-lg transition-colors" title="Download PDF">
+              <button
+                onClick={handleDownloadPDF}
+                className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                title="Download PDF"
+              >
                 <Download size={20} className="text-gray-600" />
               </button>
               <button
