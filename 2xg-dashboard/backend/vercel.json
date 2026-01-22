@@ -2,25 +2,16 @@
   "version": 2,
   "builds": [
     {
-      "src": "dist/server.js",
+      "src": "api/index.js",
       "use": "@vercel/node"
     }
   ],
   "routes": [
     {
-      "src": "/health",
-      "dest": "dist/server.js"
-    },
-    {
-      "src": "/api/(.*)",
-      "dest": "dist/server.js"
-    },
-    {
       "src": "/(.*)",
-      "dest": "dist/server.js"
+      "dest": "api/index.js"
     }
   ],
-  "env": {
-    "NODE_ENV": "production"
-  }
+  "installCommand": "npm install",
+  "buildCommand": "npm run build"
 }
