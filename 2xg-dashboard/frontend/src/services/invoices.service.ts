@@ -1,6 +1,4 @@
-import axios from 'axios';
-
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5002/api';
+import apiClient from './api.client';
 
 export interface InvoiceItem {
   item_id: string;
@@ -63,7 +61,7 @@ class InvoicesService {
       if (filters?.from_date) params.append('from_date', filters.from_date);
       if (filters?.to_date) params.append('to_date', filters.to_date);
 
-      const response = await axios.get(`${API_BASE_URL}/invoices?${params.toString()}`);
+      const response = await apiClient.get(`/invoices?${params.toString()}`);
 
       // Return the response as-is since backend returns {success: true, data: {invoices: [...], total: 5}}
       return response.data;
@@ -79,7 +77,7 @@ class InvoicesService {
 
   async getInvoiceById(id: string) {
     try {
-      const response = await axios.get(`${API_BASE_URL}/invoices/${id}`);
+      const response = await apiClient.get(`/invoices/${id}`);
       return {
         success: true,
         data: response.data.data || response.data,
@@ -98,7 +96,7 @@ class InvoicesService {
   async createInvoice(invoiceData: Partial<Invoice>) {
     try {
       console.log('InvoicesService: Sending request to create invoice');
-      const response = await axios.post(`${API_BASE_URL}/invoices`, invoiceData);
+      const response = await apiClient.post(`/invoices`, invoiceData);
       console.log('InvoicesService: Invoice created successfully', response.data);
       return {
         success: true,
@@ -123,7 +121,7 @@ class InvoicesService {
 
   async updateInvoice(id: string, invoiceData: Partial<Invoice>) {
     try {
-      const response = await axios.put(`${API_BASE_URL}/invoices/${id}`, invoiceData);
+      const response = await apiClient.put(`/invoices/${id}`, invoiceData);
       return {
         success: true,
         data: response.data.data || response.data,
@@ -141,7 +139,7 @@ class InvoicesService {
 
   async deleteInvoice(id: string) {
     try {
-      await axios.delete(`${API_BASE_URL}/invoices/${id}`);
+      await apiClient.delete(`/invoices/${id}`);
       return {
         success: true,
         message: 'Invoice deleted successfully'
@@ -157,7 +155,7 @@ class InvoicesService {
 
   async generateInvoiceNumber() {
     try {
-      const response = await axios.get(`${API_BASE_URL}/invoices/generate-number`);
+      const response = await apiClient.get(`/invoices/generate-number`);
       return {
         success: true,
         data: response.data,
@@ -175,7 +173,7 @@ class InvoicesService {
 
   async sendInvoice(id: string, emailData?: { to?: string; subject?: string; body?: string }) {
     try {
-      const response = await axios.post(`${API_BASE_URL}/invoices/${id}/send`, emailData);
+      const response = await apiClient.post(`/invoices/${id}/send`, emailData);
       return {
         success: true,
         data: response.data,
