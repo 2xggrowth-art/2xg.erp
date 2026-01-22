@@ -6,6 +6,7 @@ import dotenv from 'dotenv';
 import path from 'path';
 
 // Import routes
+import authRoutes from './routes/auth.routes';
 import erpRoutes from './routes/erp.routes';
 import logisticsRoutes from './routes/logistics.routes';
 import careRoutes from './routes/care.routes';
@@ -44,13 +45,14 @@ app.use(cors({
   origin: function (origin, callback) {
     // Allow requests with no origin (like mobile apps or curl)
     if (!origin) return callback(null, true);
-    
+
     const allowedOrigins = [
       'http://localhost:3000',
       'http://localhost:3001',
       'http://localhost:3002',
       'http://localhost:3003',
       'https://2xg-erp.vercel.app',
+      'https://2xg-dashboard-pi.vercel.app',
       process.env.FRONTEND_URL
     ];
 
@@ -83,6 +85,7 @@ app.get('/api/health', (req: Request, res: Response) => {
 });
 
 // API Routes
+app.use('/api/auth', authRoutes);
 app.use('/api/erp', erpRoutes);
 app.use('/api/logistics', logisticsRoutes);
 app.use('/api/care', careRoutes);
@@ -133,21 +136,25 @@ app.use((err: any, req: Request, res: Response, next: NextFunction) => {
   });
 });
 
-// Start server
-app.listen(PORT, () => {
-  console.log(`\n🚀 2XG Dashboard API running on port ${PORT}`);
-  console.log(`📊 Environment: ${process.env.NODE_ENV || 'development'}`);
-  console.log(`🔗 Health check: http://localhost:${PORT}/api/health\n`);
-});
+// Only start server if not in serverless environment
+if (process.env.VERCEL !== '1') {
+  app.listen(PORT, () => {
+    console.log(`\n🚀 2XG Dashboard API running on port ${PORT}`);
+    console.log(`📊 Environment: ${process.env.NODE_ENV || 'development'}`);
+    console.log(`🔗 Health check: http://localhost:${PORT}/api/health\n`);
+  });
 
-// Handle graceful shutdown
-process.on('SIGTERM', () => {
-  console.log('SIGTERM signal received: closing HTTP server');
-  process.exit(0);
-});
+  // Handle graceful shutdown
+  process.on('SIGTERM', () => {
+    console.log('SIGTERM signal received: closing HTTP server');
+    process.exit(0);
+  });
 
-process.on('SIGINT', () => {
-  console.log('SIGINT signal received: closing HTTP server');
-  process.exit(0);
-});
-// restart
+  process.on('SIGINT', () => {
+    console.log('SIGINT signal received: closing HTTP server');
+    process.exit(0);
+  });
+}
+
+// Export for serverless
+export default app;
