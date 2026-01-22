@@ -16,6 +16,8 @@ const NewPurchaseOrderForm = () => {
   const [loading, setLoading] = useState(false);
   const [vendors, setVendors] = useState<Vendor[]>([]);
   const [items, setItems] = useState<Item[]>([]);
+  const [itemSearchQueries, setItemSearchQueries] = useState<{ [key: number]: string }>({});
+  const [showItemDropdowns, setShowItemDropdowns] = useState<{ [key: number]: boolean }>({});
   const [locations] = useState<Location[]>([
     { id: '1', name: 'Head Office', address: 'Karnataka, Bangalore, Karnataka, India - 560001' }
   ]);
@@ -58,6 +60,14 @@ const NewPurchaseOrderForm = () => {
     fetchVendors();
     fetchItems();
     generatePONumber();
+
+    // Close dropdowns when clicking outside
+    const handleClickOutside = () => {
+      setShowItemDropdowns({});
+    };
+
+    document.addEventListener('click', handleClickOutside);
+    return () => document.removeEventListener('click', handleClickOutside);
   }, []);
 
   const fetchVendors = async () => {
@@ -117,23 +127,46 @@ const NewPurchaseOrderForm = () => {
     }));
   };
 
+  const handleItemSearchChange = (index: number, searchQuery: string) => {
+    setItemSearchQueries(prev => ({ ...prev, [index]: searchQuery }));
+    setShowItemDropdowns(prev => ({ ...prev, [index]: true }));
+  };
+
+  const handleItemSelect = (index: number, selectedItem: Item) => {
+    const updatedItems = [...poItems];
+    updatedItems[index] = {
+      ...updatedItems[index],
+      item_id: selectedItem.id,
+      item_name: selectedItem.item_name,
+      rate: Math.round(selectedItem.cost_price || 0), // Round to integer
+      unit_of_measurement: selectedItem.unit_of_measurement,
+      description: selectedItem.description || '',
+    };
+
+    // Calculate amount
+    updatedItems[index].amount = updatedItems[index].quantity * updatedItems[index].rate;
+
+    setPoItems(updatedItems);
+    setItemSearchQueries(prev => ({ ...prev, [index]: selectedItem.item_name }));
+    setShowItemDropdowns(prev => ({ ...prev, [index]: false }));
+  };
+
+  const getFilteredItems = (index: number) => {
+    const searchQuery = itemSearchQueries[index] || '';
+    if (!searchQuery) return items;
+
+    return items.filter(item =>
+      item.item_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      item.sku?.toLowerCase().includes(searchQuery.toLowerCase())
+    );
+  };
+
   const handleItemChange = (index: number, field: keyof PurchaseOrderItem, value: any) => {
     const updatedItems = [...poItems];
     updatedItems[index] = {
       ...updatedItems[index],
       [field]: value
     };
-
-    // If item selected, populate details
-    if (field === 'item_id' && value) {
-      const selectedItem = items.find(item => item.id === value);
-      if (selectedItem) {
-        updatedItems[index].item_name = selectedItem.item_name;
-        updatedItems[index].rate = selectedItem.cost_price || 0;
-        updatedItems[index].unit_of_measurement = selectedItem.unit_of_measurement;
-        updatedItems[index].description = selectedItem.description || '';
-      }
-    }
 
     // Calculate amount
     if (field === 'quantity' || field === 'rate') {
@@ -413,16 +446,32 @@ const NewPurchaseOrderForm = () => {
                   {poItems.map((item, index) => (
                     <tr key={index} className="border-t border-slate-200">
                       <td className="px-4 py-3">
-                        <select
-                          value={item.item_id}
-                          onChange={(e) => handleItemChange(index, 'item_id', e.target.value)}
-                          className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm mb-2"
-                        >
-                          <option value="">Select Item</option>
-                          {items.map(i => (
-                            <option key={i.id} value={i.id}>{i.item_name}</option>
-                          ))}
-                        </select>
+                        <div className="relative mb-2">
+                          <input
+                            type="text"
+                            value={itemSearchQueries[index] || item.item_name || ''}
+                            onChange={(e) => handleItemSearchChange(index, e.target.value)}
+                            onFocus={() => setShowItemDropdowns(prev => ({ ...prev, [index]: true }))}
+                            placeholder="Search for an item..."
+                            className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm"
+                          />
+                          {showItemDropdowns[index] && getFilteredItems(index).length > 0 && (
+                            <div className="absolute z-10 w-full mt-1 bg-white border border-slate-300 rounded-lg shadow-lg max-h-60 overflow-y-auto">
+                              {getFilteredItems(index).map(filteredItem => (
+                                <div
+                                  key={filteredItem.id}
+                                  onClick={() => handleItemSelect(index, filteredItem)}
+                                  className="px-3 py-2 hover:bg-blue-50 cursor-pointer text-sm"
+                                >
+                                  <div className="font-medium">{filteredItem.item_name}</div>
+                                  {filteredItem.sku && (
+                                    <div className="text-xs text-gray-500">SKU: {filteredItem.sku}</div>
+                                  )}
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
                         <input
                           type="text"
                           value={item.description}
@@ -454,9 +503,10 @@ const NewPurchaseOrderForm = () => {
                       <td className="px-4 py-3">
                         <input
                           type="number"
-                          value={item.rate}
-                          onChange={(e) => handleItemChange(index, 'rate', parseFloat(e.target.value) || 0)}
-                          step="0.01"
+                          value={item.rate || ''}
+                          onChange={(e) => handleItemChange(index, 'rate', parseInt(e.target.value) || 0)}
+                          step="1"
+                          min="0"
                           className="w-32 px-3 py-2 border border-slate-300 rounded-lg text-sm"
                         />
                       </td>
