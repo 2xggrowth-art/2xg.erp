@@ -9,6 +9,7 @@ const TransferOrdersPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
+  const [selectedOrders, setSelectedOrders] = useState<string[]>([]);
 
   useEffect(() => {
     fetchOrders();
@@ -72,6 +73,26 @@ const TransferOrdersPage: React.FC = () => {
       month: '2-digit',
       year: 'numeric'
     });
+  };
+
+  const handleSelectAll = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.checked) {
+      setSelectedOrders(orders.map(order => order.id));
+    } else {
+      setSelectedOrders([]);
+    }
+  };
+
+  const handleSelectOrder = (orderId: string) => {
+    setSelectedOrders(prev =>
+      prev.includes(orderId)
+        ? prev.filter(id => id !== orderId)
+        : [...prev, orderId]
+    );
+  };
+
+  const handleRowClick = (orderId: string) => {
+    navigate(`/inventory/transfer-orders/${orderId}`);
   };
 
   return (
@@ -164,6 +185,14 @@ const TransferOrdersPage: React.FC = () => {
             <table className="min-w-full divide-y divide-gray-200">
               <thead className="bg-gray-50">
                 <tr>
+                  <th className="px-6 py-3 text-left">
+                    <input
+                      type="checkbox"
+                      checked={selectedOrders.length === orders.length && orders.length > 0}
+                      onChange={handleSelectAll}
+                      className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                    />
+                  </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Date
                   </th>
@@ -195,7 +224,19 @@ const TransferOrdersPage: React.FC = () => {
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
                 {orders.map((order) => (
-                  <tr key={order.id} className="hover:bg-gray-50">
+                  <tr
+                    key={order.id}
+                    className="hover:bg-gray-50 cursor-pointer"
+                    onClick={() => handleRowClick(order.id)}
+                  >
+                    <td className="px-6 py-4 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                      <input
+                        type="checkbox"
+                        checked={selectedOrders.includes(order.id)}
+                        onChange={() => handleSelectOrder(order.id)}
+                        className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                      />
+                    </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                       {formatDate(order.transfer_date)}
                     </td>
@@ -222,7 +263,7 @@ const TransferOrdersPage: React.FC = () => {
                         {order.status.replace('_', ' ').toUpperCase()}
                       </span>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500" onClick={(e) => e.stopPropagation()}>
                       <div className="flex items-center gap-2">
                         <button
                           onClick={() => navigate(`/inventory/transfer-orders/${order.id}`)}

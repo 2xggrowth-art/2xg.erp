@@ -56,6 +56,7 @@ import PosCreate from './pages/PosCreate';
 import PosPage from './pages/PosPage';
 import SessionDetailPage from './pages/SessionDetailPage';
 import ComingSoonPage from './pages/ComingSoonPage';
+import TransferOrderDetailPage from './pages/TransferOrderDetailPage';
 
 function App() {
   return (
@@ -86,6 +87,7 @@ function App() {
             {/* Transfer Orders Routes (Inventory Module) */}
             <Route path="/inventory/transfer-orders" element={<ProtectedRoute><DashboardLayout><TransferOrdersPage /></DashboardLayout></ProtectedRoute>} />
             <Route path="/inventory/transfer-orders/new" element={<ProtectedRoute><DashboardLayout><NewTransferOrderForm /></DashboardLayout></ProtectedRoute>} />
+            <Route path="/inventory/transfer-orders/:id" element={<ProtectedRoute><DashboardLayout><TransferOrderDetailPage /></DashboardLayout></ProtectedRoute>} />
 
             {/* Purchase Routes */}
             <Route path="/purchases" element={<ProtectedRoute><DashboardLayout><PurchasesPage /></DashboardLayout></ProtectedRoute>} />
