@@ -430,7 +430,7 @@ const NewPurchaseOrderForm = () => {
           {/* Items Table */}
           <div>
             <h3 className="text-lg font-semibold text-slate-800 mb-4">Item Table</h3>
-            <div className="overflow-x-auto border border-slate-200 rounded-lg">
+            <div className="overflow-visible border border-slate-200 rounded-lg">
               <table className="w-full">
                 <thead className="bg-slate-50">
                   <tr>
@@ -452,21 +452,30 @@ const NewPurchaseOrderForm = () => {
                             value={itemSearchQueries[index] || item.item_name || ''}
                             onChange={(e) => handleItemSearchChange(index, e.target.value)}
                             onFocus={() => setShowItemDropdowns(prev => ({ ...prev, [index]: true }))}
+                            onClick={(e) => e.stopPropagation()}
                             placeholder="Search for an item..."
                             className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm"
                           />
                           {showItemDropdowns[index] && getFilteredItems(index).length > 0 && (
-                            <div className="absolute z-10 w-full mt-1 bg-white border border-slate-300 rounded-lg shadow-lg max-h-60 overflow-y-auto">
+                            <div
+                              className="absolute z-50 w-full mt-1 bg-white border border-slate-300 rounded-lg shadow-xl max-h-60 overflow-y-auto"
+                              onClick={(e) => e.stopPropagation()}
+                              style={{ minWidth: '300px' }}
+                            >
                               {getFilteredItems(index).map(filteredItem => (
                                 <div
                                   key={filteredItem.id}
-                                  onClick={() => handleItemSelect(index, filteredItem)}
-                                  className="px-3 py-2 hover:bg-blue-50 cursor-pointer text-sm"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleItemSelect(index, filteredItem);
+                                  }}
+                                  className="px-4 py-3 hover:bg-blue-50 cursor-pointer border-b border-gray-100 last:border-0"
                                 >
-                                  <div className="font-medium">{filteredItem.item_name}</div>
+                                  <div className="font-medium text-gray-900">{filteredItem.item_name}</div>
                                   {filteredItem.sku && (
-                                    <div className="text-xs text-gray-500">SKU: {filteredItem.sku}</div>
+                                    <div className="text-xs text-gray-500 mt-1">SKU: {filteredItem.sku}</div>
                                   )}
+                                  <div className="text-xs text-gray-600 mt-1">Rate: ₹{Math.round(filteredItem.cost_price || 0)}</div>
                                 </div>
                               ))}
                             </div>

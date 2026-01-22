@@ -24,6 +24,7 @@ import SalesPage from './pages/SalesPage';
 import SalesOrderPage from './pages/SalesOrderPage';
 import InvoicesPage from './pages/InvoicesPage';
 import ExpensesPage from './pages/ExpensesPage';
+import ExpenseDetailPage from './pages/ExpenseDetailPage';
 import TasksPage from './pages/TasksPage';
 import ReportsPage from './pages/ReportsPage';
 import SearchPage from './pages/SearchPage';
@@ -53,6 +54,8 @@ import SettingsPage from './pages/SettingsPage';
 // ONLY ADDED THIS POS IMPORT
 import PosCreate from './pages/PosCreate';
 import PosPage from './pages/PosPage';
+import SessionDetailPage from './pages/SessionDetailPage';
+import ComingSoonPage from './pages/ComingSoonPage';
 
 function App() {
   return (
@@ -74,7 +77,8 @@ function App() {
             <Route path="/items" element={<ProtectedRoute><DashboardLayout><ItemsPage /></DashboardLayout></ProtectedRoute>} />
             <Route path="/items/new" element={<ProtectedRoute><DashboardLayout><NewItemForm /></DashboardLayout></ProtectedRoute>} />
             <Route path="/items/:id" element={<ProtectedRoute><DashboardLayout><ItemDetailPage /></DashboardLayout></ProtectedRoute>} />
-            <Route path="/items/new-category" element={<ProtectedRoute><DashboardLayout><ItemsPage /></DashboardLayout></ProtectedRoute>} />
+            <Route path="/items/:id/edit" element={<ProtectedRoute><DashboardLayout><NewItemForm /></DashboardLayout></ProtectedRoute>} />
+            <Route path="/items/new-category" element={<ProtectedRoute><DashboardLayout><ComingSoonPage /></DashboardLayout></ProtectedRoute>} />
             <Route path="/items/stock-count" element={<ProtectedRoute><DashboardLayout><StockCountPage /></DashboardLayout></ProtectedRoute>} />
             <Route path="/items/stock-count/new" element={<ProtectedRoute><DashboardLayout><NewStockCountPage /></DashboardLayout></ProtectedRoute>} />
             <Route path="/items/transfer-order" element={<ProtectedRoute><DashboardLayout><TransferOrderPage /></DashboardLayout></ProtectedRoute>} />
@@ -119,6 +123,7 @@ function App() {
             {/* ONLY ADDED THIS POS ROUTE */}
             <Route path="/sales/pos" element={<ProtectedRoute><DashboardLayout><PosPage /></DashboardLayout></ProtectedRoute>} />
             <Route path="/sales/pos/new" element={<ProtectedRoute><DashboardLayout><PosCreate /></DashboardLayout></ProtectedRoute>} />
+            <Route path="/sales/pos/sessions/:sessionId" element={<ProtectedRoute><DashboardLayout><SessionDetailPage /></DashboardLayout></ProtectedRoute>} />
 
             <Route path="/sales/sales-order" element={<ProtectedRoute><DashboardLayout><SalesOrderPage /></DashboardLayout></ProtectedRoute>} />
             <Route path="/sales/sales-orders" element={<ProtectedRoute><DashboardLayout><SalesOrdersPage /></DashboardLayout></ProtectedRoute>} />
@@ -136,6 +141,7 @@ function App() {
 
             <Route path="/expenses" element={<ProtectedRoute><DashboardLayout><ExpensesPage /></DashboardLayout></ProtectedRoute>} />
             <Route path="/expenses/new" element={<ProtectedRoute><DashboardLayout><NewExpenseForm /></DashboardLayout></ProtectedRoute>} />
+            <Route path="/expenses/:id" element={<ProtectedRoute><DashboardLayout><ExpenseDetailPage /></DashboardLayout></ProtectedRoute>} />
             <Route path="/tasks" element={<ProtectedRoute><DashboardLayout><TasksPage /></DashboardLayout></ProtectedRoute>} />
             <Route path="/reports" element={<ProtectedRoute><DashboardLayout><ReportsPage /></DashboardLayout></ProtectedRoute>} />
             <Route path="/search" element={<ProtectedRoute><DashboardLayout><SearchPage /></DashboardLayout></ProtectedRoute>} />
