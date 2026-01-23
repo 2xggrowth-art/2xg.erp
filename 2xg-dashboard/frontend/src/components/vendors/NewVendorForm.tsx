@@ -46,10 +46,22 @@ const NewVendorForm = () => {
     const { name, value, type } = e.target;
     const checked = (e.target as HTMLInputElement).checked;
 
-    setFormData(prev => ({
-      ...prev,
-      [name]: type === 'checkbox' ? checked : value
-    }));
+    setFormData(prev => {
+      const updated = {
+        ...prev,
+        [name]: type === 'checkbox' ? checked : value
+      };
+
+      // Auto-update display name when first/last name changes
+      if (name === 'firstName' || name === 'lastName') {
+        const fullName = `${name === 'firstName' ? value : prev.firstName} ${name === 'lastName' ? value : prev.lastName}`.trim();
+        if (fullName && !prev.displayName) {
+          updated.displayName = fullName;
+        }
+      }
+
+      return updated;
+    });
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -225,7 +237,11 @@ const NewVendorForm = () => {
                   required
                 >
                   <option value="">Select or type to add</option>
-                  {formData.firstName && <option value={formData.firstName}>{formData.firstName}</option>}
+                  {(formData.firstName || formData.lastName) && (
+                    <option value={`${formData.firstName} ${formData.lastName}`.trim()}>
+                      {`${formData.firstName} ${formData.lastName}`.trim()}
+                    </option>
+                  )}
                   {formData.companyName && <option value={formData.companyName}>{formData.companyName}</option>}
                 </select>
               </div>
