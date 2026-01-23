@@ -18,6 +18,7 @@ const NewVendorForm = () => {
     workPhone: '',
     mobile: '',
     gstTreatment: '',
+    gstin: '',
     sourceOfSupply: '',
     pan: '',
     isMsmeRegistered: false,
@@ -79,6 +80,7 @@ const NewVendorForm = () => {
         work_phone: formData.workPhone || undefined,
         mobile: formData.mobile || undefined,
         gst_treatment: formData.gstTreatment || undefined,
+        gstin: formData.gstin || undefined,
         source_of_supply: formData.sourceOfSupply || undefined,
         pan: formData.pan || undefined,
         is_msme_registered: formData.isMsmeRegistered,
@@ -392,6 +394,30 @@ const NewVendorForm = () => {
                       </select>
                     </div>
                   </div>
+
+                  {/* GST NO / GSTIN */}
+                  {formData.gstTreatment && formData.gstTreatment !== 'Consumer' && formData.gstTreatment !== 'Unregistered Business' && (
+                    <div className="grid grid-cols-12 gap-4 items-center">
+                      <label className="col-span-3 text-sm font-medium text-gray-700">
+                        GST NO
+                      </label>
+                      <div className="col-span-9">
+                        <input
+                          type="text"
+                          name="gstin"
+                          value={formData.gstin}
+                          onChange={handleInputChange}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          placeholder="Enter GST Number (e.g., 22AAAAA0000A1Z5)"
+                          pattern="[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}"
+                          maxLength={15}
+                        />
+                        <p className="text-xs text-gray-500 mt-1">
+                          Format: 22AAAAA0000A1Z5 (15 characters)
+                        </p>
+                      </div>
+                    </div>
+                  )}
 
                   {/* Source of Supply */}
                   <div className="grid grid-cols-12 gap-4 items-center">
