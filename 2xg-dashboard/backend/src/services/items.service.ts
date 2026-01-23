@@ -170,9 +170,57 @@ export class ItemsService {
    * Update an existing item
    */
   async updateItem(id: string, itemData: any) {
+    // Map frontend field names to database column names (same as createItem)
+    const updateData: any = {};
+
+    // Only include fields that are actually being updated
+    if (itemData.name !== undefined) updateData.item_name = itemData.name;
+    if (itemData.sku !== undefined) updateData.sku = itemData.sku;
+    if (itemData.unit !== undefined) updateData.unit_of_measurement = itemData.unit;
+    if (itemData.category !== undefined) updateData.category_id = itemData.category || null;
+    if (itemData.description !== undefined) updateData.description = itemData.description || null;
+    if (itemData.unit_price !== undefined) updateData.unit_price = parseFloat(itemData.unit_price) || 0;
+    if (itemData.cost_price !== undefined) updateData.cost_price = parseFloat(itemData.cost_price) || 0;
+    if (itemData.current_stock !== undefined) updateData.current_stock = parseInt(itemData.current_stock) || 0;
+    if (itemData.reorder_point !== undefined) updateData.reorder_point = parseInt(itemData.reorder_point) || 10;
+    if (itemData.max_stock !== undefined) updateData.max_stock = parseInt(itemData.max_stock) || null;
+    if (itemData.barcode !== undefined) updateData.barcode = itemData.barcode || null;
+    if (itemData.manufacturer !== undefined) updateData.manufacturer = itemData.manufacturer || null;
+    if (itemData.weight !== undefined) updateData.weight = parseFloat(itemData.weight) || null;
+    if (itemData.dimensions !== undefined) updateData.dimensions = itemData.dimensions || null;
+    if (itemData.is_active !== undefined) updateData.is_active = itemData.is_active;
+    if (itemData.tax_rate !== undefined) updateData.tax_rate = parseFloat(itemData.tax_rate) || 0;
+    if (itemData.image_url !== undefined) updateData.image_url = itemData.image_url || null;
+    if (itemData.hsn_code !== undefined) updateData.hsn_code = itemData.hsn_code || null;
+    if (itemData.brand !== undefined) updateData.brand = itemData.brand || null;
+    if (itemData.upc !== undefined) updateData.upc = itemData.upc || null;
+    if (itemData.mpn !== undefined) updateData.mpn = itemData.mpn || null;
+    if (itemData.ean !== undefined) updateData.ean = itemData.ean || null;
+    if (itemData.isbn !== undefined) updateData.isbn = itemData.isbn || null;
+    if (itemData.is_returnable !== undefined) updateData.is_returnable = itemData.is_returnable || false;
+
+    // Sales Information
+    if (itemData.is_sellable !== undefined) updateData.is_sellable = itemData.is_sellable;
+    if (itemData.selling_price !== undefined) updateData.selling_price = itemData.selling_price ? parseFloat(itemData.selling_price) : null;
+    if (itemData.sales_account !== undefined) updateData.sales_account = itemData.sales_account || null;
+    if (itemData.sales_description !== undefined) updateData.sales_description = itemData.sales_description || null;
+
+    // Purchase Information
+    if (itemData.is_purchasable !== undefined) updateData.is_purchasable = itemData.is_purchasable;
+    if (itemData.purchase_account !== undefined) updateData.purchase_account = itemData.purchase_account || null;
+    if (itemData.purchase_description !== undefined) updateData.purchase_description = itemData.purchase_description || null;
+    if (itemData.preferred_vendor_id !== undefined) updateData.preferred_vendor_id = itemData.preferred_vendor_id || null;
+
+    // Inventory Tracking
+    if (itemData.track_inventory !== undefined) updateData.track_inventory = itemData.track_inventory;
+    if (itemData.track_bin_location !== undefined) updateData.track_bin_location = itemData.track_bin_location || false;
+    if (itemData.advanced_tracking_type !== undefined) updateData.advanced_tracking_type = itemData.advanced_tracking_type || 'none';
+    if (itemData.inventory_account !== undefined) updateData.inventory_account = itemData.inventory_account || null;
+    if (itemData.valuation_method !== undefined) updateData.valuation_method = itemData.valuation_method || null;
+
     const { data, error } = await supabaseAdmin
       .from('items')
-      .update(itemData)
+      .update(updateData)
       .eq('id', id)
       .select()
       .single();
