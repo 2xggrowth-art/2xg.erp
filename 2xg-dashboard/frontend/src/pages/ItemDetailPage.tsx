@@ -35,8 +35,7 @@ const ItemDetailPage: React.FC = () => {
   };
 
   const handleEdit = () => {
-    // TODO: Navigate to edit page or open edit modal
-    console.log('Edit item:', id);
+    navigate(`/items/${id}/edit`);
   };
 
   const handleDelete = async () => {
@@ -117,11 +116,10 @@ const ItemDetailPage: React.FC = () => {
         {/* Status Badge */}
         <div className="mb-6 flex gap-2">
           <span
-            className={`px-3 py-1 rounded-full text-sm font-medium ${
-              item.is_active
+            className={`px-3 py-1 rounded-full text-sm font-medium ${item.is_active
                 ? 'bg-green-100 text-green-800'
                 : 'bg-gray-100 text-gray-800'
-            }`}
+              }`}
           >
             {item.is_active ? 'Active' : 'Inactive'}
           </span>

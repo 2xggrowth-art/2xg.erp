@@ -3,11 +3,13 @@ import { useNavigate } from 'react-router-dom';
 import { useState, useEffect } from 'react';
 import StockCountWorkflow from '../components/common/StockCountWorkflow';
 import { stockCountService, StockCount } from '../services/stockCount.service';
+import BulkActionBar, { createBulkDeleteAction } from '../components/common/BulkActionBar';
 
 const StockCountPage = () => {
   const navigate = useNavigate();
   const [stockCounts, setStockCounts] = useState<StockCount[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [selectedCounts, setSelectedCounts] = useState<string[]>([]);
 
   useEffect(() => {
     loadStockCounts();
@@ -34,9 +36,41 @@ const StockCountPage = () => {
       try {
         await stockCountService.deleteStockCount(id);
         loadStockCounts(); // Reload the list
+        setSelectedCounts(prev => prev.filter(countId => countId !== id)); // Remove from selection if deleted
       } catch (error) {
         console.error('Error deleting stock count:', error);
         alert('Failed to delete stock count. Please try again.');
+      }
+    }
+  };
+
+  // Bulk Selection Handlers
+  const handleSelectCount = (id: string) => {
+    setSelectedCounts(prev =>
+      prev.includes(id)
+        ? prev.filter(countId => countId !== id)
+        : [...prev, id]
+    );
+  };
+
+  const handleSelectAll = () => {
+    if (selectedCounts.length === stockCounts.length) {
+      setSelectedCounts([]);
+    } else {
+      setSelectedCounts(stockCounts.map(count => count.id));
+    }
+  };
+
+  const handleBulkDelete = async () => {
+    if (window.confirm(`Are you sure you want to delete ${selectedCounts.length} stock counts?`)) {
+      try {
+        // Delete sequentially or parallel
+        await Promise.all(selectedCounts.map(id => stockCountService.deleteStockCount(id)));
+        setSelectedCounts([]);
+        loadStockCounts();
+      } catch (error) {
+        console.error('Error bulk deleting stock counts:', error);
+        alert('Failed to delete some stock counts. Please try again.');
       }
     }
   };
@@ -110,6 +144,14 @@ const StockCountPage = () => {
               <table className="w-full">
                 <thead className="bg-slate-50 border-b border-slate-200">
                   <tr>
+                    <th className="px-6 py-3 text-left">
+                      <input
+                        type="checkbox"
+                        checked={selectedCounts.length === stockCounts.length && stockCounts.length > 0}
+                        onChange={handleSelectAll}
+                        className="rounded"
+                      />
+                    </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-slate-600 uppercase tracking-wider">
                       Stock Count #
                     </th>
@@ -138,7 +180,15 @@ const StockCountPage = () => {
                 </thead>
                 <tbody className="divide-y divide-slate-200">
                   {stockCounts.map((stockCount) => (
-                    <tr key={stockCount.id} className="hover:bg-slate-50 transition-colors">
+                    <tr key={stockCount.id} className="hover:bg-slate-50 transition-colors cursor-pointer" onClick={() => navigate(`/items/stock-count/${stockCount.id}`)}>
+                      <td className="px-6 py-4 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                        <input
+                          type="checkbox"
+                          checked={selectedCounts.includes(stockCount.id)}
+                          onChange={() => handleSelectCount(stockCount.id)}
+                          className="rounded"
+                        />
+                      </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <span className="text-sm font-medium text-blue-600">
                           {stockCount.stockCountNumber}
@@ -149,6 +199,7 @@ const StockCountPage = () => {
                           {stockCount.description || '-'}
                         </span>
                       </td>
+
                       <td className="px-6 py-4 whitespace-nowrap">
                         <span className="text-sm text-slate-600">
                           {formatDate(stockCount.createdAt)}
@@ -174,24 +225,33 @@ const StockCountPage = () => {
                           {stockCount.status}
                         </span>
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-center">
+                      <td className="px-6 py-4 whitespace-nowrap text-center" onClick={(e) => e.stopPropagation()}>
                         <div className="flex items-center justify-center gap-2">
                           <button
-                            onClick={() => navigate(`/items/stock-count/${stockCount.id}`)}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              navigate(`/items/stock-count/${stockCount.id}`);
+                            }}
                             className="p-1.5 text-blue-600 hover:bg-blue-50 rounded transition-colors"
                             title="View"
                           >
                             <Eye size={18} />
                           </button>
                           <button
-                            onClick={() => navigate(`/items/stock-count/edit/${stockCount.id}`)}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              navigate(`/items/stock-count/edit/${stockCount.id}`);
+                            }}
                             className="p-1.5 text-green-600 hover:bg-green-50 rounded transition-colors"
                             title="Edit"
                           >
                             <Edit2 size={18} />
                           </button>
                           <button
-                            onClick={() => handleDelete(stockCount.id)}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleDelete(stockCount.id);
+                            }}
                             className="p-1.5 text-red-600 hover:bg-red-50 rounded transition-colors"
                             title="Delete"
                           >
@@ -210,7 +270,23 @@ const StockCountPage = () => {
         {/* Stock Count Workflow */}
         <StockCountWorkflow />
       </div>
-    </div>
+
+      {/* Bulk Action Bar */}
+      {
+        selectedCounts.length > 0 && (
+          <BulkActionBar
+            selectedCount={selectedCounts.length}
+            totalCount={stockCounts.length}
+            onClearSelection={() => setSelectedCounts([])}
+            onSelectAll={handleSelectAll}
+            actions={[
+              createBulkDeleteAction(handleBulkDelete),
+            ]}
+            entityName="stock count"
+          />
+        )
+      }
+    </div >
   );
 };
 

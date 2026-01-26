@@ -1,5 +1,7 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Lock, Mail, Eye, EyeOff, LogIn } from 'lucide-react';
+import { useAuth } from '../contexts/AuthContext';
 
 const LoginPage = () => {
   const [email, setEmail] = useState('');
@@ -7,6 +9,9 @@ const LoginPage = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+
+  const { login } = useAuth();
+  const navigate = useNavigate();
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -16,8 +21,9 @@ const LoginPage = () => {
     console.log('Login attempt started', { email });
 
     // Validate email format
+    const trimmedEmail = email.trim();
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(email)) {
+    if (!emailRegex.test(trimmedEmail)) {
       setError('Please enter a valid email address');
       setIsLoading(false);
       return;
@@ -30,70 +36,30 @@ const LoginPage = () => {
     }
 
     try {
-      // Get users from localStorage (in production, this would be an API call)
-      let usersData = localStorage.getItem('users');
+      // Call login from AuthContext which uses the API
+      const success = await login({
+        email: email.trim(),
+        password: password.trim()
+      });
 
-      // Initialize default users if none exist
-      if (!usersData) {
-        const defaultUsers = [
-          { id: '1', name: 'Zaheer', email: 'mohd.zaheer@gmail.com', password: 'admin123', role: 'Admin', status: 'Active' },
-          { id: '2', name: 'Rahul Kumar', email: 'rahul@gmail.com', password: 'admin123', role: 'Manager', status: 'Active' },
-        ];
-        localStorage.setItem('users', JSON.stringify(defaultUsers));
-        usersData = JSON.stringify(defaultUsers);
+      if (success) {
+        console.log('Login successful, redirecting to dashboard...');
+        navigate('/');
+      } else {
+        setError('Invalid email or password. Please try again.');
       }
-
-      const users = JSON.parse(usersData);
-      console.log('Users loaded:', users.length);
-
-      // Find user by email
-      const user = users.find((u: any) => u.email.toLowerCase() === email.toLowerCase());
-      console.log('User found:', !!user);
-
-      if (!user) {
-        setError('No account found with this email address');
-        setIsLoading(false);
-        return;
-      }
-
-      // Check if user is active
-      if (user.status !== 'Active') {
-        setError('Your account has been deactivated. Please contact administrator.');
-        setIsLoading(false);
-        return;
-      }
-
-      // Verify password
-      if (user.password !== password) {
-        setError('Incorrect password. Please try again.');
-        setIsLoading(false);
-        return;
-      }
-
-      // Successful login
-      const authData = {
-        id: user.id,
-        name: user.name,
-        email: user.email,
-        role: user.role,
-        isAuthenticated: true,
-        loginTime: new Date().toISOString()
-      };
-
-      console.log('Login successful, saving auth data');
-      localStorage.setItem('authUser', JSON.stringify(authData));
-
-      // Redirect to dashboard immediately
-      console.log('Redirecting to dashboard...');
-      window.location.href = '/';
-      // Force page reload to ensure auth state is loaded
-      // setTimeout(() => {
-      //   navigate('/');
-      // }, 500);
-
-    } catch (err) {
+    } catch (err: any) {
       console.error('Login error:', err);
-      setError('An error occurred during login. Please try again.');
+
+      // Parse error message from API response
+      if (err.response?.data?.error) {
+        setError(err.response.data.error);
+      } else if (err.message) {
+        setError(err.message);
+      } else {
+        setError('An error occurred during login. Please try again.');
+      }
+    } finally {
       setIsLoading(false);
     }
   };

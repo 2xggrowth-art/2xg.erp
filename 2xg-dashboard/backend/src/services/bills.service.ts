@@ -142,6 +142,26 @@ export class BillsService {
           await supabase.from('bills').delete().eq('id', bill.id);
           throw itemsError;
         }
+
+        // Update item stock
+        for (const item of data.items) {
+          if (item.item_id && item.quantity > 0) {
+            // Get current stock
+            const { data: currentItem } = await supabase
+              .from('items')
+              .select('current_stock')
+              .eq('id', item.item_id)
+              .single();
+
+            if (currentItem) {
+              const newStock = (currentItem.current_stock || 0) + item.quantity;
+              await supabase
+                .from('items')
+                .update({ current_stock: newStock })
+                .eq('id', item.item_id);
+            }
+          }
+        }
       }
 
       return bill;

@@ -22,6 +22,7 @@ import {
   Send
 } from 'lucide-react';
 import { invoicesService } from '../services/invoices.service';
+import { downloadInvoicePDF, printInvoicePDF, InvoicePDFData } from '../utils/pdfGenerators/invoicePDF';
 
 interface LineItem {
   id: string;
@@ -82,48 +83,27 @@ const InvoiceDetailPage: React.FC = () => {
   const fetchInvoiceDetails = async () => {
     try {
       setLoading(true);
-      try {
-        const response = await invoicesService.getById(id!);
-        if (response) {
-          setInvoice(response);
-          return;
-        }
-      } catch (error) {
-        console.log('Using mock data');
+      const response = await invoicesService.getInvoiceById(id!);
+      if (response.success && response.data) {
+        const backendData = response.data;
+        // Map backend data to frontend Invoice interface
+        const mappedInvoice: Invoice = {
+          ...backendData,
+          line_items: (backendData.items || []).map((item: any) => ({
+            id: item.id || item.item_id || Math.random().toString(), // Fallback ID
+            item_name: item.item_name,
+            sku: item.sku || '', // Backend might not return SKU in items
+            quantity: item.quantity,
+            unit_price: item.rate,
+            discount: item.discount || 0,
+            tax_rate: item.tax_rate || 0,
+            total: item.amount
+          }))
+        };
+        setInvoice(mappedInvoice);
+      } else {
+        console.error('Failed to fetch invoice:', response.message);
       }
-
-      // Mock data
-      setInvoice({
-        id: id!,
-        invoice_number: `INV-${id?.slice(0, 8).toUpperCase()}`,
-        sales_order_number: 'SO-00123',
-        customer_name: 'Acme Corporation',
-        customer_email: 'billing@acme.com',
-        customer_phone: '+91 98765 43210',
-        billing_address: '123 Business Park, Sector 5, Gurugram, Haryana 122001',
-        shipping_address: '456 Warehouse Road, Sector 12, Noida, UP 201301',
-        invoice_date: new Date().toISOString(),
-        due_date: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
-        status: 'sent',
-        subtotal: 45000,
-        tax_amount: 8100,
-        discount_amount: 2000,
-        shipping_charges: 500,
-        total_amount: 51600,
-        amount_paid: 20000,
-        balance_due: 31600,
-        notes: 'Thank you for your business!',
-        terms_conditions: 'Payment due within 30 days. Late payment may incur 2% monthly interest.',
-        line_items: [
-          { id: '1', item_name: 'Hero Sprint Pro 26T', sku: 'HRO-SPR-26T', quantity: 2, unit_price: 15000, discount: 500, tax_rate: 18, total: 30000 },
-          { id: '2', item_name: 'Shimano Gear Set', sku: 'SHM-GR-7SP', quantity: 3, unit_price: 5000, discount: 0, tax_rate: 18, total: 15000 },
-        ],
-        payment_history: [
-          { id: '1', date: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(), amount: 20000, method: 'Bank Transfer', reference: 'TXN-123456' }
-        ],
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      });
     } catch (error) {
       console.error('Error fetching invoice:', error);
     } finally {
@@ -171,10 +151,80 @@ const InvoiceDetailPage: React.FC = () => {
   const handleDelete = async () => {
     if (window.confirm('Are you sure you want to delete this invoice?')) {
       try {
-        await invoicesService.delete(id!);
+        await invoicesService.deleteInvoice(id!);
         navigate('/sales/invoices');
       } catch (error) {
         console.error('Error deleting invoice:', error);
+      }
+    }
+  };
+
+  // Transform invoice data to PDF format
+  const transformInvoiceToPDFData = (inv: Invoice): InvoicePDFData => ({
+    id: inv.id,
+    invoice_number: inv.invoice_number,
+    sales_order_number: inv.sales_order_number,
+    customer_name: inv.customer_name,
+    customer_email: inv.customer_email,
+    customer_phone: inv.customer_phone,
+    billing_address: inv.billing_address,
+    shipping_address: inv.shipping_address,
+    invoice_date: inv.invoice_date,
+    due_date: inv.due_date,
+    payment_terms: 'Due on Receipt',
+    status: inv.status,
+    subtotal: inv.subtotal,
+    tax_amount: inv.tax_amount,
+    discount_amount: inv.discount_amount,
+    shipping_charges: inv.shipping_charges,
+    total_amount: inv.total_amount,
+    amount_paid: inv.amount_paid,
+    balance_due: inv.balance_due,
+    notes: inv.notes,
+    terms_conditions: inv.terms_conditions,
+    line_items: inv.line_items.map(item => ({
+      item_name: item.item_name,
+      sku: item.sku,
+      hsn_code: item.sku, // Use SKU as HSN code placeholder
+      quantity: item.quantity,
+      unit_price: item.unit_price,
+      discount: item.discount,
+      tax_rate: item.tax_rate,
+      total: item.total
+    }))
+  });
+
+  const handlePrint = () => {
+    if (invoice) {
+      const pdfData = transformInvoiceToPDFData(invoice);
+      printInvoicePDF(pdfData);
+    }
+  };
+
+  const handleDownload = () => {
+    if (invoice) {
+      const pdfData = transformInvoiceToPDFData(invoice);
+      downloadInvoicePDF(pdfData);
+    }
+  };
+
+  const handleEmail = async () => {
+    if (invoice) {
+      try {
+        // Open mailto with invoice details
+        const subject = encodeURIComponent(`Invoice ${invoice.invoice_number}`);
+        const body = encodeURIComponent(
+          `Dear ${invoice.customer_name},\n\n` +
+          `Please find attached Invoice ${invoice.invoice_number}.\n\n` +
+          `Invoice Amount: ₹${invoice.total_amount.toLocaleString('en-IN')}\n` +
+          `Due Date: ${new Date(invoice.due_date).toLocaleDateString('en-IN')}\n\n` +
+          `Thank you for your business!\n\n` +
+          `Best regards,\n2XG Business Suite`
+        );
+        window.open(`mailto:${invoice.customer_email || ''}?subject=${subject}&body=${body}`);
+      } catch (error) {
+        console.error('Error sending email:', error);
+        alert('Failed to open email client');
       }
     }
   };
@@ -245,19 +295,34 @@ const InvoiceDetailPage: React.FC = () => {
             </div>
 
             <div className="flex items-center gap-2">
-              <button className="p-2 hover:bg-gray-100 rounded-lg transition-colors" title="Print">
+              <button
+                onClick={handlePrint}
+                className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                title="Print"
+              >
                 <Printer size={20} className="text-gray-600" />
               </button>
-              <button className="p-2 hover:bg-gray-100 rounded-lg transition-colors" title="Send Email">
+              <button
+                onClick={handleEmail}
+                className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                title="Send Email"
+              >
                 <Mail size={20} className="text-gray-600" />
               </button>
-              <button className="p-2 hover:bg-gray-100 rounded-lg transition-colors" title="Download PDF">
+              <button
+                onClick={handleDownload}
+                className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                title="Download PDF"
+              >
                 <Download size={20} className="text-gray-600" />
               </button>
               {invoice.status !== 'paid' && (
-                <button className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 flex items-center gap-2">
+                <button
+                  onClick={() => navigate('/sales/payment-received/new', { state: { invoice } })}
+                  className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 flex items-center gap-2"
+                >
                   <CreditCard size={16} />
-                  Record Payment
+                  {invoice.status === 'partial' || invoice.status === 'partially_paid' ? 'Pay Remaining Amount' : 'Record Payment'}
                 </button>
               )}
               <button
@@ -304,11 +369,10 @@ const InvoiceDetailPage: React.FC = () => {
               <button
                 key={tab}
                 onClick={() => setActiveTab(tab as any)}
-                className={`pb-4 px-1 font-medium capitalize transition-colors ${
-                  activeTab === tab
-                    ? 'text-blue-600 border-b-2 border-blue-600'
-                    : 'text-gray-500 hover:text-gray-700'
-                }`}
+                className={`pb-4 px-1 font-medium capitalize transition-colors ${activeTab === tab
+                  ? 'text-blue-600 border-b-2 border-blue-600'
+                  : 'text-gray-500 hover:text-gray-700'
+                  }`}
               >
                 {tab}
               </button>
@@ -458,7 +522,10 @@ const InvoiceDetailPage: React.FC = () => {
             <div className="p-6 border-b flex justify-between items-center">
               <h3 className="text-lg font-semibold text-gray-900">Payment History</h3>
               {invoice.balance_due > 0 && (
-                <button className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 flex items-center gap-2">
+                <button
+                  onClick={() => navigate('/sales/payment-received/new', { state: { invoice } })}
+                  className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 flex items-center gap-2"
+                >
                   <CreditCard size={16} />
                   Record Payment
                 </button>

@@ -75,7 +75,10 @@ export const itemsService = {
     isActive?: boolean;
     lowStock?: boolean;
   }): AxiosPromise<APIResponse<Item[]>> =>
-    apiClient.get('/items', { params: filters }),
+    apiClient.get('/items', {
+      params: { ...filters, _t: Date.now() },
+      headers: { 'Cache-Control': 'no-cache' }
+    }),
 
   getItemById: (id: string): AxiosPromise<APIResponse<Item>> =>
     apiClient.get(`/items/${id}`),

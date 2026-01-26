@@ -2,6 +2,11 @@ import { useState, useEffect } from 'react';
 import { Plus, Filter, Download, Printer, MoreVertical, Edit, Trash2, Eye } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { paymentsReceivedService, PaymentReceived } from '../services/payments-received.service';
+import BulkActionBar, {
+  createBulkDeleteAction,
+  createBulkExportAction,
+  createBulkPrintAction
+} from '../components/common/BulkActionBar';
 
 const PaymentsReceivedPage = () => {
   const navigate = useNavigate();
@@ -65,6 +70,53 @@ const PaymentsReceivedPage = () => {
         alert('Failed to delete payment');
       }
     }
+  };
+
+  const clearSelection = () => {
+    setSelectedPayments([]);
+  };
+
+  const handleBulkDelete = async () => {
+    if (window.confirm(`Are you sure you want to delete ${selectedPayments.length} payment(s)?`)) {
+      try {
+        await Promise.all(
+          selectedPayments.map(id => paymentsReceivedService.deletePaymentReceived(id))
+        );
+        clearSelection();
+        fetchPayments();
+      } catch (error) {
+        console.error('Error deleting payments:', error);
+        alert('Failed to delete some payments');
+      }
+    }
+  };
+
+  const handleBulkExport = () => {
+    const selectedPaymentData = payments.filter(p => selectedPayments.includes(p.id!));
+
+    const csv = [
+      ['Date', 'Payment Number', 'Customer Name', 'Payment Mode', 'Reference Number', 'Amount'].join(','),
+      ...selectedPaymentData.map(payment => [
+        formatDate(payment.payment_date),
+        payment.payment_number,
+        payment.customer_name,
+        payment.payment_mode,
+        payment.reference_number || '',
+        payment.amount_received.toString()
+      ].join(','))
+    ].join('\n');
+
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `payments-received-${new Date().toISOString().split('T')[0]}.csv`;
+    a.click();
+    window.URL.revokeObjectURL(url);
+  };
+
+  const handleBulkPrint = () => {
+    window.print();
   };
 
   const formatDate = (dateString: string) => {
@@ -338,6 +390,20 @@ const PaymentsReceivedPage = () => {
           </div>
         </div>
       </div>
+
+      {/* Bulk Action Bar */}
+      <BulkActionBar
+        selectedCount={selectedPayments.length}
+        totalCount={payments.length}
+        onClearSelection={clearSelection}
+        onSelectAll={handleSelectAll}
+        actions={[
+          createBulkDeleteAction(handleBulkDelete),
+          createBulkExportAction(handleBulkExport),
+          createBulkPrintAction(handleBulkPrint)
+        ]}
+        entityName="payments"
+      />
     </div>
   );
 };

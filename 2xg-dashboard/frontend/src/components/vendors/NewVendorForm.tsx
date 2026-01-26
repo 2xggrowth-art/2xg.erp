@@ -1,11 +1,14 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { ArrowLeft, User, Save } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import { vendorsService } from '../../services/vendors.service';
 
 const NewVendorForm = () => {
   const navigate = useNavigate();
+  const { id } = useParams<{ id: string }>();
+  const isEditMode = Boolean(id);
   const [loading, setLoading] = useState(false);
+  const [fetchingData, setFetchingData] = useState(false);
   const [activeTab, setActiveTab] = useState('other-details');
 
   const [formData, setFormData] = useState({
@@ -42,6 +45,81 @@ const NewVendorForm = () => {
     // Remarks
     remarks: ''
   });
+
+  // Fetch vendor data if in edit mode
+  useEffect(() => {
+    if (isEditMode && id) {
+      fetchVendorData();
+    }
+  }, [id, isEditMode]);
+
+  const fetchVendorData = async () => {
+    try {
+      setFetchingData(true);
+      const response = await vendorsService.getVendorById(id!);
+
+      if (response.data.success && response.data.data) {
+        const vendor = response.data.data;
+
+        // Parse the supplier_name to extract salutation, first and last name
+        const nameParts = vendor.supplier_name?.split(' ') || [];
+        let salutation = 'Mr.';
+        let firstName = '';
+        let lastName = '';
+
+        if (nameParts.length > 0) {
+          // Check if first part is a salutation
+          const firstPart = nameParts[0];
+          if (['Mr.', 'Mrs.', 'Ms.', 'Miss.', 'Dr.'].includes(firstPart)) {
+            salutation = firstPart;
+            firstName = nameParts[1] || '';
+            lastName = nameParts.slice(2).join(' ');
+          } else {
+            firstName = firstPart;
+            lastName = nameParts.slice(1).join(' ');
+          }
+        }
+
+        setFormData({
+          salutation: salutation,
+          firstName: firstName,
+          lastName: lastName,
+          companyName: vendor.company_name || '',
+          displayName: vendor.supplier_name || '',
+          email: vendor.email || '',
+          workPhone: vendor.work_phone || '',
+          mobile: vendor.phone || '',
+          gstTreatment: vendor.gst_treatment || '',
+          gstin: vendor.gstin || '',
+          sourceOfSupply: vendor.source_of_supply || '',
+          pan: vendor.pan || '',
+          isMsmeRegistered: vendor.is_msme_registered || false,
+          currency: vendor.currency || 'INR- Indian Rupee',
+          paymentTerms: vendor.payment_terms || 'Due on Receipt',
+          attention: '',
+          country: vendor.country || 'India',
+          address: vendor.address || '',
+          city: vendor.city || '',
+          state: vendor.state || '',
+          postalCode: vendor.postal_code || '',
+          phone: '',
+          fax: '',
+          accountHolderName: '',
+          accountNumber: '',
+          ifscCode: '',
+          bankName: '',
+          branch: '',
+          remarks: vendor.notes || ''
+        });
+      }
+    } catch (error: any) {
+      console.error('Error fetching vendor:', error);
+      alert('Failed to load vendor data: ' + (error.message || 'Unknown error'));
+      navigate('/vendor-management');
+    } finally {
+      setFetchingData(false);
+    }
+  };
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value, type } = e.target;
@@ -95,19 +173,26 @@ const NewVendorForm = () => {
       };
 
       console.log('Sending vendor data:', vendorData);
-      const response = await vendorsService.createVendor(vendorData);
-      console.log('Vendor API Response:', response);
+
+      let response;
+      if (isEditMode && id) {
+        response = await vendorsService.updateVendor(id, vendorData);
+        console.log('Vendor Update Response:', response);
+      } else {
+        response = await vendorsService.createVendor(vendorData);
+        console.log('Vendor Create Response:', response);
+      }
 
       // Axios response structure: response.data = { success: boolean, data: Vendor }
       if (response.data.success && response.data.data) {
         navigate('/vendor-management');
       } else {
-        const errorMsg = response.data.error || 'Failed to create vendor. Please try again.';
+        const errorMsg = response.data.error || `Failed to ${isEditMode ? 'update' : 'create'} vendor. Please try again.`;
         alert(errorMsg);
       }
     } catch (error: any) {
-      console.error('Error creating vendor:', error);
-      const errorMsg = error.response?.data?.error || error.message || 'Failed to create vendor. Please try again.';
+      console.error(`Error ${isEditMode ? 'updating' : 'creating'} vendor:`, error);
+      const errorMsg = error.response?.data?.error || error.message || `Failed to ${isEditMode ? 'update' : 'create'} vendor. Please try again.`;
       alert(errorMsg);
     } finally {
       setLoading(false);
@@ -117,6 +202,17 @@ const NewVendorForm = () => {
   const handleCancel = () => {
     navigate('/vendor-management');
   };
+
+  if (fetchingData) {
+    return (
+      <div className="h-full flex items-center justify-center bg-gray-50">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <p className="text-gray-500">Loading vendor details...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="h-full overflow-y-auto bg-gray-50">
@@ -133,7 +229,9 @@ const NewVendorForm = () => {
               </button>
               <div className="flex items-center gap-2">
                 <User className="w-6 h-6 text-blue-600" />
-                <h1 className="text-2xl font-semibold text-gray-800">New Vendor</h1>
+                <h1 className="text-2xl font-semibold text-gray-800">
+                  {isEditMode ? 'Edit Vendor' : 'New Vendor'}
+                </h1>
               </div>
             </div>
             <div className="flex items-center gap-3">
@@ -805,7 +903,7 @@ const NewVendorForm = () => {
               ) : (
                 <>
                   <Save className="w-4 h-4" />
-                  Save Vendor
+                  {isEditMode ? 'Update Vendor' : 'Save Vendor'}
                 </>
               )}
             </button>

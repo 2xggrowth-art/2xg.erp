@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Users, Plus, Search } from 'lucide-react';
 import { customersService, Customer } from '../services/customers.service';
+import BulkActionBar, { createBulkDeleteAction, createBulkExportAction } from '../components/common/BulkActionBar';
 
 const CustomerManagementPage = () => {
   const navigate = useNavigate();
@@ -9,6 +10,7 @@ const CustomerManagementPage = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [selectedCustomers, setSelectedCustomers] = useState<string[]>([]);
 
   useEffect(() => {
     fetchCustomers();
@@ -40,6 +42,68 @@ const CustomerManagementPage = () => {
     customer.customer_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
     (customer.email && customer.email.toLowerCase().includes(searchQuery.toLowerCase()))
   );
+
+  // Selection handlers
+  const handleSelectCustomer = (customerId: string) => {
+    setSelectedCustomers(prev =>
+      prev.includes(customerId)
+        ? prev.filter(id => id !== customerId)
+        : [...prev, customerId]
+    );
+  };
+
+  const handleSelectAll = () => {
+    if (selectedCustomers.length === filteredCustomers.length) {
+      setSelectedCustomers([]);
+    } else {
+      setSelectedCustomers(filteredCustomers.map(customer => customer.id!));
+    }
+  };
+
+  const clearSelection = () => {
+    setSelectedCustomers([]);
+  };
+
+  // Bulk action handlers
+  const handleBulkDelete = async () => {
+    if (window.confirm(`Are you sure you want to delete ${selectedCustomers.length} customer(s)?`)) {
+      try {
+        await Promise.all(selectedCustomers.map(id => customersService.deleteCustomer(id)));
+        setSelectedCustomers([]);
+        fetchCustomers();
+      } catch (error) {
+        console.error('Error deleting customers:', error);
+        alert('Failed to delete some customers. Please try again.');
+      }
+    }
+  };
+
+  const handleBulkExport = () => {
+    const selectedData = customers.filter(customer => selectedCustomers.includes(customer.id!));
+    const csv = [
+      ['Name', 'Company Name', 'Email', 'Work Phone', 'Payables (INR)'].join(','),
+      ...selectedData.map(customer => [
+        customer.customer_name,
+        customer.company_name || '',
+        customer.email || '',
+        customer.work_phone || '',
+        customer.current_balance || '0'
+      ].join(','))
+    ].join('\n');
+
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `customers_export_${new Date().toISOString().split('T')[0]}.csv`;
+    a.click();
+  };
+
+  // Bulk actions configuration
+  const bulkActions = [
+    createBulkDeleteAction(handleBulkDelete),
+    createBulkExportAction(handleBulkExport)
+  ];
 
   return (
     <div className="h-full flex flex-col bg-gray-50">
@@ -108,7 +172,12 @@ const CustomerManagementPage = () => {
                 <thead className="bg-gray-50 border-b border-gray-200">
                   <tr>
                     <th className="px-6 py-3 text-left">
-                      <input type="checkbox" className="rounded" />
+                      <input
+                        type="checkbox"
+                        checked={selectedCustomers.length === filteredCustomers.length && filteredCustomers.length > 0}
+                        onChange={handleSelectAll}
+                        className="rounded"
+                      />
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       NAME
@@ -148,10 +217,15 @@ const CustomerManagementPage = () => {
                       <tr
                         key={customer.id}
                         className="hover:bg-gray-50 cursor-pointer transition-colors"
-                        onClick={() => navigate(`/customer-management/${customer.id}`)}
+                        onClick={() => navigate(`/sales/customers/${customer.id}`)}
                       >
                         <td className="px-6 py-4" onClick={(e) => e.stopPropagation()}>
-                          <input type="checkbox" className="rounded" />
+                          <input
+                            type="checkbox"
+                            checked={selectedCustomers.includes(customer.id!)}
+                            onChange={() => handleSelectCustomer(customer.id!)}
+                            className="rounded"
+                          />
                         </td>
                         <td className="px-6 py-4">
                           <div className="text-sm font-medium text-blue-600 hover:underline">
@@ -184,6 +258,18 @@ const CustomerManagementPage = () => {
           )}
         </div>
       </div>
+
+      {/* Bulk Action Bar */}
+      {selectedCustomers.length > 0 && (
+        <BulkActionBar
+          selectedCount={selectedCustomers.length}
+          totalCount={filteredCustomers.length}
+          onClearSelection={clearSelection}
+          onSelectAll={handleSelectAll}
+          actions={bulkActions}
+          entityName="customer"
+        />
+      )}
     </div>
   );
 };

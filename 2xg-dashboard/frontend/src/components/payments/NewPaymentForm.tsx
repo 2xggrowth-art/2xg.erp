@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import { X } from 'lucide-react';
 import { paymentsService, CreatePaymentData } from '../../services/payments.service';
 import { vendorsService } from '../../services/vendors.service';
@@ -24,6 +24,8 @@ interface BillSelection {
 }
 
 const NewPaymentForm = () => {
+  const { id } = useParams<{ id: string }>();
+  const isEditMode = !!id;
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<PaymentTab>('bill');
   const [loading, setLoading] = useState(false);
@@ -40,7 +42,6 @@ const NewPaymentForm = () => {
     payment_mode: '',
     reference_number: '',
     amount: 0,
-    bank_charges: 0,
     currency: 'INR',
     exchange_rate: 1,
     notes: '',
@@ -73,14 +74,49 @@ const NewPaymentForm = () => {
 
   useEffect(() => {
     fetchVendors();
-    generatePaymentNumber();
-  }, []);
+    if (isEditMode) {
+      fetchPaymentDetails();
+    } else {
+      generatePaymentNumber();
+    }
+  }, [id]);
 
   useEffect(() => {
     if (formData.vendor_id) {
       fetchVendorBills(formData.vendor_id);
     }
   }, [formData.vendor_id]);
+
+  const fetchPaymentDetails = async () => {
+    try {
+      setLoading(true);
+      const response = await paymentsService.getPaymentById(id!);
+      if (response.success && response.data) {
+        const payment = response.data;
+        setFormData({
+          vendor_id: payment.vendor_id || '',
+          vendor_name: payment.vendor_name,
+          payment_date: payment.payment_date.split('T')[0],
+          payment_mode: payment.payment_mode,
+          reference_number: payment.reference_number || '',
+          amount: payment.amount,
+          currency: payment.currency,
+          exchange_rate: payment.exchange_rate,
+          notes: payment.notes || '',
+          payment_account: payment.payment_account || '',
+          deposit_to: payment.deposit_to || '',
+        });
+        setPaymentNumber(payment.payment_number);
+        // Note: Retrieving selected bills allocation is complex if not returned clearly by API.
+        // For now, focusing on basic details editing.
+      }
+    } catch (error) {
+      console.error('Error fetching payment details:', error);
+      alert('Failed to fetch payment details');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const fetchVendors = async () => {
     try {
@@ -148,10 +184,15 @@ const NewPaymentForm = () => {
     ));
   };
 
-  const calculateTotalAmount = () => {
-    if (activeTab === 'bill') {
-      return selectedBills.reduce((sum, bill) => sum + bill.amount_allocated, 0);
+  // Sync total amount with selected bills
+  useEffect(() => {
+    if (activeTab === 'bill' && !isEditMode) { // Only sync in create mode to avoid overwriting fetched amount
+      const totalAllocated = selectedBills.reduce((sum, bill) => sum + bill.amount_allocated, 0);
+      setFormData(prev => ({ ...prev, amount: totalAllocated }));
     }
+  }, [selectedBills, activeTab, isEditMode]);
+
+  const calculateTotalAmount = () => {
     return formData.amount;
   };
 
@@ -175,7 +216,9 @@ const NewPaymentForm = () => {
       newErrors.amount = "Amount entered doesn't seem right.";
     }
 
-    if (activeTab === 'bill' && selectedBills.length === 0) {
+    if (activeTab === 'bill' && selectedBills.length === 0 && !isEditMode) {
+      // In edit mode, we might not have bills selected explicitly if API doesn't return them in a way we can easily map back yet
+      // So we act leniently or strictly depending on requirements. For now strict only on create.
       newErrors.bills = 'Please select at least one bill to pay';
     }
 
@@ -216,13 +259,18 @@ const NewPaymentForm = () => {
         })) : undefined,
       };
 
-      await paymentsService.createPayment(paymentData);
+      if (isEditMode) {
+        await paymentsService.updatePayment(id!, paymentData);
+        alert('Payment updated successfully');
+      } else {
+        await paymentsService.createPayment(paymentData);
+        alert('The payment made to the vendor has been recorded.');
+      }
 
-      alert('The payment made to the vendor has been recorded.');
       navigate('/purchases/payments-made');
     } catch (error: any) {
-      console.error('Error creating payment:', error);
-      alert(error.response?.data?.message || 'Failed to create payment');
+      console.error('Error saving payment:', error);
+      alert(error.response?.data?.message || 'Failed to save payment');
     } finally {
       setLoading(false);
     }
@@ -234,7 +282,7 @@ const NewPaymentForm = () => {
       <div className="border-b border-gray-200 px-6 py-4">
         <div className="flex items-center justify-between">
           <h1 className="text-2xl font-semibold text-gray-900">
-            {activeTab === 'bill' ? 'Bill Payment' : 'Vendor Advance'}
+            {isEditMode ? 'Edit Payment' : (activeTab === 'bill' ? 'Bill Payment' : 'Vendor Advance')}
           </h1>
           <button
             onClick={() => navigate('/purchases/payments-made')}
@@ -250,21 +298,19 @@ const NewPaymentForm = () => {
         <div className="flex space-x-8">
           <button
             onClick={() => setActiveTab('bill')}
-            className={`py-4 px-1 border-b-2 font-medium text-sm transition-colors ${
-              activeTab === 'bill'
-                ? 'border-blue-500 text-blue-600'
-                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-            }`}
+            className={`py-4 px-1 border-b-2 font-medium text-sm transition-colors ${activeTab === 'bill'
+              ? 'border-blue-500 text-blue-600'
+              : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              }`}
           >
             Bill Payment
           </button>
           <button
             onClick={() => setActiveTab('advance')}
-            className={`py-4 px-1 border-b-2 font-medium text-sm transition-colors ${
-              activeTab === 'advance'
-                ? 'border-blue-500 text-blue-600'
-                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-            }`}
+            className={`py-4 px-1 border-b-2 font-medium text-sm transition-colors ${activeTab === 'advance'
+              ? 'border-blue-500 text-blue-600'
+              : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              }`}
           >
             Vendor Advance
           </button>
@@ -470,31 +516,6 @@ const NewPaymentForm = () => {
             </div>
           )}
 
-          {/* Amount (for Vendor Advance tab) */}
-          {activeTab === 'advance' && (
-            <div className="mb-6">
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Amount<span className="text-red-500">*</span>
-              </label>
-              <div className="relative">
-                <span className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-500">
-                  ₹
-                </span>
-                <input
-                  type="number"
-                  value={formData.amount}
-                  onChange={(e) => setFormData({ ...formData, amount: parseFloat(e.target.value) || 0 })}
-                  className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  step="0.01"
-                  min="0"
-                />
-              </div>
-              {errors.amount && (
-                <p className="mt-1 text-sm text-red-600">{errors.amount}</p>
-              )}
-            </div>
-          )}
-
           {/* Reference Number */}
           <div className="mb-6">
             <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -509,10 +530,10 @@ const NewPaymentForm = () => {
             />
           </div>
 
-          {/* Bank Charges */}
+          {/* Amount (Replaces Bank Charges) */}
           <div className="mb-6">
             <label className="block text-sm font-medium text-gray-700 mb-2">
-              Bank Charges
+              Amount<span className="text-red-500">*</span>
             </label>
             <div className="relative">
               <span className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-500">
@@ -520,13 +541,17 @@ const NewPaymentForm = () => {
               </span>
               <input
                 type="number"
-                value={formData.bank_charges}
-                onChange={(e) => setFormData({ ...formData, bank_charges: parseFloat(e.target.value) || 0 })}
+                value={formData.amount || ''}
+                onChange={(e) => setFormData({ ...formData, amount: e.target.value === '' ? 0 : parseFloat(e.target.value) })}
                 className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                 step="0.01"
                 min="0"
+                placeholder="0.00"
               />
             </div>
+            {errors.amount && (
+              <p className="mt-1 text-sm text-red-600">{errors.amount}</p>
+            )}
           </div>
 
           {/* Notes */}

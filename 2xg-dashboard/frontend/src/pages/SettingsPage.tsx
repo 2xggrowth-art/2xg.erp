@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { Settings, Users, Plus, Trash2, Edit2, Save, X, Shield, CheckSquare, Square } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
+import { authService, User as APIUser } from '../services/auth.service';
 
 interface Permission {
   module: string;
@@ -22,9 +23,11 @@ interface User {
   id: string;
   name: string;
   email: string;
-  password: string;
+  password?: string;
   role: string;
-  status: 'Active' | 'Inactive';
+  phone?: string;
+  department?: string;
+  status: 'Active' | 'Inactive' | 'Suspended';
 }
 
 const SettingsPage = () => {
@@ -146,36 +149,25 @@ const SettingsPage = () => {
     }
   }, [roles]);
 
-  // Load users from localStorage on mount
+  // Load users from API on mount
   useEffect(() => {
-    const storedUsers = localStorage.getItem('users');
-    if (storedUsers) {
+    const loadUsers = async () => {
       try {
-        const parsedUsers = JSON.parse(storedUsers);
-        setUsers(parsedUsers);
+        const fetchedUsers = await authService.getUsers();
+        setUsers(fetchedUsers);
+        isUsersInitialized.current = true;
       } catch (error) {
-        console.error('Error loading users from localStorage:', error);
+        console.error('Error loading users from API:', error);
+        alert('Failed to load users. Please try again.');
       }
-    } else {
-      // Initialize with default users
-      const defaultUsers = [
-        { id: '1', name: 'Zaheer', email: 'mohd.zaheer@gmail.com', password: 'admin123', role: 'Admin', status: 'Active' as const },
-        { id: '2', name: 'Rahul Kumar', email: 'rahul@gmail.com', password: 'admin123', role: 'Manager', status: 'Active' as const },
-      ];
-      localStorage.setItem('users', JSON.stringify(defaultUsers));
-      setUsers(defaultUsers);
-    }
-    isUsersInitialized.current = true;
-  }, []);
+    };
 
-  // Sync users to localStorage whenever they change (after initial load)
-  useEffect(() => {
-    if (isUsersInitialized.current && users.length > 0) {
-      localStorage.setItem('users', JSON.stringify(users));
+    if (isAdmin) {
+      loadUsers();
     }
-  }, [users]);
+  }, [isAdmin]);
 
-  const handleAddUser = () => {
+  const handleAddUser = async () => {
     if (!newUser.name || !newUser.email || !newUser.password) {
       alert('Please fill in all required fields');
       return;
@@ -188,29 +180,22 @@ const SettingsPage = () => {
       return;
     }
 
-    // Check if email already exists
-    if (users.some(u => u.email.toLowerCase() === newUser.email.toLowerCase())) {
-      alert('A user with this email already exists');
-      return;
+    try {
+      const createdUser = await authService.register({
+        name: newUser.name,
+        email: newUser.email,
+        password: newUser.password,
+        role: newUser.role
+      });
+
+      setUsers([...users, createdUser]);
+      setNewUser({ name: '', email: '', password: '', role: 'User', status: 'Active' });
+      setShowAddUserModal(false);
+      alert('User created successfully!');
+    } catch (error: any) {
+      console.error('Error creating user:', error);
+      alert(error.response?.data?.error || error.message || 'Failed to create user');
     }
-
-    const user: User = {
-      id: Date.now().toString(),
-      name: newUser.name,
-      email: newUser.email,
-      password: newUser.password,
-      role: newUser.role,
-      status: newUser.status
-    };
-
-    const updatedUsers = [...users, user];
-    setUsers(updatedUsers);
-
-    // Save to localStorage for login functionality
-    localStorage.setItem('users', JSON.stringify(updatedUsers));
-
-    setNewUser({ name: '', email: '', password: '', role: 'User', status: 'Active' });
-    setShowAddUserModal(false);
   };
 
   const handleEditUser = (user: User) => {
@@ -218,12 +203,27 @@ const SettingsPage = () => {
     setEditUser({ ...user });
   };
 
-  const handleSaveEdit = () => {
+  const handleSaveEdit = async () => {
     if (!editUser) return;
 
-    setUsers(users.map(u => u.id === editUser.id ? editUser : u));
-    setEditingUserId(null);
-    setEditUser(null);
+    try {
+      const updatedUser = await authService.updateUser(editUser.id, {
+        name: editUser.name,
+        email: editUser.email,
+        role: editUser.role,
+        phone: editUser.phone,
+        department: editUser.department,
+        status: editUser.status
+      });
+
+      setUsers(users.map(u => u.id === updatedUser.id ? updatedUser : u));
+      setEditingUserId(null);
+      setEditUser(null);
+      alert('User updated successfully!');
+    } catch (error: any) {
+      console.error('Error updating user:', error);
+      alert(error.response?.data?.error || error.message || 'Failed to update user');
+    }
   };
 
   const handleCancelEdit = () => {
@@ -231,18 +231,35 @@ const SettingsPage = () => {
     setEditUser(null);
   };
 
-  const handleDeleteUser = (userId: string) => {
-    if (window.confirm('Are you sure you want to delete this user?')) {
+  const handleDeleteUser = async (userId: string) => {
+    if (!window.confirm('Are you sure you want to delete this user?')) {
+      return;
+    }
+
+    try {
+      await authService.deleteUser(userId);
       setUsers(users.filter(u => u.id !== userId));
+      alert('User deleted successfully!');
+    } catch (error: any) {
+      console.error('Error deleting user:', error);
+      alert(error.response?.data?.error || error.message || 'Failed to delete user');
     }
   };
 
-  const handleToggleStatus = (userId: string) => {
-    setUsers(users.map(u =>
-      u.id === userId
-        ? { ...u, status: u.status === 'Active' ? 'Inactive' : 'Active' }
-        : u
-    ));
+  const handleToggleStatus = async (userId: string) => {
+    const user = users.find(u => u.id === userId);
+    if (!user) return;
+
+    const newStatus = user.status === 'Active' ? 'Inactive' : 'Active';
+
+    try {
+      const updatedUser = await authService.updateUser(userId, { status: newStatus });
+      setUsers(users.map(u => u.id === userId ? updatedUser : u));
+      alert(`User status changed to ${newStatus}`);
+    } catch (error: any) {
+      console.error('Error updating user status:', error);
+      alert(error.response?.data?.error || error.message || 'Failed to update user status');
+    }
   };
 
   // Role Management Handlers

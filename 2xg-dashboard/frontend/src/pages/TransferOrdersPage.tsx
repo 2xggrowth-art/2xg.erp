@@ -50,6 +50,104 @@ const TransferOrdersPage: React.FC = () => {
     }
   };
 
+  const handleBulkDelete = async () => {
+    if (selectedOrders.length === 0) {
+      alert('Please select at least one transfer order to delete');
+      return;
+    }
+
+    if (window.confirm(`Are you sure you want to delete ${selectedOrders.length} transfer order(s)?`)) {
+      try {
+        await Promise.all(selectedOrders.map(id => transferOrdersService.deleteTransferOrder(id)));
+        setSelectedOrders([]);
+        fetchOrders();
+      } catch (error) {
+        console.error('Error deleting transfer orders:', error);
+        alert('Failed to delete some transfer orders');
+      }
+    }
+  };
+
+  const handleExportPDF = () => {
+    if (selectedOrders.length === 0) {
+      alert('Please select at least one transfer order to export');
+      return;
+    }
+
+    const selectedOrdersData = orders.filter(order => selectedOrders.includes(order.id));
+
+    // Create a simple HTML representation for PDF export
+    const htmlContent = `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>Transfer Orders Export</title>
+          <style>
+            body { font-family: Arial, sans-serif; padding: 20px; }
+            h1 { color: #333; }
+            table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+            th, td { border: 1px solid #ddd; padding: 12px; text-align: left; }
+            th { background-color: #f2f2f2; font-weight: bold; }
+            tr:nth-child(even) { background-color: #f9f9f9; }
+            .header { margin-bottom: 30px; }
+            .status { padding: 4px 8px; border-radius: 4px; display: inline-block; }
+            .status-draft { background-color: #e5e7eb; color: #1f2937; }
+            .status-initiated { background-color: #dbeafe; color: #1e40af; }
+            .status-in_transit { background-color: #fef3c7; color: #92400e; }
+            .status-received { background-color: #d1fae5; color: #065f46; }
+            .status-cancelled { background-color: #fee2e2; color: #991b1b; }
+          </style>
+        </head>
+        <body>
+          <div class="header">
+            <h1>Transfer Orders Report</h1>
+            <p>Generated on: ${new Date().toLocaleString('en-IN')}</p>
+            <p>Total Orders: ${selectedOrdersData.length}</p>
+          </div>
+          <table>
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Transfer Order #</th>
+                <th>From</th>
+                <th>To</th>
+                <th>Reason</th>
+                <th>Items</th>
+                <th>Quantity</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${selectedOrdersData.map(order => `
+                <tr>
+                  <td>${formatDate(order.transfer_date)}</td>
+                  <td>${order.transfer_order_number}</td>
+                  <td>${order.source_location}</td>
+                  <td>${order.destination_location}</td>
+                  <td>${order.reason || '-'}</td>
+                  <td>${order.total_items}</td>
+                  <td>${order.total_quantity}</td>
+                  <td><span class="status status-${order.status}">${order.status.replace('_', ' ').toUpperCase()}</span></td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        </body>
+      </html>
+    `;
+
+    // Create a blob and download
+    const blob = new Blob([htmlContent], { type: 'text/html' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `transfer-orders-${new Date().toISOString().split('T')[0]}.html`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'draft':
@@ -106,13 +204,36 @@ const TransferOrdersPage: React.FC = () => {
               Manage stock movements between locations
             </p>
           </div>
-          <button
-            onClick={() => navigate('/inventory/transfer-orders/new')}
-            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-          >
-            <Plus size={20} />
-            <span>New</span>
-          </button>
+          <div className="flex items-center gap-3">
+            {selectedOrders.length > 0 && (
+              <>
+                <div className="text-sm text-gray-600 mr-2">
+                  {selectedOrders.length} selected
+                </div>
+                <button
+                  onClick={handleBulkDelete}
+                  className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+                >
+                  <Trash2 size={18} />
+                  <span>Delete</span>
+                </button>
+                <button
+                  onClick={handleExportPDF}
+                  className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+                >
+                  <Download size={18} />
+                  <span>Export PDF</span>
+                </button>
+              </>
+            )}
+            <button
+              onClick={() => navigate('/inventory/transfer-orders/new')}
+              className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+            >
+              <Plus size={20} />
+              <span>New</span>
+            </button>
+          </div>
         </div>
 
         {/* Search and Filter Bar */}

@@ -36,8 +36,61 @@ async function seedDatabase() {
     }
     console.log('✅ Organization ready:', org.name);
 
-    // 2. Create product categories
-    console.log('\n📦 Step 2: Creating product categories...');
+    // 2. Create Admin User (Moved to top priority)
+    console.log('\n📦 Step 2: Creating admin user...');
+    const adminEmail = 'mohd.zaheer@gmail.com';
+    const adminPassword = 'admin123';
+
+    // Check if user exists
+    const { data: existingUser } = await supabaseAdmin
+      .from('users')
+      .select('id')
+      .eq('email', adminEmail)
+      .single();
+
+    if (!existingUser) {
+      const bcrypt = require('bcrypt');
+      const saltRounds = 10;
+      const passwordHash = await bcrypt.hash(adminPassword, saltRounds);
+
+      const { error: userError } = await supabaseAdmin
+        .from('users')
+        .insert({
+          organization_id: org.id, // Ensure org_id is linked if schema requires it
+          name: 'Zaheer Admin',
+          email: adminEmail,
+          password_hash: passwordHash,
+          role: 'Admin',
+          phone: '+919876543210',
+          department: 'Management',
+          status: 'Active'
+        });
+
+      if (userError) {
+        console.error('Error creating admin user:', userError);
+      } else {
+        console.log(`✅ Admin user created: ${adminEmail}`);
+      }
+    } else {
+      console.log(`ℹ️ Admin user already exists: ${adminEmail}`);
+      // Force update password to ensure it is 'admin123'
+      const bcrypt = require('bcrypt');
+      const saltRounds = 10;
+      const passwordHash = await bcrypt.hash(adminPassword, saltRounds);
+
+      const { error: updateError } = await supabaseAdmin
+        .from('users')
+        .update({ password_hash: passwordHash, status: 'Active' })
+        .eq('email', adminEmail);
+
+      if (updateError) {
+        console.error('Error updating admin password:', updateError);
+      } else {
+        console.log(`✅ Admin password reset to: ${adminPassword}`);
+      }
+    }
+
+    // 3. Create product categories
     const categories = ['Electric Bikes', 'Geared Cycles', 'Premium MTB', 'Single Speed', 'Kids Bikes'];
     const categoryData = [];
 
@@ -212,6 +265,8 @@ async function seedDatabase() {
 
     await supabaseAdmin.from('crm_leads').insert(leadData);
     console.log(`✅ Created ${leadData.length} CRM leads`);
+
+
 
     console.log('\n🎉 Database seeding completed successfully!\n');
     console.log('Summary:');

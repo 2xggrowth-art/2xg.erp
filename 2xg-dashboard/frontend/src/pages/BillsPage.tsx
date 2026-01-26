@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import ProcessFlow from '../components/common/ProcessFlow';
 import { billsService, Bill } from '../services/bills.service';
+import BulkActionBar, { createBulkDeleteAction, createBulkExportAction, createBulkPrintAction } from '../components/common/BulkActionBar';
 
 const BillsPage = () => {
   const navigate = useNavigate();
@@ -21,6 +22,7 @@ const BillsPage = () => {
   const [bills, setBills] = useState<Bill[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [selectedBills, setSelectedBills] = useState<string[]>([]);
 
   // Fetch bills on component mount
   useEffect(() => {
@@ -40,6 +42,75 @@ const BillsPage = () => {
       setLoading(false);
     }
   };
+
+  // Selection handlers
+  const handleSelectBill = (billId: string) => {
+    setSelectedBills(prev =>
+      prev.includes(billId)
+        ? prev.filter(id => id !== billId)
+        : [...prev, billId]
+    );
+  };
+
+  const handleSelectAll = () => {
+    if (selectedBills.length === bills.length) {
+      setSelectedBills([]);
+    } else {
+      setSelectedBills(bills.map(bill => bill.id!));
+    }
+  };
+
+  const clearSelection = () => {
+    setSelectedBills([]);
+  };
+
+  // Bulk action handlers
+  const handleBulkDelete = async () => {
+    if (window.confirm(`Are you sure you want to delete ${selectedBills.length} bill(s)?`)) {
+      try {
+        await Promise.all(selectedBills.map(id => billsService.deleteBill(id)));
+        setSelectedBills([]);
+        fetchBills();
+      } catch (error) {
+        console.error('Error deleting bills:', error);
+        alert('Failed to delete some bills. Please try again.');
+      }
+    }
+  };
+
+  const handleBulkExport = () => {
+    const selectedData = bills.filter(bill => selectedBills.includes(bill.id!));
+    const csv = [
+      ['Bill Number', 'Vendor', 'Status', 'Date', 'Due Date', 'Amount', 'Balance Due'].join(','),
+      ...selectedData.map(bill => [
+        bill.bill_number,
+        bill.vendor_name,
+        bill.status,
+        bill.bill_date || '',
+        bill.due_date || '',
+        bill.total_amount,
+        bill.balance_due || bill.total_amount
+      ].join(','))
+    ].join('\n');
+
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `bills_export_${new Date().toISOString().split('T')[0]}.csv`;
+    a.click();
+  };
+
+  const handleBulkPrint = () => {
+    window.print();
+  };
+
+  // Bulk actions configuration
+  const bulkActions = [
+    createBulkDeleteAction(handleBulkDelete),
+    createBulkExportAction(handleBulkExport),
+    createBulkPrintAction(handleBulkPrint)
+  ];
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('en-IN', {
@@ -101,6 +172,12 @@ const BillsPage = () => {
       status: 'default' as const,
     },
   ];
+
+  // Filter bills based on search query
+  const filteredBills = bills.filter(bill =>
+    bill.bill_number.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    bill.vendor_name.toLowerCase().includes(searchQuery.toLowerCase())
+  );
 
   return (
     <div className="min-h-screen bg-white">
@@ -167,7 +244,7 @@ const BillsPage = () => {
           <div className="flex justify-center items-center py-16">
             <div className="text-red-500">Error: {error}</div>
           </div>
-        ) : bills.length === 0 ? (
+        ) : filteredBills.length === 0 && searchQuery === '' ? (
           /* Empty State */
           <div className="max-w-4xl mx-auto py-16">
             <div className="text-center">
@@ -231,6 +308,11 @@ const BillsPage = () => {
               </div>
             </div>
           </div>
+        ) : filteredBills.length === 0 ? (
+          /* No Search Results */
+          <div className="flex justify-center items-center py-16">
+            <div className="text-gray-500">No bills found matching "{searchQuery}"</div>
+          </div>
         ) : (
           /* Bills Table */
           <div className="bg-white">
@@ -238,6 +320,14 @@ const BillsPage = () => {
               <table className="min-w-full divide-y divide-gray-200">
                 <thead className="bg-gray-50">
                   <tr>
+                    <th className="px-6 py-3 text-left">
+                      <input
+                        type="checkbox"
+                        checked={selectedBills.length === filteredBills.length && filteredBills.length > 0}
+                        onChange={handleSelectAll}
+                        className="rounded"
+                      />
+                    </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Reference Number
                     </th>
@@ -259,12 +349,20 @@ const BillsPage = () => {
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
-                  {bills.map((bill) => (
+                  {filteredBills.map((bill) => (
                     <tr
                       key={bill.id}
                       onClick={() => navigate(`/purchases/bills/${bill.id}`)}
                       className="hover:bg-gray-50 cursor-pointer transition-colors"
                     >
+                      <td className="px-6 py-4 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                        <input
+                          type="checkbox"
+                          checked={selectedBills.includes(bill.id!)}
+                          onChange={() => handleSelectBill(bill.id!)}
+                          className="rounded"
+                        />
+                      </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-blue-600">
                         {bill.reference_number || bill.bill_number}
                       </td>
@@ -293,6 +391,18 @@ const BillsPage = () => {
           </div>
         )}
       </div>
+
+      {/* Bulk Action Bar */}
+      {selectedBills.length > 0 && (
+        <BulkActionBar
+          selectedCount={selectedBills.length}
+          totalCount={filteredBills.length}
+          onClearSelection={clearSelection}
+          onSelectAll={handleSelectAll}
+          actions={bulkActions}
+          entityName="bill"
+        />
+      )}
     </div>
   );
 };

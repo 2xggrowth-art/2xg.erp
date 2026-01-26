@@ -123,6 +123,52 @@ export class PaymentsReceivedService {
       }
 
       console.log('PaymentsReceivedService: Payment created successfully:', payment.id);
+
+      // Update linked invoice if exists
+      if (invoiceId) {
+        try {
+          const { data: invoice, error: invoiceFetchError } = await supabase
+            .from('invoices')
+            .select('start_total_amount:total_amount, start_amount_paid:amount_paid')
+            .eq('id', invoiceId)
+            .single();
+
+          if (!invoiceFetchError && invoice) {
+            const paymentAmount = Number(data.amount_received) || 0;
+            // We assume amount_used is what reduces the balance. If amount_used is 0/null, we use amount_received
+            const amountToApply = Number(data.amount_used) > 0 ? Number(data.amount_used) : paymentAmount;
+
+            const currentPaid = Number(invoice.start_amount_paid) || 0;
+            const totalAmount = Number(invoice.start_total_amount) || 0;
+
+            const newPaid = currentPaid + amountToApply;
+            const newBalance = Math.max(0, totalAmount - newPaid);
+
+            let newStatus = 'partial';
+            if (newBalance <= 0) {
+              newStatus = 'paid';
+            } else if (newPaid > 0) {
+              newStatus = 'partial'; // backend uses 'partial' or 'partially_paid'? front expects 'partial' based on typical logic, check getStatusConfig if needed.
+            }
+
+            // Update invoice
+            await supabase
+              .from('invoices')
+              .update({
+                amount_paid: newPaid,
+                balance_due: newBalance,
+                status: newStatus
+              })
+              .eq('id', invoiceId);
+
+            console.log(`PaymentsReceivedService: Updated invoice ${invoiceId} - Status: ${newStatus}, Balance: ${newBalance}`);
+          }
+        } catch (updateError) {
+          console.error('PaymentsReceivedService: Error updating linked invoice:', updateError);
+          // Don't fail the payment creation just because invoice update failed, but log it
+        }
+      }
+
       return payment;
     } catch (error: any) {
       console.error('PaymentsReceivedService: Error creating payment:', error);

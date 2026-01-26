@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Plus, Search, Filter, Download, Trash2, Edit, Eye } from 'lucide-react';
 import { vendorCreditsService, VendorCredit } from '../services/vendor-credits.service';
 import { useNavigate } from 'react-router-dom';
+import BulkActionBar, { createBulkDeleteAction, createBulkExportAction } from '../components/common/BulkActionBar';
 
 const VendorCreditsPage: React.FC = () => {
   const navigate = useNavigate();
@@ -9,6 +10,7 @@ const VendorCreditsPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
+  const [selectedCredits, setSelectedCredits] = useState<string[]>([]);
 
   useEffect(() => {
     fetchCredits();
@@ -79,6 +81,68 @@ const VendorCreditsPage: React.FC = () => {
       year: 'numeric'
     });
   };
+
+  // Selection handlers
+  const handleSelectCredit = (creditId: string) => {
+    setSelectedCredits(prev =>
+      prev.includes(creditId)
+        ? prev.filter(id => id !== creditId)
+        : [...prev, creditId]
+    );
+  };
+
+  const handleSelectAll = () => {
+    if (selectedCredits.length === credits.length) {
+      setSelectedCredits([]);
+    } else {
+      setSelectedCredits(credits.map(credit => credit.id));
+    }
+  };
+
+  const clearSelection = () => {
+    setSelectedCredits([]);
+  };
+
+  const handleBulkDelete = async () => {
+    if (window.confirm(`Are you sure you want to delete ${selectedCredits.length} vendor credit(s)?`)) {
+      try {
+        await Promise.all(selectedCredits.map(id => vendorCreditsService.deleteVendorCredit(id)));
+        setSelectedCredits([]);
+        fetchCredits();
+      } catch (error) {
+        console.error('Error deleting vendor credits:', error);
+        alert('Failed to delete some vendor credits. Please try again.');
+      }
+    }
+  };
+
+  const handleBulkExport = () => {
+    const selectedData = credits.filter(credit => selectedCredits.includes(credit.id));
+    const csv = [
+      ['Date', 'Credit Note#', 'Vendor Name', 'Reference#', 'Amount', 'Balance', 'Status'].join(','),
+      ...selectedData.map(credit => [
+        formatDate(credit.credit_date),
+        credit.credit_number,
+        credit.vendor_name,
+        credit.reference_number || '',
+        credit.total_amount.toString(),
+        credit.balance.toString(),
+        credit.status
+      ].join(','))
+    ].join('\n');
+
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `vendor_credits_export_${new Date().toISOString().split('T')[0]}.csv`;
+    a.click();
+  };
+
+  const bulkActions = [
+    createBulkDeleteAction(handleBulkDelete),
+    createBulkExportAction(handleBulkExport)
+  ];
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -169,6 +233,14 @@ const VendorCreditsPage: React.FC = () => {
             <table className="min-w-full divide-y divide-gray-200">
               <thead className="bg-gray-50">
                 <tr>
+                  <th className="px-6 py-3 text-left">
+                    <input
+                      type="checkbox"
+                      checked={selectedCredits.length === credits.length && credits.length > 0}
+                      onChange={handleSelectAll}
+                      className="rounded"
+                    />
+                  </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Date
                   </th>
@@ -197,7 +269,15 @@ const VendorCreditsPage: React.FC = () => {
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
                 {credits.map((credit) => (
-                  <tr key={credit.id} className="hover:bg-gray-50">
+                  <tr key={credit.id} className="hover:bg-gray-50 cursor-pointer" onClick={() => navigate(`/purchases/vendor-credits/${credit.id}`)}>
+                    <td className="px-6 py-4 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                      <input
+                        type="checkbox"
+                        checked={selectedCredits.includes(credit.id)}
+                        onChange={() => handleSelectCredit(credit.id)}
+                        className="rounded"
+                      />
+                    </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                       {formatDate(credit.credit_date)}
                     </td>
@@ -253,6 +333,18 @@ const VendorCreditsPage: React.FC = () => {
           </div>
         )}
       </div>
+
+      {/* Bulk Action Bar */}
+      {selectedCredits.length > 0 && (
+        <BulkActionBar
+          selectedCount={selectedCredits.length}
+          totalCount={credits.length}
+          onClearSelection={clearSelection}
+          onSelectAll={handleSelectAll}
+          actions={bulkActions}
+          entityName="vendor credit"
+        />
+      )}
     </div>
   );
 };

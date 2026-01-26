@@ -1,12 +1,15 @@
 import { useState, useEffect } from 'react';
 import { ArrowLeft, Package, Save } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import { itemsService } from '../../services/items.service';
 import { vendorsService, Vendor } from '../../services/vendors.service';
 
 const NewItemForm = () => {
   const navigate = useNavigate();
+  const { id } = useParams<{ id: string }>();
+  const isEditMode = !!id;
   const [loading, setLoading] = useState(false);
+  const [fetching, setFetching] = useState(false);
   const [vendors, setVendors] = useState<Vendor[]>([]);
   const [formData, setFormData] = useState({
     type: 'goods',
@@ -17,18 +20,9 @@ const NewItemForm = () => {
     returnableItem: false,
     hsnCode: '',
     taxPreference: 'taxable',
-    dimensionLength: '',
-    dimensionWidth: '',
-    dimensionHeight: '',
-    dimensionUnit: 'cm',
-    weight: '',
-    weightUnit: 'kg',
     manufacturer: '',
     brand: '',
-    upc: '',
-    mpn: '',
-    ean: '',
-    isbn: '',
+
     // Sales Information
     sellable: true,
     sellingPrice: '',
@@ -46,12 +40,42 @@ const NewItemForm = () => {
     advancedTracking: 'none',
     inventoryAccount: '',
     valuationMethod: '',
-    reorderPoint: ''
+    reorderPoint: '',
+    quantity: '0' // Added quantity field
   });
+
+  // Fetch items for SKU validation and last SKU
+  const [items, setItems] = useState<any[]>([]);
+  const [lastSku, setLastSku] = useState<string>('');
+  const [duplicateSkuError, setDuplicateSkuError] = useState<boolean>(false);
 
   useEffect(() => {
     fetchVendors();
-  }, []);
+    fetchItems(); // Fetch items for SKU validation and last SKU
+    if (isEditMode && id) {
+      fetchItemDetails(id);
+    }
+  }, [id, isEditMode]);
+
+  const fetchItems = async () => {
+    try {
+      const response = await itemsService.getAllItems();
+      if (response.data.success && response.data.data) {
+        const fetchedItems = response.data.data;
+        setItems(fetchedItems);
+        // Find last SKU (assuming simple string sort or creation date if available in sort)
+        // Ideally backend should provide this, but client-side approximation:
+        if (fetchedItems.length > 0) {
+          // Sort by created_at desc if possible, or just look at list
+          // Assuming default list might not be sorted, let's sort by created_at
+          const sorted = [...fetchedItems].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+          setLastSku(sorted[0].sku);
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching items:', error);
+    }
+  };
 
   const fetchVendors = async () => {
     try {
@@ -65,30 +89,90 @@ const NewItemForm = () => {
     }
   };
 
+  const fetchItemDetails = async (itemId: string) => {
+    try {
+      setFetching(true);
+      const response = await itemsService.getItemById(itemId);
+      const apiResponse = response.data;
+      if (apiResponse.success && apiResponse.data) {
+        const item = apiResponse.data;
+
+        setFormData({
+          type: 'goods', // Default as usually not stored directly or derived from other fields
+          name: item.item_name,
+          sku: item.sku,
+          unit: item.unit_of_measurement,
+          category: item.category_id || '',
+          returnableItem: item.is_returnable,
+          hsnCode: item.hsn_code || '',
+          taxPreference: item.tax_rate > 0 ? 'taxable' : 'non-taxable',
+          // Removed dimension and weight fields
+          manufacturer: item.manufacturer || '',
+          brand: item.brand || '',
+          // Removed UPC, MPN, EAN, ISBN fields
+
+          // Sales Information
+          sellable: item.is_active, // Assuming is_active relates to sellable for now, or fetch specific field if added
+          sellingPrice: item.unit_price ? item.unit_price.toString() : '',
+          salesAccount: 'Sales', // Default, as not returned in getById usually
+          salesDescription: item.description || '',
+
+          // Purchase Information
+          purchasable: true,
+          costPrice: item.cost_price ? item.cost_price.toString() : '',
+          purchaseAccount: 'Cost of Goods Sold',
+          purchaseDescription: '', // Not in item interface shown
+          preferredVendor: item.supplier_id || '',
+
+          // Inventory Tracking
+          trackInventory: true,
+          trackBinLocation: false,
+          advancedTracking: 'none',
+          inventoryAccount: '',
+          valuationMethod: '',
+          reorderPoint: item.reorder_point ? item.reorder_point.toString() : '',
+          // Add quantity if editing? Usually stock is separate, but we can set initial if needed or separate field
+          quantity: item.current_stock ? item.current_stock.toString() : '0'
+        });
+      }
+    } catch (error) {
+      console.error('Error fetching item details:', error);
+      alert('Failed to fetch item details');
+      navigate('/items');
+    } finally {
+      setFetching(false);
+    }
+  };
+
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value, type } = e.target;
+    // Handle checkbox specifically
     const checked = (e.target as HTMLInputElement).checked;
 
     setFormData(prev => ({
       ...prev,
       [name]: type === 'checkbox' ? checked : value
     }));
+
+    if (name === 'sku') {
+      const isDuplicate = items.some(i => i.sku.toLowerCase() === value.toLowerCase() && i.id !== id);
+      setDuplicateSkuError(isDuplicate);
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
+    if (duplicateSkuError) {
+      alert('SKU already exists. Please use a unique SKU.');
+      return;
+    }
+
     setLoading(true);
 
     try {
-      // Build dimensions string if provided
-      let dimensions = '';
-      if (formData.dimensionLength && formData.dimensionWidth && formData.dimensionHeight) {
-        dimensions = `${formData.dimensionLength}×${formData.dimensionWidth}×${formData.dimensionHeight} ${formData.dimensionUnit}`;
-      }
-
       // Prepare item data for API
-      const itemData = {
+      const itemData: any = {
         name: formData.name,
         sku: formData.sku,
         unit: formData.unit,
@@ -96,13 +180,9 @@ const NewItemForm = () => {
         hsn_code: formData.hsnCode || undefined,
         manufacturer: formData.manufacturer || undefined,
         brand: formData.brand || undefined,
-        upc: formData.upc || undefined,
-        mpn: formData.mpn || undefined,
-        ean: formData.ean || undefined,
-        isbn: formData.isbn || undefined,
+        // Removed UPC, MPN, EAN, ISBN fields
         is_returnable: formData.returnableItem,
-        weight: formData.weight ? parseFloat(formData.weight) : undefined,
-        dimensions: dimensions || undefined,
+        // Removed weight and dimensions
         tax_rate: formData.taxPreference === 'taxable' ? 18 : 0, // Default 18% GST for taxable items
 
         // Sales Information
@@ -126,28 +206,36 @@ const NewItemForm = () => {
         inventory_account: formData.inventoryAccount || undefined,
         valuation_method: formData.valuationMethod || undefined,
         reorder_point: formData.reorderPoint ? parseInt(formData.reorderPoint) : 10,
-        current_stock: 0, // Initialize with 0 stock
+        current_stock: formData.quantity ? parseFloat(formData.quantity) : 0, // Include quantity as current_stock
       };
 
-      // Log the data being sent for debugging
-      console.log('Sending item data:', itemData);
-
-      // Call API to create item
-      const response = await itemsService.createItem(itemData);
+      // Call API to create or update item
+      let response;
+      if (isEditMode && id) {
+        console.log('=== FRONTEND UPDATE ===');
+        console.log('Item ID:', id);
+        console.log('formData.name:', formData.name);
+        console.log('itemData.name:', itemData.name);
+        console.log('Full itemData:', JSON.stringify(itemData, null, 2));
+        response = await itemsService.updateItem(id, itemData);
+      } else {
+        response = await itemsService.createItem(itemData);
+      }
 
       console.log('API Response:', response);
+      console.log('Returned item name:', response.data.data?.item_name);
 
       // Axios response structure: response.data = { success: boolean, data: Item, error?: string }
       if (response.data.success && response.data.data) {
-        // Navigate to the items list page
-        navigate('/items');
+        // Navigate to the items list page with refetch flag
+        navigate('/items', { state: { refetch: true } });
       } else {
         const errorMsg = response.data.error || 'Failed to save item. Please try again.';
         console.error('Save failed:', errorMsg);
         alert(errorMsg);
       }
     } catch (error: any) {
-      console.error('Error creating item:', error);
+      console.error('Error saving item:', error);
       const errorMsg = error.response?.data?.error || error.message || 'Failed to save item. Please try again.';
       alert(errorMsg);
     } finally {
@@ -174,7 +262,7 @@ const NewItemForm = () => {
               </button>
               <div className="flex items-center gap-2">
                 <Package className="w-6 h-6 text-blue-600" />
-                <h1 className="text-2xl font-semibold text-gray-800">New Item</h1>
+                <h1 className="text-2xl font-semibold text-gray-800">{isEditMode ? 'Edit Item' : 'New Item'}</h1>
               </div>
             </div>
             <div className="flex items-center gap-3">
@@ -187,7 +275,7 @@ const NewItemForm = () => {
               </button>
               <button
                 onClick={handleSubmit}
-                disabled={loading}
+                disabled={loading || duplicateSkuError}
                 className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {loading ? (
@@ -273,10 +361,16 @@ const NewItemForm = () => {
                 name="sku"
                 value={formData.sku}
                 onChange={handleInputChange}
-                className="w-full px-3 py-2 border border-blue-400 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent ${duplicateSkuError ? 'border-red-500' : 'border-blue-400'}`}
                 placeholder="Enter SKU"
                 required
               />
+              {duplicateSkuError && (
+                <p className="text-xs text-red-500 mt-1">SKU already exists. Please choose a unique SKU.</p>
+              )}
+              {lastSku && !isEditMode && (
+                <p className="text-xs text-gray-500 mt-1">Last used SKU: <span className="font-semibold">{lastSku}</span></p>
+              )}
             </div>
           </div>
 
@@ -287,14 +381,33 @@ const NewItemForm = () => {
               <span className="text-gray-400 cursor-help">ⓘ</span>
             </label>
             <div className="col-span-3">
-              <input
-                type="text"
+              <select
                 name="unit"
                 value={formData.unit}
                 onChange={handleInputChange}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                placeholder="e.g., pcs, kg, liters"
                 required
+              >
+                <option value="" disabled>Select Unit</option>
+                <option value="pcs">Pieces (pcs)</option>
+                <option value="box">Box (box)</option>
+              </select>
+            </div>
+          </div>
+
+          {/* Quantity */}
+          <div className="grid grid-cols-4 gap-4 items-center">
+            <label className="text-sm font-medium text-gray-700 flex items-center gap-1">
+              Quantity
+            </label>
+            <div className="col-span-3">
+              <input
+                type="number"
+                name="quantity"
+                value={formData.quantity}
+                onChange={handleInputChange}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                placeholder="0"
               />
             </div>
           </div>
@@ -358,82 +471,6 @@ const NewItemForm = () => {
             </div>
           </div>
 
-          {/* Dimensions and Weight */}
-          <div className="grid grid-cols-4 gap-4 items-start">
-            <label className="text-sm font-medium text-gray-700 pt-2">
-              Dimensions
-              <div className="text-xs text-gray-500 font-normal mt-1">
-                (Length X Width X Height)
-              </div>
-            </label>
-            <div className="col-span-3 grid grid-cols-2 gap-6">
-              <div className="flex items-center gap-2">
-                <input
-                  type="text"
-                  name="dimensionLength"
-                  value={formData.dimensionLength}
-                  onChange={handleInputChange}
-                  placeholder="×"
-                  className="w-16 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-center"
-                />
-                <span className="text-gray-400">×</span>
-                <input
-                  type="text"
-                  name="dimensionWidth"
-                  value={formData.dimensionWidth}
-                  onChange={handleInputChange}
-                  placeholder="×"
-                  className="w-16 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-center"
-                />
-                <span className="text-gray-400">×</span>
-                <input
-                  type="text"
-                  name="dimensionHeight"
-                  value={formData.dimensionHeight}
-                  onChange={handleInputChange}
-                  placeholder=""
-                  className="w-16 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-center"
-                />
-                <select
-                  name="dimensionUnit"
-                  value={formData.dimensionUnit}
-                  onChange={handleInputChange}
-                  className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                >
-                  <option value="cm">cm</option>
-                  <option value="m">m</option>
-                  <option value="in">in</option>
-                  <option value="ft">ft</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="text-sm font-medium text-gray-700 block mb-2">Weight</label>
-                <div className="flex items-center gap-2">
-                  <input
-                    type="text"
-                    name="weight"
-                    value={formData.weight}
-                    onChange={handleInputChange}
-                    className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    placeholder=""
-                  />
-                  <select
-                    name="weightUnit"
-                    value={formData.weightUnit}
-                    onChange={handleInputChange}
-                    className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  >
-                    <option value="kg">kg</option>
-                    <option value="g">g</option>
-                    <option value="lb">lb</option>
-                    <option value="oz">oz</option>
-                  </select>
-                </div>
-              </div>
-            </div>
-          </div>
-
           {/* Manufacturer and Brand */}
           <div className="grid grid-cols-4 gap-4 items-center">
             <label className="text-sm font-medium text-gray-700">
@@ -457,70 +494,6 @@ const NewItemForm = () => {
                   onChange={handleInputChange}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   placeholder="Enter brand"
-                />
-              </div>
-            </div>
-          </div>
-
-          {/* UPC and MPN */}
-          <div className="grid grid-cols-4 gap-4 items-center">
-            <label className="text-sm font-medium text-gray-700 flex items-center gap-1">
-              UPC
-              <span className="text-gray-400 cursor-help">ⓘ</span>
-            </label>
-            <div className="col-span-3 grid grid-cols-2 gap-6">
-              <input
-                type="text"
-                name="upc"
-                value={formData.upc}
-                onChange={handleInputChange}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                placeholder=""
-              />
-              <div>
-                <label className="text-sm font-medium text-gray-700 flex items-center gap-1 mb-2">
-                  MPN
-                  <span className="text-gray-400 cursor-help">ⓘ</span>
-                </label>
-                <input
-                  type="text"
-                  name="mpn"
-                  value={formData.mpn}
-                  onChange={handleInputChange}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  placeholder=""
-                />
-              </div>
-            </div>
-          </div>
-
-          {/* EAN and ISBN */}
-          <div className="grid grid-cols-4 gap-4 items-center">
-            <label className="text-sm font-medium text-gray-700 flex items-center gap-1">
-              EAN
-              <span className="text-gray-400 cursor-help">ⓘ</span>
-            </label>
-            <div className="col-span-3 grid grid-cols-2 gap-6">
-              <input
-                type="text"
-                name="ean"
-                value={formData.ean}
-                onChange={handleInputChange}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                placeholder=""
-              />
-              <div>
-                <label className="text-sm font-medium text-gray-700 flex items-center gap-1 mb-2">
-                  ISBN
-                  <span className="text-gray-400 cursor-help">ⓘ</span>
-                </label>
-                <input
-                  type="text"
-                  name="isbn"
-                  value={formData.isbn}
-                  onChange={handleInputChange}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  placeholder=""
                 />
               </div>
             </div>

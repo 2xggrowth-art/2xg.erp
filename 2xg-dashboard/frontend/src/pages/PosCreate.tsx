@@ -5,6 +5,7 @@ import { customersService, Customer, CreateCustomerData } from '../services/cust
 import { itemsService, Item } from '../services/items.service';
 import { salespersonService, Salesperson } from '../services/salesperson.service';
 import { invoicesService } from '../services/invoices.service';
+import SplitPaymentModal from '../components/pos/SplitPaymentModal';
 
 // Define the shape of a Cart Item
 interface CartItem {
@@ -69,6 +70,7 @@ const PosCreate: React.FC = () => {
 
   // Payment states
   const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [showSplitPaymentModal, setShowSplitPaymentModal] = useState(false);
   const [selectedPaymentMode, setSelectedPaymentMode] = useState<'CASH' | 'HDFC BANK' | 'ICICI BANK' | 'BAJAJ/ICICI' | 'CREDIT SALE' | 'D/B CREDIT CARD' | ''>('');
   const [referenceNumber, setReferenceNumber] = useState('');
   const [paidAmount, setPaidAmount] = useState<number>(0);
@@ -86,6 +88,31 @@ const PosCreate: React.FC = () => {
     gstin: '',
     payment_terms: 'Due on Receipt',
   });
+
+  const fetchItems = async () => {
+    try {
+      setLoading(true);
+      const response = await itemsService.getAllItems();
+      // Handle both possible response structures (array or object with data property)
+      const itemsData = response.data?.data || response.data || [];
+      if (Array.isArray(itemsData)) {
+        setItems(itemsData);
+      } else {
+        console.error('Unexpected items data format:', itemsData);
+        setItems([]);
+      }
+    } catch (error) {
+      console.error('Error fetching items:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchItems();
+    fetchSalespersons();
+    fetchSessions();
+  }, []);
 
   const fetchSalespersons = () => {
     try {
@@ -449,6 +476,113 @@ const PosCreate: React.FC = () => {
     }
   };
 
+  const handleSplitPaymentComplete = async (payments: any[], totalPaid: number) => {
+    try {
+      setProcessingPayment(true);
+
+      // Generate invoice number
+      const invoiceNumberRes = await invoicesService.generateInvoiceNumber();
+      const invoiceNumber = invoiceNumberRes.data?.invoice_number || `INV-${Date.now()}`;
+
+      // Calculate balance due
+      const balanceDue = total - totalPaid;
+
+      // Determine invoice status based on payment
+      let invoiceStatus: 'paid' | 'partially_paid' | 'sent';
+      let paymentStatus: 'Paid' | 'Partially Paid' | 'Unpaid';
+
+      if (totalPaid >= total) {
+        invoiceStatus = 'paid';
+        paymentStatus = 'Paid';
+      } else if (totalPaid > 0) {
+        invoiceStatus = 'partially_paid';
+        paymentStatus = 'Partially Paid';
+      } else {
+        invoiceStatus = 'sent';
+        paymentStatus = 'Unpaid';
+      }
+
+      // Build payment details string
+      const paymentDetails = payments.map((p, i) =>
+        `Payment ${i + 1}: ${p.mode} - ₹${p.amount.toFixed(2)}${p.reference ? ` (Ref: ${p.reference})` : ''}${p.note ? `\n  Note: ${p.note}` : ''}`
+      ).join('\n');
+
+      // Prepare invoice data
+      const invoiceData = {
+        customer_id: selectedCustomer?.id || null,
+        customer_name: selectedCustomer?.customer_name || 'Walk-in Customer',
+        customer_email: selectedCustomer?.email || null,
+        invoice_number: invoiceNumber,
+        order_number: null,
+        invoice_date: new Date().toISOString().split('T')[0],
+        due_date: new Date().toISOString().split('T')[0],
+        payment_terms: 'Due on Receipt',
+        salesperson_id: selectedSalesperson?.id || null,
+        salesperson_name: selectedSalesperson?.name || null,
+        discount_type: 'percentage' as const,
+        discount_value: 0,
+        tds_tcs_type: null,
+        tds_tcs_rate: 0,
+        adjustment: 0,
+        sub_total: total,
+        total_amount: total,
+        amount_paid: totalPaid,
+        balance_due: balanceDue,
+        status: invoiceStatus,
+        payment_status: paymentStatus,
+        subject: 'POS',  // Mark this as a POS transaction
+        customer_notes: `SPLIT PAYMENT (${payments.length} payments)\n${paymentDetails}${balanceDue > 0 ? `\n\nAmount Paid: ₹${totalPaid.toFixed(2)}\nBalance Due: ₹${balanceDue.toFixed(2)}` : ''}`,
+        terms_and_conditions: null,
+        items: cart.map(item => ({
+          item_id: item.item_id,
+          item_name: item.name,
+          account: 'Sales',
+          description: `SKU: ${item.sku}`,
+          quantity: item.qty,
+          unit_of_measurement: 'pcs',
+          rate: item.rate,
+          amount: item.qty * item.rate,
+          stock_on_hand: 0
+        }))
+      };
+
+      // Create invoice
+      const response = await invoicesService.createInvoice(invoiceData);
+
+      if (response.success) {
+        setGeneratedInvoice({
+          ...invoiceData,
+          id: response.data?.id,
+          paymentMode: `SPLIT (${payments.length} payments)`,
+          referenceNumber: '',
+          amountPaid: totalPaid,
+          balanceDue: balanceDue,
+          splitPayments: payments,
+          createdAt: new Date().toLocaleString('en-IN', {
+            day: '2-digit',
+            month: '2-digit',
+            year: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit',
+            hour12: true
+          })
+        });
+        setShowSplitPaymentModal(false);
+        setShowBillSuccess(true);
+
+        // Refresh items to update stock levels
+        fetchItems();
+      } else {
+        throw new Error('Failed to create invoice');
+      }
+    } catch (error) {
+      console.error('Split payment processing error:', error);
+      alert('Failed to process split payment. Please try again.');
+    } finally {
+      setProcessingPayment(false);
+    }
+  };
+
   const handleCompleteBill = () => {
     // Clear everything and start fresh
     setCart([]);
@@ -600,11 +734,10 @@ const PosCreate: React.FC = () => {
           <div className="flex bg-gray-100 text-xs border-b border-gray-200 overflow-x-auto">
             {/* Current Active Tab */}
             <div
-              className={`px-4 py-2.5 flex items-center gap-2 cursor-pointer ${
-                activeTab === 'newsale' && !activeHeldCartId
+              className={`px-4 py-2.5 flex items-center gap-2 cursor-pointer ${activeTab === 'newsale' && !activeHeldCartId
                   ? 'bg-white border-t-2 border-blue-500'
                   : 'border-r border-gray-200'
-              }`}
+                }`}
               onClick={() => setActiveTab('newsale')}
             >
               <Plus size={12} className={activeTab === 'newsale' && !activeHeldCartId ? "text-blue-500" : "text-gray-500"} />
@@ -640,9 +773,8 @@ const PosCreate: React.FC = () => {
             {/* Sessions Tab */}
             <div
               onClick={() => setActiveTab('sessions')}
-              className={`px-4 py-2.5 flex items-center gap-2 border-r border-gray-200 cursor-pointer hover:bg-white transition-colors ${
-                activeTab === 'sessions' ? 'bg-white border-t-2 border-blue-500' : 'opacity-60 hover:opacity-100'
-              }`}
+              className={`px-4 py-2.5 flex items-center gap-2 border-r border-gray-200 cursor-pointer hover:bg-white transition-colors ${activeTab === 'sessions' ? 'bg-white border-t-2 border-blue-500' : 'opacity-60 hover:opacity-100'
+                }`}
             >
               <Clock size={12} className="text-gray-500" />
               <span className="font-medium">Sessions</span>
@@ -652,142 +784,142 @@ const PosCreate: React.FC = () => {
           {activeTab === 'newsale' ? (
             <>
 
-          {/* Item Search Input - Inline */}
-          <div className="px-6 py-4 border-b border-gray-200 bg-white relative z-20">
-            <div className="relative">
-              <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-              <input
-                type="text"
-                placeholder="Type here or scan an item to add [F10]"
-                value={itemSearch}
-                onChange={(e) => setItemSearch(e.target.value)}
-                className="w-full pl-10 pr-4 py-2.5 bg-gray-50 border border-gray-300 rounded-lg text-sm text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              />
-            </div>
+              {/* Item Search Input - Inline */}
+              <div className="px-6 py-4 border-b border-gray-200 bg-white relative z-20">
+                <div className="relative">
+                  <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                  <input
+                    type="text"
+                    placeholder="Type here or scan an item to add [F10]"
+                    value={itemSearch}
+                    onChange={(e) => setItemSearch(e.target.value)}
+                    className="w-full pl-10 pr-4 py-2.5 bg-gray-50 border border-gray-300 rounded-lg text-sm text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                </div>
 
-            {/* Inline Dropdown Results */}
-            {itemSearch && (
-              <div className="absolute top-full left-0 right-0 bg-white border border-gray-200 shadow-xl rounded-b-lg max-h-[400px] overflow-y-auto z-50 mx-6 mt-1">
-                {filteredItems.length === 0 ? (
-                  <div className="text-center py-6 text-gray-400">
-                    <p className="text-sm">No items found</p>
-                  </div>
-                ) : (
-                  <div className="p-2 space-y-1">
-                    {filteredItems.map((item) => (
-                      <div
-                        key={item.id}
-                        onClick={() => handleSelectItem(item)}
-                        className="p-3 hover:bg-blue-50 border border-transparent hover:border-blue-200 rounded-lg cursor-pointer transition-colors flex justify-between items-center group"
-                      >
-                        <div>
-                          <div className="font-semibold text-gray-800 text-sm group-hover:text-blue-700">{item.item_name}</div>
-                          <div className="text-xs text-gray-500 mt-0.5">
-                            SKU: {item.sku} {item.barcode ? `| Barcode: ${item.barcode}` : ''}
-                          </div>
-                        </div>
-                        <div className="text-right">
-                          <div className="font-bold text-gray-900 group-hover:text-blue-700">₹{item.unit_price.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</div>
-                          <div className="text-xs text-gray-500">
-                            Stock: <span className={item.current_stock > 0 ? 'text-green-600 font-medium' : 'text-red-500'}>{item.current_stock}</span>
-                          </div>
-                        </div>
+                {/* Inline Dropdown Results */}
+                {itemSearch && (
+                  <div className="absolute top-full left-0 right-0 bg-white border border-gray-200 shadow-xl rounded-b-lg max-h-[400px] overflow-y-auto z-50 mx-6 mt-1">
+                    {filteredItems.length === 0 ? (
+                      <div className="text-center py-6 text-gray-400">
+                        <p className="text-sm">No items found</p>
                       </div>
-                    ))}
+                    ) : (
+                      <div className="p-2 space-y-1">
+                        {filteredItems.map((item) => (
+                          <div
+                            key={item.id}
+                            onClick={() => handleSelectItem(item)}
+                            className="p-3 hover:bg-blue-50 border border-transparent hover:border-blue-200 rounded-lg cursor-pointer transition-colors flex justify-between items-center group"
+                          >
+                            <div>
+                              <div className="font-semibold text-gray-800 text-sm group-hover:text-blue-700">{item.item_name}</div>
+                              <div className="text-xs text-gray-500 mt-0.5">
+                                SKU: {item.sku} {item.barcode ? `| Barcode: ${item.barcode}` : ''}
+                              </div>
+                            </div>
+                            <div className="text-right">
+                              <div className="font-bold text-gray-900 group-hover:text-blue-700">₹{item.unit_price.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</div>
+                              <div className="text-xs text-gray-500">
+                                Stock: <span className={item.current_stock > 0 ? 'text-green-600 font-medium' : 'text-red-500'}>{item.current_stock}</span>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
-            )}
-          </div>
 
-          {/* Table Header */}
-          {cart.length > 0 && (
-            <div className="grid grid-cols-12 gap-4 px-6 py-3 text-xs font-semibold uppercase tracking-wide text-gray-600 border-b border-gray-200 bg-gray-50">
-              <div className="col-span-1">S.NO.</div>
-              <div className="col-span-5">NAME</div>
-              <div className="col-span-1 text-center">QTY.</div>
-              <div className="col-span-2 text-right">RATE</div>
-              <div className="col-span-2 text-right">AMOUNT</div>
-              <div className="col-span-1"></div>
-            </div>
-          )}
-
-          {/* Cart Items or Empty State */}
-          <div className="flex-grow overflow-y-auto">
-            {cart.length === 0 ? (
-              <div className="flex flex-col items-center justify-center h-full text-gray-400">
-                <div className="relative mb-6">
-                  <ShoppingCart size={80} strokeWidth={1.5} className="text-gray-300" />
-                  <Plus size={24} className="absolute -top-2 -right-2 text-gray-400" />
+              {/* Table Header */}
+              {cart.length > 0 && (
+                <div className="grid grid-cols-12 gap-4 px-6 py-3 text-xs font-semibold uppercase tracking-wide text-gray-600 border-b border-gray-200 bg-gray-50">
+                  <div className="col-span-1">S.NO.</div>
+                  <div className="col-span-5">NAME</div>
+                  <div className="col-span-1 text-center">QTY.</div>
+                  <div className="col-span-2 text-right">RATE</div>
+                  <div className="col-span-2 text-right">AMOUNT</div>
+                  <div className="col-span-1"></div>
                 </div>
-                <h3 className="text-lg font-semibold mb-2 text-gray-500">Yet to add items to the cart!</h3>
-                <p className="text-sm text-gray-400">Search or scan items to add them to your cart</p>
-              </div>
-            ) : (
-              <>
-                {cart.map((item, index) => (
-                  <div key={item.id} className="grid grid-cols-12 gap-4 px-6 py-4 items-center border-b border-gray-100 hover:bg-gray-50 transition-colors">
-                    <div className="col-span-1 text-sm text-gray-600">{index + 1}</div>
-                    <div className="col-span-5">
-                      <div className="font-semibold text-sm text-gray-800">{item.name}</div>
-                      <div className="text-xs text-gray-500 mt-1">
-                        SKU: {item.sku} | Tax: {item.tax_rate}%
-                      </div>
-                    </div>
-                    <div className="col-span-1 text-center">
-                      <input
-                        type="number"
-                        min="1"
-                        value={item.qty}
-                        onChange={(e: ChangeEvent<HTMLInputElement>) => handleQtyChange(item.id, e.target.value)}
-                        className="w-16 bg-gray-50 border border-gray-300 rounded px-2 py-1 text-center text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      />
-                    </div>
-                    <div className="col-span-2 text-right">
-                      <div className="flex items-center justify-end bg-gray-50 rounded border border-gray-300 focus-within:border-blue-500 focus-within:ring-2 focus-within:ring-blue-500/20 transition-all px-2">
-                        <span className="text-xs text-gray-500 mr-1">₹</span>
-                        <input
-                          type="number"
-                          value={item.rate || ''}
-                          onChange={(e: ChangeEvent<HTMLInputElement>) => handleRateChange(item.id, e.target.value)}
-                          className="w-full bg-transparent border-none focus:ring-0 text-right text-sm text-gray-800 p-1 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                          placeholder="0.00"
-                        />
-                      </div>
-                    </div>
-                    <div className="col-span-2 text-right text-sm font-semibold text-gray-800">
-                      ₹{(item.qty * item.rate).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-                    </div>
-                    <div className="col-span-1 text-right">
-                      <button
-                        onClick={() => handleRemoveItem(item.id)}
-                        className="text-gray-400 hover:text-red-500 transition-colors"
-                      >
-                        <Trash2 size={16} />
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </>
-            )}
-          </div>
+              )}
 
-          {/* Footer Actions */}
-          <div className="p-4 bg-gray-50 border-t border-gray-200 flex gap-2">
-            <button
-              onClick={handleClearCart}
-              className="px-4 py-2 bg-red-50 border border-red-300 hover:bg-red-100 text-red-700 rounded-lg text-xs font-medium flex items-center gap-2 transition-colors"
-            >
-              <X size={14} /> Clear All [F6]
-            </button>
-            <button
-              onClick={handleHoldCart}
-              disabled={cart.length === 0}
-              className="px-4 py-2 bg-white border border-gray-300 hover:bg-gray-100 text-gray-700 rounded-lg text-xs font-medium flex items-center gap-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              <Package size={14} /> Hold Cart [F7]
-            </button>
-          </div>
+              {/* Cart Items or Empty State */}
+              <div className="flex-grow overflow-y-auto">
+                {cart.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center h-full text-gray-400">
+                    <div className="relative mb-6">
+                      <ShoppingCart size={80} strokeWidth={1.5} className="text-gray-300" />
+                      <Plus size={24} className="absolute -top-2 -right-2 text-gray-400" />
+                    </div>
+                    <h3 className="text-lg font-semibold mb-2 text-gray-500">Yet to add items to the cart!</h3>
+                    <p className="text-sm text-gray-400">Search or scan items to add them to your cart</p>
+                  </div>
+                ) : (
+                  <>
+                    {cart.map((item, index) => (
+                      <div key={item.id} className="grid grid-cols-12 gap-4 px-6 py-4 items-center border-b border-gray-100 hover:bg-gray-50 transition-colors">
+                        <div className="col-span-1 text-sm text-gray-600">{index + 1}</div>
+                        <div className="col-span-5">
+                          <div className="font-semibold text-sm text-gray-800">{item.name}</div>
+                          <div className="text-xs text-gray-500 mt-1">
+                            SKU: {item.sku} | Tax: {item.tax_rate}%
+                          </div>
+                        </div>
+                        <div className="col-span-1 text-center">
+                          <input
+                            type="number"
+                            min="1"
+                            value={item.qty}
+                            onChange={(e: ChangeEvent<HTMLInputElement>) => handleQtyChange(item.id, e.target.value)}
+                            className="w-16 bg-gray-50 border border-gray-300 rounded px-2 py-1 text-center text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                          />
+                        </div>
+                        <div className="col-span-2 text-right">
+                          <div className="flex items-center justify-end bg-gray-50 rounded border border-gray-300 focus-within:border-blue-500 focus-within:ring-2 focus-within:ring-blue-500/20 transition-all px-2">
+                            <span className="text-xs text-gray-500 mr-1">₹</span>
+                            <input
+                              type="number"
+                              value={item.rate || ''}
+                              onChange={(e: ChangeEvent<HTMLInputElement>) => handleRateChange(item.id, e.target.value)}
+                              className="w-full bg-transparent border-none focus:ring-0 text-right text-sm text-gray-800 p-1 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                              placeholder="0.00"
+                            />
+                          </div>
+                        </div>
+                        <div className="col-span-2 text-right text-sm font-semibold text-gray-800">
+                          ₹{(item.qty * item.rate).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                        </div>
+                        <div className="col-span-1 text-right">
+                          <button
+                            onClick={() => handleRemoveItem(item.id)}
+                            className="text-gray-400 hover:text-red-500 transition-colors"
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </>
+                )}
+              </div>
+
+              {/* Footer Actions */}
+              <div className="p-4 bg-gray-50 border-t border-gray-200 flex gap-2">
+                <button
+                  onClick={handleClearCart}
+                  className="px-4 py-2 bg-red-50 border border-red-300 hover:bg-red-100 text-red-700 rounded-lg text-xs font-medium flex items-center gap-2 transition-colors"
+                >
+                  <X size={14} /> Clear All [F6]
+                </button>
+                <button
+                  onClick={handleHoldCart}
+                  disabled={cart.length === 0}
+                  className="px-4 py-2 bg-white border border-gray-300 hover:bg-gray-100 text-gray-700 rounded-lg text-xs font-medium flex items-center gap-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <Package size={14} /> Hold Cart [F7]
+                </button>
+              </div>
             </>
           ) : (
             /* Sessions View */
@@ -861,12 +993,12 @@ const PosCreate: React.FC = () => {
                           <td className="px-6 py-4 text-sm text-gray-600">
                             {session.closed_at
                               ? new Date(session.closed_at).toLocaleString('en-IN', {
-                                  day: '2-digit',
-                                  month: 'short',
-                                  year: 'numeric',
-                                  hour: '2-digit',
-                                  minute: '2-digit'
-                                })
+                                day: '2-digit',
+                                month: 'short',
+                                year: 'numeric',
+                                hour: '2-digit',
+                                minute: '2-digit'
+                              })
                               : '-'}
                           </td>
                           <td className="px-6 py-4 text-sm text-gray-900 text-right font-semibold">
@@ -874,11 +1006,10 @@ const PosCreate: React.FC = () => {
                           </td>
                           <td className="px-6 py-4 text-center">
                             <span
-                              className={`px-3 py-1 rounded-full text-xs font-medium ${
-                                session.status === 'In-Progress'
+                              className={`px-3 py-1 rounded-full text-xs font-medium ${session.status === 'In-Progress'
                                   ? 'bg-green-100 text-green-700'
                                   : 'bg-gray-100 text-gray-700'
-                              }`}
+                                }`}
                             >
                               {session.status}
                             </span>
@@ -1104,8 +1235,9 @@ const PosCreate: React.FC = () => {
                 D/B CREDIT CARD
               </button>
               <button
-                disabled
-                className="py-2.5 bg-white border border-gray-300 text-gray-400 rounded-lg text-xs font-semibold cursor-not-allowed"
+                onClick={() => setShowSplitPaymentModal(true)}
+                disabled={cart.length === 0 || processingPayment}
+                className="py-2.5 bg-white border border-gray-300 hover:bg-gray-100 text-gray-700 rounded-lg text-xs font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 More... [F12]
               </button>
@@ -1732,6 +1864,16 @@ const PosCreate: React.FC = () => {
             </div>
           </div>
         )}
+
+        {/* Split Payment Modal */}
+        <SplitPaymentModal
+          isOpen={showSplitPaymentModal}
+          onClose={() => setShowSplitPaymentModal(false)}
+          totalAmount={total}
+          customerName={selectedCustomer?.customer_name || 'Walk-in Customer'}
+          customerMobile={selectedCustomer?.mobile}
+          onComplete={handleSplitPaymentComplete}
+        />
       </div>
     </>
   );

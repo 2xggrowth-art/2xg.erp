@@ -57,7 +57,7 @@ const VendorDetailPage = () => {
 
     try {
       await vendorsService.deleteVendor(id!);
-      navigate('/purchase/vendors');
+      navigate('/vendor-management');
     } catch (err: any) {
       alert('Failed to delete vendor: ' + err.message);
     }
@@ -80,7 +80,7 @@ const VendorDetailPage = () => {
         <div className="text-center">
           <p className="text-red-600 text-lg font-medium mb-4">{error || 'Vendor not found'}</p>
           <button
-            onClick={() => navigate('/purchase/vendors')}
+            onClick={() => navigate('/vendor-management')}
             className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
           >
             Back to Vendors
@@ -98,7 +98,7 @@ const VendorDetailPage = () => {
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-4">
               <button
-                onClick={() => navigate('/purchase/vendors')}
+                onClick={() => navigate('/vendor-management')}
                 className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
               >
                 <ArrowLeft className="w-5 h-5 text-gray-600" />
@@ -110,7 +110,7 @@ const VendorDetailPage = () => {
             </div>
             <div className="flex gap-3">
               <button
-                onClick={() => navigate(`/purchase/vendors/${id}/edit`)}
+                onClick={() => navigate(`/vendor-management/${id}/edit`)}
                 className="flex items-center gap-2 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
               >
                 <Edit className="w-4 h-4" />

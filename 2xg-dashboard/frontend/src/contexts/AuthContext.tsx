@@ -1,83 +1,90 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
-
-interface AuthUser {
-  id: string;
-  name: string;
-  email: string;
-  role: string;
-  isAuthenticated: boolean;
-}
+import { authService, User, LoginCredentials } from '../services/auth.service';
 
 interface AuthContextType {
-  user: AuthUser | null;
-  login: (email: string, password: string) => Promise<boolean>;
+  user: User | null;
+  login: (credentials: LoginCredentials) => Promise<boolean>;
   logout: () => void;
   isAuthenticated: boolean;
   isLoading: boolean;
+  refreshUser: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
-  const [user, setUser] = useState<AuthUser | null>(null);
+  const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const navigate = useNavigate();
 
   // Check for existing auth on mount
   useEffect(() => {
-    console.log('AuthProvider: Checking for existing auth');
-    const authUser = localStorage.getItem('authUser');
-    console.log('AuthProvider: authUser from localStorage:', authUser);
-    if (authUser) {
+    const initAuth = async () => {
+      console.log('AuthProvider: Initializing authentication');
+
       try {
-        const parsedUser = JSON.parse(authUser);
-        console.log('AuthProvider: Setting user:', parsedUser);
-        setUser(parsedUser);
+        const token = authService.getToken();
+        const storedUser = authService.getUser();
+
+        if (token && storedUser) {
+          console.log('AuthProvider: Found existing token, verifying...');
+
+          try {
+            // Verify token with backend
+            const verifiedUser = await authService.verifyToken();
+            console.log('AuthProvider: Token verified, user:', verifiedUser);
+            setUser(verifiedUser);
+          } catch (error) {
+            console.error('AuthProvider: Token verification failed:', error);
+            // Token is invalid, clear storage
+            authService.logout();
+            setUser(null);
+          }
+        } else {
+          console.log('AuthProvider: No existing auth found');
+        }
       } catch (error) {
-        console.error('Error parsing auth user:', error);
-        localStorage.removeItem('authUser');
+        console.error('AuthProvider: Error initializing auth:', error);
+      } finally {
+        setIsLoading(false);
       }
-    }
-    setIsLoading(false);
+    };
+
+    initAuth();
   }, []);
 
-  const login = async (email: string, password: string): Promise<boolean> => {
+  const login = async (credentials: LoginCredentials): Promise<boolean> => {
     try {
-      const usersData = localStorage.getItem('users');
-      const users = usersData ? JSON.parse(usersData) : [];
+      console.log('AuthContext: Attempting login for:', credentials.email);
 
-      const foundUser = users.find((u: any) =>
-        u.email.toLowerCase() === email.toLowerCase() &&
-        u.password === password &&
-        u.status === 'Active'
-      );
+      const response = await authService.login(credentials);
 
-      if (foundUser) {
-        const authUser: AuthUser = {
-          id: foundUser.id,
-          name: foundUser.name,
-          email: foundUser.email,
-          role: foundUser.role,
-          isAuthenticated: true
-        };
+      console.log('AuthContext: Login successful, user:', response.user);
+      setUser(response.user);
 
-        setUser(authUser);
-        localStorage.setItem('authUser', JSON.stringify(authUser));
-        return true;
-      }
-
-      return false;
-    } catch (error) {
-      console.error('Login error:', error);
+      return true;
+    } catch (error: any) {
+      console.error('AuthContext: Login error:', error);
       return false;
     }
   };
 
   const logout = () => {
+    console.log('AuthContext: Logging out');
+    authService.logout();
     setUser(null);
-    localStorage.removeItem('authUser');
     navigate('/login');
+  };
+
+  const refreshUser = async () => {
+    try {
+      const verifiedUser = await authService.verifyToken();
+      setUser(verifiedUser);
+    } catch (error) {
+      console.error('AuthContext: Failed to refresh user:', error);
+      logout();
+    }
   };
 
   return (
@@ -87,7 +94,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         login,
         logout,
         isAuthenticated: !!user,
-        isLoading
+        isLoading,
+        refreshUser
       }}
     >
       {children}

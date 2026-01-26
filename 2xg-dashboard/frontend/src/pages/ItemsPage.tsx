@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { Package, Plus, Search, Grid, List } from 'lucide-react';
 import { itemsService, Item as ItemType } from '../services/items.service';
+import BulkActionBar, { createBulkDeleteAction, createBulkExportAction } from '../components/common/BulkActionBar';
 
 interface Item {
   id: string;
@@ -15,20 +16,35 @@ interface Item {
 
 const ItemsPage = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const [items, setItems] = useState<Item[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [viewMode, setViewMode] = useState<'list' | 'grid'>('list');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [selectedItems, setSelectedItems] = useState<string[]>([]);
+  const [refreshKey, setRefreshKey] = useState(0);
 
+  // Fetch items on mount, pathname change, or refresh key change
   useEffect(() => {
     fetchItems();
-  }, []);
+  }, [location.pathname, refreshKey]);
+
+  // Refetch when location state changes (coming from edit)
+  useEffect(() => {
+    if (location.state?.refetch) {
+      console.log('Refetch triggered!');
+      setRefreshKey(prev => prev + 1);
+      navigate(location.pathname, { replace: true, state: {} });
+    }
+  }, [location.state?.refetch]);
 
   const fetchItems = async () => {
     try {
+      console.log('Fetching items at:', new Date().toISOString());
       setLoading(true);
       setError(null);
+      // Add timestamp to prevent caching
       const response = await itemsService.getAllItems({ isActive: true });
 
       console.log('Items API Response:', response);
@@ -45,6 +61,7 @@ const ItemsPage = () => {
           stock_on_hand: item.current_stock,
           reorder_level: item.reorder_point
         }));
+        console.log('Mapped items with names:', mappedItems.map(i => ({ id: i.id, name: i.name })));
         setItems(mappedItems);
       } else {
         setError('Failed to load items');
@@ -61,6 +78,68 @@ const ItemsPage = () => {
     item.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
     item.sku.toLowerCase().includes(searchQuery.toLowerCase())
   );
+
+  // Selection handlers
+  const handleSelectItem = (itemId: string) => {
+    setSelectedItems(prev =>
+      prev.includes(itemId)
+        ? prev.filter(id => id !== itemId)
+        : [...prev, itemId]
+    );
+  };
+
+  const handleSelectAll = () => {
+    if (selectedItems.length === filteredItems.length) {
+      setSelectedItems([]);
+    } else {
+      setSelectedItems(filteredItems.map(item => item.id));
+    }
+  };
+
+  const clearSelection = () => {
+    setSelectedItems([]);
+  };
+
+  // Bulk action handlers
+  const handleBulkDelete = async () => {
+    if (window.confirm(`Are you sure you want to delete ${selectedItems.length} item(s)?`)) {
+      try {
+        await Promise.all(selectedItems.map(id => itemsService.deleteItem(id)));
+        setSelectedItems([]);
+        fetchItems();
+      } catch (error) {
+        console.error('Error deleting items:', error);
+        alert('Failed to delete some items. Please try again.');
+      }
+    }
+  };
+
+  const handleBulkExport = () => {
+    const selectedData = items.filter(item => selectedItems.includes(item.id));
+    const csv = [
+      ['Name', 'SKU', 'Unit', 'Stock on Hand', 'Reorder Level'].join(','),
+      ...selectedData.map(item => [
+        item.name,
+        item.sku,
+        item.unit,
+        item.stock_on_hand.toString(),
+        item.reorder_level.toString()
+      ].join(','))
+    ].join('\n');
+
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `items_export_${new Date().toISOString().split('T')[0]}.csv`;
+    a.click();
+  };
+
+  // Bulk actions configuration
+  const bulkActions = [
+    createBulkDeleteAction(handleBulkDelete),
+    createBulkExportAction(handleBulkExport)
+  ];
 
   return (
     <div className="h-full flex flex-col bg-gray-50">
@@ -149,7 +228,12 @@ const ItemsPage = () => {
                 <thead className="bg-gray-50 border-b border-gray-200">
                   <tr>
                     <th className="px-6 py-3 text-left">
-                      <input type="checkbox" className="rounded" />
+                      <input
+                        type="checkbox"
+                        checked={selectedItems.length === filteredItems.length && filteredItems.length > 0}
+                        onChange={handleSelectAll}
+                        className="rounded"
+                      />
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       NAME
@@ -186,7 +270,12 @@ const ItemsPage = () => {
                         onClick={() => navigate(`/items/${item.id}`)}
                       >
                         <td className="px-6 py-4" onClick={(e) => e.stopPropagation()}>
-                          <input type="checkbox" className="rounded" />
+                          <input
+                            type="checkbox"
+                            checked={selectedItems.includes(item.id)}
+                            onChange={() => handleSelectItem(item.id)}
+                            className="rounded"
+                          />
                         </td>
                         <td className="px-6 py-4">
                           <div className="flex items-center gap-3">
@@ -219,6 +308,18 @@ const ItemsPage = () => {
           )}
         </div>
       </div>
+
+      {/* Bulk Action Bar */}
+      {selectedItems.length > 0 && (
+        <BulkActionBar
+          selectedCount={selectedItems.length}
+          totalCount={filteredItems.length}
+          onClearSelection={clearSelection}
+          onSelectAll={handleSelectAll}
+          actions={bulkActions}
+          entityName="item"
+        />
+      )}
     </div>
   );
 };

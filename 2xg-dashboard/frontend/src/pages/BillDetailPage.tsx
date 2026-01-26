@@ -19,46 +19,10 @@ import {
   Copy,
   CreditCard
 } from 'lucide-react';
+import { billsService, type Bill as BillServiceType, type BillItem } from '../services/bills.service';
 
-interface LineItem {
-  id: string;
-  item_name: string;
-  sku?: string;
-  quantity: number;
-  unit_price: number;
-  tax_rate?: number;
-  total: number;
-}
-
-interface Bill {
-  id: string;
-  bill_number: string;
-  vendor_bill_number?: string;
-  po_number?: string;
-  vendor_name: string;
-  vendor_email?: string;
-  vendor_phone?: string;
-  vendor_address?: string;
-  bill_date: string;
-  due_date: string;
-  status: 'draft' | 'pending' | 'partial' | 'paid' | 'overdue' | 'cancelled';
-  subtotal: number;
-  tax_amount?: number;
-  discount_amount?: number;
-  total_amount: number;
-  amount_paid: number;
-  balance_due: number;
-  notes?: string;
-  line_items: LineItem[];
-  payment_history?: Array<{
-    id: string;
-    date: string;
-    amount: number;
-    method: string;
-    reference?: string;
-  }>;
-  created_at: string;
-  updated_at?: string;
+interface Bill extends BillServiceType {
+  items?: BillItem[];
 }
 
 const BillDetailPage: React.FC = () => {
@@ -76,38 +40,16 @@ const BillDetailPage: React.FC = () => {
   const fetchBillDetails = async () => {
     try {
       setLoading(true);
-      // Mock data
-      setBill({
-        id: id!,
-        bill_number: `BILL-${id?.slice(0, 8).toUpperCase()}`,
-        vendor_bill_number: 'VB-2024-001234',
-        po_number: 'PO-00123',
-        vendor_name: 'Hero Cycles Ltd',
-        vendor_email: 'accounts@herocycles.com',
-        vendor_phone: '+91 98765 12345',
-        vendor_address: 'Industrial Area Phase II, Ludhiana, Punjab 141003',
-        bill_date: new Date().toISOString(),
-        due_date: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
-        status: 'pending',
-        subtotal: 125000,
-        tax_amount: 22500,
-        discount_amount: 0,
-        total_amount: 147500,
-        amount_paid: 50000,
-        balance_due: 97500,
-        notes: 'Bill for goods received on 5th Jan 2026',
-        line_items: [
-          { id: '1', item_name: 'Hero Sprint Pro 26T Frame', sku: 'HRO-FRM-26T', quantity: 20, unit_price: 5000, tax_rate: 18, total: 100000 },
-          { id: '2', item_name: 'Hero Wheel Set 26"', sku: 'HRO-WHL-26', quantity: 10, unit_price: 2500, tax_rate: 18, total: 25000 },
-        ],
-        payment_history: [
-          { id: '1', date: new Date(Date.now() - 10 * 24 * 60 * 60 * 1000).toISOString(), amount: 50000, method: 'Bank Transfer', reference: 'TXN-987654' }
-        ],
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      });
+      const response = await billsService.getBillById(id!);
+      if (response.success && response.data) {
+        setBill(response.data as Bill);
+      } else {
+        console.error('Failed to fetch bill:', response.message);
+        setBill(null);
+      }
     } catch (error) {
       console.error('Error fetching bill:', error);
+      setBill(null);
     } finally {
       setLoading(false);
     }
@@ -117,7 +59,9 @@ const BillDetailPage: React.FC = () => {
     const configs: Record<string, { bg: string; text: string; icon: React.ReactNode; label: string }> = {
       draft: { bg: 'bg-gray-100', text: 'text-gray-700', icon: <FileText size={16} />, label: 'Draft' },
       pending: { bg: 'bg-orange-100', text: 'text-orange-700', icon: <Clock size={16} />, label: 'Pending' },
+      open: { bg: 'bg-orange-100', text: 'text-orange-700', icon: <Clock size={16} />, label: 'Open' },
       partial: { bg: 'bg-yellow-100', text: 'text-yellow-700', icon: <Clock size={16} />, label: 'Partially Paid' },
+      partially_paid: { bg: 'bg-yellow-100', text: 'text-yellow-700', icon: <Clock size={16} />, label: 'Partially Paid' },
       paid: { bg: 'bg-green-100', text: 'text-green-700', icon: <CheckCircle size={16} />, label: 'Paid' },
       overdue: { bg: 'bg-red-100', text: 'text-red-700', icon: <XCircle size={16} />, label: 'Overdue' },
       cancelled: { bg: 'bg-gray-100', text: 'text-gray-700', icon: <XCircle size={16} />, label: 'Cancelled' },
@@ -142,7 +86,7 @@ const BillDetailPage: React.FC = () => {
   };
 
   const getDaysUntilDue = () => {
-    if (!bill) return 0;
+    if (!bill || !bill.due_date) return 0;
     const dueDate = new Date(bill.due_date);
     const today = new Date();
     const diffTime = dueDate.getTime() - today.getTime();
@@ -151,8 +95,134 @@ const BillDetailPage: React.FC = () => {
 
   const handleDelete = async () => {
     if (window.confirm('Are you sure you want to delete this bill?')) {
-      navigate('/purchases/bills');
+      try {
+        const response = await billsService.deleteBill(id!);
+        if (response.success) {
+          navigate('/purchases/bills');
+        } else {
+          alert('Failed to delete bill: ' + response.message);
+        }
+      } catch (error) {
+        console.error('Error deleting bill:', error);
+        alert('Failed to delete bill');
+      }
     }
+  };
+
+  const lineItems = bill?.items || [];
+
+  const handlePrint = () => {
+    window.print();
+  };
+
+  const handleDownloadPDF = () => {
+    // Create HTML content for PDF
+    const printContent = document.getElementById('bill-content');
+    if (!printContent) return;
+
+    const htmlContent = `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>Bill - ${bill?.bill_number}</title>
+          <style>
+            body { font-family: Arial, sans-serif; padding: 20px; }
+            h1 { color: #333; margin-bottom: 5px; }
+            .header { margin-bottom: 30px; }
+            .section { margin-bottom: 20px; }
+            .section-title { font-weight: bold; font-size: 18px; margin-bottom: 10px; color: #2563eb; }
+            table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+            th, td { border: 1px solid #ddd; padding: 10px; text-align: left; }
+            th { background-color: #f9fafb; font-weight: bold; }
+            .text-right { text-align: right; }
+            .summary { float: right; width: 300px; margin-top: 20px; }
+            .summary-row { display: flex; justify-content: space-between; padding: 8px 0; }
+            .summary-total { font-weight: bold; font-size: 18px; border-top: 2px solid #333; padding-top: 10px; }
+          </style>
+        </head>
+        <body>
+          <div class="header">
+            <h1>Bill: ${bill?.bill_number}</h1>
+            <p>Status: ${bill?.status.toUpperCase()}</p>
+            ${bill?.reference_number ? `<p>Reference: ${bill.reference_number}</p>` : ''}
+          </div>
+
+          <div class="section">
+            <div class="section-title">Vendor Information</div>
+            <p><strong>Vendor:</strong> ${bill?.vendor_name}</p>
+            ${bill?.vendor_email ? `<p><strong>Email:</strong> ${bill.vendor_email}</p>` : ''}
+            ${bill?.vendor_phone ? `<p><strong>Phone:</strong> ${bill.vendor_phone}</p>` : ''}
+          </div>
+
+          <div class="section">
+            <div class="section-title">Bill Items</div>
+            <table>
+              <thead>
+                <tr>
+                  <th>#</th>
+                  <th>Item</th>
+                  <th class="text-right">Qty</th>
+                  <th class="text-right">Rate</th>
+                  <th class="text-right">Tax</th>
+                  <th class="text-right">Amount</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${lineItems.map((item, index) => `
+                  <tr>
+                    <td>${index + 1}</td>
+                    <td>${item.item_name}${item.description ? `<br><small>${item.description}</small>` : ''}</td>
+                    <td class="text-right">${item.quantity}</td>
+                    <td class="text-right">${formatCurrency(item.unit_price)}</td>
+                    <td class="text-right">${item.tax_rate ? `${item.tax_rate}%` : '-'}</td>
+                    <td class="text-right">${formatCurrency(item.total)}</td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+          </div>
+
+          <div class="summary">
+            <div class="summary-row">
+              <span>Subtotal:</span>
+              <span>${formatCurrency(bill?.subtotal || 0)}</span>
+            </div>
+            <div class="summary-row">
+              <span>Tax (GST):</span>
+              <span>${formatCurrency(bill?.tax_amount || 0)}</span>
+            </div>
+            <div class="summary-row summary-total">
+              <span>Total:</span>
+              <span>${formatCurrency(bill?.total_amount || 0)}</span>
+            </div>
+            <div class="summary-row" style="color: green;">
+              <span>Amount Paid:</span>
+              <span>${formatCurrency(bill?.amount_paid || 0)}</span>
+            </div>
+            <div class="summary-row" style="color: #ea580c; font-weight: bold;">
+              <span>Balance Due:</span>
+              <span>${formatCurrency(bill?.balance_due || 0)}</span>
+            </div>
+          </div>
+
+          <div style="clear: both; margin-top: 40px;">
+            <p><strong>Bill Date:</strong> ${formatDate(bill?.bill_date || '')}</p>
+            ${bill?.due_date ? `<p><strong>Due Date:</strong> ${formatDate(bill.due_date)}</p>` : ''}
+            ${bill?.notes ? `<p><strong>Notes:</strong> ${bill.notes}</p>` : ''}
+          </div>
+        </body>
+      </html>
+    `;
+
+    const blob = new Blob([htmlContent], { type: 'text/html' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `bill-${bill?.bill_number}-${new Date().toISOString().split('T')[0]}.html`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
   };
 
   if (loading) {
@@ -214,17 +284,25 @@ const BillDetailPage: React.FC = () => {
                   )}
                 </div>
                 <p className="text-sm text-gray-500 mt-1">
-                  {bill.vendor_bill_number && `Vendor Bill: ${bill.vendor_bill_number} • `}
+                  {bill.reference_number && `Ref: ${bill.reference_number} • `}
                   {bill.po_number && `From ${bill.po_number}`}
                 </p>
               </div>
             </div>
 
             <div className="flex items-center gap-2">
-              <button className="p-2 hover:bg-gray-100 rounded-lg transition-colors" title="Print">
+              <button
+                onClick={handlePrint}
+                className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                title="Print"
+              >
                 <Printer size={20} className="text-gray-600" />
               </button>
-              <button className="p-2 hover:bg-gray-100 rounded-lg transition-colors" title="Download PDF">
+              <button
+                onClick={handleDownloadPDF}
+                className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                title="Download PDF"
+              >
                 <Download size={20} className="text-gray-600" />
               </button>
               {bill.status !== 'paid' && (
@@ -285,7 +363,7 @@ const BillDetailPage: React.FC = () => {
       </div>
 
       {/* Content */}
-      <div className="max-w-7xl mx-auto px-6 py-6">
+      <div id="bill-content" className="max-w-7xl mx-auto px-6 py-6">
         {activeTab === 'details' && (
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             {/* Main Content */}
@@ -309,9 +387,9 @@ const BillDetailPage: React.FC = () => {
                     <p className="text-sm text-gray-500">Phone</p>
                     <p className="font-medium text-gray-900">{bill.vendor_phone || '-'}</p>
                   </div>
-                  <div>
-                    <p className="text-sm text-gray-500">Address</p>
-                    <p className="font-medium text-gray-900">{bill.vendor_address || '-'}</p>
+                  <div className="col-span-2">
+                    <p className="text-sm text-gray-500">Notes</p>
+                    <p className="font-medium text-gray-900">{bill.notes || '-'}</p>
                   </div>
                 </div>
               </div>
@@ -321,7 +399,7 @@ const BillDetailPage: React.FC = () => {
                 <div className="p-6 border-b">
                   <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
                     <Package size={20} className="text-blue-600" />
-                    Bill Items ({bill.line_items.length})
+                    Bill Items ({lineItems.length})
                   </h3>
                 </div>
                 <div className="overflow-x-auto">
@@ -337,12 +415,12 @@ const BillDetailPage: React.FC = () => {
                       </tr>
                     </thead>
                     <tbody className="divide-y">
-                      {bill.line_items.map((item, index) => (
+                      {lineItems.map((item, index) => (
                         <tr key={item.id} className="hover:bg-gray-50">
                           <td className="px-6 py-4 text-gray-500">{index + 1}</td>
                           <td className="px-6 py-4">
                             <p className="font-medium text-gray-900">{item.item_name}</p>
-                            {item.sku && <p className="text-sm text-gray-500">SKU: {item.sku}</p>}
+                            {item.description && <p className="text-sm text-gray-500">{item.description}</p>}
                           </td>
                           <td className="px-6 py-4 text-right text-gray-900">{item.quantity}</td>
                           <td className="px-6 py-4 text-right text-gray-900">{formatCurrency(item.unit_price)}</td>
@@ -369,12 +447,10 @@ const BillDetailPage: React.FC = () => {
                     <span className="text-gray-500">Subtotal</span>
                     <span className="text-gray-900">{formatCurrency(bill.subtotal)}</span>
                   </div>
-                  {bill.tax_amount && (
-                    <div className="flex justify-between">
-                      <span className="text-gray-500">Tax (GST)</span>
-                      <span className="text-gray-900">{formatCurrency(bill.tax_amount)}</span>
-                    </div>
-                  )}
+                  <div className="flex justify-between">
+                    <span className="text-gray-500">Tax (GST)</span>
+                    <span className="text-gray-900">{formatCurrency(bill.tax_amount || 0)}</span>
+                  </div>
                   <hr />
                   <div className="flex justify-between text-lg font-bold">
                     <span>Total</span>
@@ -382,11 +458,11 @@ const BillDetailPage: React.FC = () => {
                   </div>
                   <div className="flex justify-between text-green-600">
                     <span>Amount Paid</span>
-                    <span>{formatCurrency(bill.amount_paid)}</span>
+                    <span>{formatCurrency(bill.amount_paid || 0)}</span>
                   </div>
                   <div className="flex justify-between font-semibold text-orange-600 text-lg">
                     <span>Balance Due</span>
-                    <span>{formatCurrency(bill.balance_due)}</span>
+                    <span>{formatCurrency(bill.balance_due || 0)}</span>
                   </div>
                 </div>
               </div>
@@ -402,17 +478,19 @@ const BillDetailPage: React.FC = () => {
                     <p className="text-sm text-gray-500">Bill Date</p>
                     <p className="font-medium text-gray-900">{formatDate(bill.bill_date)}</p>
                   </div>
-                  <div>
-                    <p className="text-sm text-gray-500">Due Date</p>
-                    <p className={`font-medium ${daysUntilDue < 0 ? 'text-red-600' : 'text-gray-900'}`}>
-                      {formatDate(bill.due_date)}
-                    </p>
-                  </div>
+                  {bill.due_date && (
+                    <div>
+                      <p className="text-sm text-gray-500">Due Date</p>
+                      <p className={`font-medium ${daysUntilDue < 0 ? 'text-red-600' : 'text-gray-900'}`}>
+                        {formatDate(bill.due_date)}
+                      </p>
+                    </div>
+                  )}
                 </div>
               </div>
 
               {/* Quick Actions */}
-              {bill.balance_due > 0 && (
+              {(bill.balance_due || 0) > 0 && (
                 <div className="bg-white rounded-xl shadow-sm border p-6">
                   <h3 className="text-lg font-semibold text-gray-900 mb-4">Quick Actions</h3>
                   <button className="w-full px-4 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 flex items-center gap-2 justify-center font-medium">
@@ -428,31 +506,17 @@ const BillDetailPage: React.FC = () => {
           <div className="bg-white rounded-xl shadow-sm border">
             <div className="p-6 border-b flex justify-between items-center">
               <h3 className="text-lg font-semibold text-gray-900">Payment History</h3>
-              {bill.balance_due > 0 && (
+              {(bill.balance_due || 0) > 0 && (
                 <button className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 flex items-center gap-2">
                   <CreditCard size={16} />
                   Make Payment
                 </button>
               )}
             </div>
-            {bill.payment_history && bill.payment_history.length > 0 ? (
-              <div className="divide-y">
-                {bill.payment_history.map((payment) => (
-                  <div key={payment.id} className="p-6 flex justify-between items-center">
-                    <div>
-                      <p className="font-medium text-gray-900">{formatCurrency(payment.amount)}</p>
-                      <p className="text-sm text-gray-500">{payment.method} • {payment.reference}</p>
-                    </div>
-                    <p className="text-sm text-gray-500">{formatDate(payment.date)}</p>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="p-12 text-center text-gray-500">
-                <CreditCard size={48} className="mx-auto mb-4 text-gray-300" />
-                <p>No payments recorded yet</p>
-              </div>
-            )}
+            <div className="p-12 text-center text-gray-500">
+              <CreditCard size={48} className="mx-auto mb-4 text-gray-300" />
+              <p>No payments recorded yet</p>
+            </div>
           </div>
         )}
 
@@ -462,21 +526,28 @@ const BillDetailPage: React.FC = () => {
             <div className="relative">
               <div className="absolute left-4 top-0 bottom-0 w-0.5 bg-gray-200"></div>
               <div className="space-y-6">
-                {[
-                  { date: bill.created_at, title: 'Bill Created', description: 'Bill was recorded in the system', icon: <FileText size={16} />, color: 'bg-blue-500' },
-                  { date: bill.payment_history?.[0]?.date || bill.created_at, title: 'Payment Recorded', description: `Payment of ${formatCurrency(bill.payment_history?.[0]?.amount || 0)} received`, icon: <CreditCard size={16} />, color: 'bg-green-500' },
-                ].map((event, index) => (
-                  <div key={index} className="relative flex gap-4 pl-10">
-                    <div className={`absolute left-2 w-5 h-5 rounded-full ${event.color} flex items-center justify-center text-white`}>
-                      {event.icon}
+                <div className="relative flex gap-4 pl-10">
+                  <div className="absolute left-2 w-5 h-5 rounded-full bg-blue-500 flex items-center justify-center text-white">
+                    <FileText size={16} />
+                  </div>
+                  <div>
+                    <p className="font-medium text-gray-900">Bill Created</p>
+                    <p className="text-sm text-gray-500">Bill was recorded in the system</p>
+                    <p className="text-xs text-gray-400 mt-1">{formatDate(bill.created_at)}</p>
+                  </div>
+                </div>
+                {bill.updated_at && bill.updated_at !== bill.created_at && (
+                  <div className="relative flex gap-4 pl-10">
+                    <div className="absolute left-2 w-5 h-5 rounded-full bg-yellow-500 flex items-center justify-center text-white">
+                      <Edit size={16} />
                     </div>
                     <div>
-                      <p className="font-medium text-gray-900">{event.title}</p>
-                      <p className="text-sm text-gray-500">{event.description}</p>
-                      <p className="text-xs text-gray-400 mt-1">{formatDate(event.date)}</p>
+                      <p className="font-medium text-gray-900">Bill Updated</p>
+                      <p className="text-sm text-gray-500">Bill details were modified</p>
+                      <p className="text-xs text-gray-400 mt-1">{formatDate(bill.updated_at)}</p>
                     </div>
                   </div>
-                ))}
+                )}
               </div>
             </div>
           </div>

@@ -203,6 +203,45 @@ export class InvoicesService {
         }
 
         console.log('InvoicesService: Invoice items created successfully');
+
+        // Update stock for each item
+        for (const item of items) {
+          if (item.item_id && this.isValidUUID(item.item_id)) {
+            try {
+              // Get current stock
+              const { data: currentItem, error: fetchError } = await supabase
+                .from('items')
+                .select('current_stock')
+                .eq('id', item.item_id)
+                .single();
+
+              if (fetchError) {
+                console.error(`InvoicesService: Error fetching stock for item ${item.item_id}:`, fetchError);
+                continue;
+              }
+
+              if (currentItem) {
+                const quantity = Number(item.quantity) || 0;
+                const currentStock = Number(currentItem.current_stock) || 0;
+                const newStock = currentStock - quantity;
+
+                // Update stock
+                const { error: updateError } = await supabase
+                  .from('items')
+                  .update({ current_stock: newStock })
+                  .eq('id', item.item_id);
+
+                if (updateError) {
+                  console.error(`InvoicesService: Error updating stock for item ${item.item_id}:`, updateError);
+                } else {
+                  console.log(`InvoicesService: Updated stock for item ${item.item_id}: ${currentStock} -> ${newStock}`);
+                }
+              }
+            } catch (error) {
+              console.error(`InvoicesService: Exception updating stock for item ${item.item_id}:`, error);
+            }
+          }
+        }
       }
 
       // Fetch the complete invoice with items

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { X, Settings, ShoppingBasket, Plus, Search } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import { itemsService, Item as ItemType } from '../services/items.service';
 import { stockCountService, StockCountItem } from '../services/stockCount.service';
 
@@ -12,6 +12,8 @@ interface Item {
 }
 
 const NewStockCountPage = () => {
+  const { id } = useParams<{ id: string }>();
+  const isEditMode = !!id;
   const navigate = useNavigate();
   const [stockCountNumber, setStockCountNumber] = useState('1');
   const [description, setDescription] = useState('');
@@ -44,7 +46,6 @@ const NewStockCountPage = () => {
       } catch (error) {
         console.error('Error fetching items:', error);
         // Optionally show an error message to the user
-        alert('Failed to load items. Please try again.');
       } finally {
         setIsLoadingItems(false);
       }
@@ -52,6 +53,36 @@ const NewStockCountPage = () => {
 
     fetchItems();
   }, []);
+
+  // Fetch Stock Count Details if Edit Mode
+  useEffect(() => {
+    if (isEditMode) {
+      fetchStockCountDetails();
+    }
+  }, [id]);
+
+  const fetchStockCountDetails = async () => {
+    try {
+      const data = await stockCountService.getStockCountById(id!);
+      if (data) {
+        setStockCountNumber(data.stockCountNumber);
+        setDescription(data.description);
+        setLocation(data.location || 'Head Office');
+        setAssignTo(data.assignTo);
+        // Map service items back to local Item interface
+        const mappedItems: Item[] = data.items.map(item => ({
+          id: item.id,
+          name: item.name,
+          sku: item.sku,
+          currentStock: item.currentStock
+        }));
+        setSelectedItems(mappedItems);
+      }
+    } catch (error) {
+      console.error('Error fetching stock count details:', error);
+      alert('Failed to load stock count details');
+    }
+  };
 
   const handleNext = () => {
     if (currentStep === 'configure') {
@@ -81,7 +112,7 @@ const NewStockCountPage = () => {
       <div className="bg-white rounded-lg shadow-md">
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-slate-200">
-          <h1 className="text-2xl font-bold text-slate-800">New Stock Count</h1>
+          <h1 className="text-2xl font-bold text-slate-800">{isEditMode ? 'Edit Stock Count' : 'New Stock Count'}</h1>
           <button
             onClick={handleCancel}
             className="text-slate-400 hover:text-slate-600 transition-colors"
@@ -97,7 +128,7 @@ const NewStockCountPage = () => {
               {currentStep === 'add-items' ? (
                 <div className="w-5 h-5 rounded-full bg-green-600 flex items-center justify-center">
                   <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-                    <path d="M2 6L5 9L10 3" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                    <path d="M2 6L5 9L10 3" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
                   </svg>
                 </div>
               ) : (
@@ -131,10 +162,13 @@ const NewStockCountPage = () => {
                   value={stockCountNumber}
                   onChange={(e) => setStockCountNumber(e.target.value)}
                   className="flex-1 px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  disabled={isEditMode} // Usually stock count numbers are unique and should be consistent
                 />
-                <button className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors">
-                  <Settings size={20} />
-                </button>
+                {!isEditMode && (
+                  <button className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors">
+                    <Settings size={20} />
+                  </button>
+                )}
               </div>
             </div>
 
@@ -172,7 +206,7 @@ const NewStockCountPage = () => {
                 Assign To<span className="text-red-500">*</span>
                 <button className="text-slate-400 hover:text-slate-600">
                   <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
-                    <circle cx="8" cy="8" r="7" stroke="currentColor" fill="none" strokeWidth="1.5"/>
+                    <circle cx="8" cy="8" r="7" stroke="currentColor" fill="none" strokeWidth="1.5" />
                     <text x="8" y="11" fontSize="10" textAnchor="middle" fill="currentColor">?</text>
                   </svg>
                 </button>
@@ -328,41 +362,40 @@ const NewStockCountPage = () => {
                       .filter(item => {
                         const query = searchQuery.toLowerCase();
                         return item.name.toLowerCase().includes(query) ||
-                               item.sku.toLowerCase().includes(query);
+                          item.sku.toLowerCase().includes(query);
                       })
                       .map((item) => {
                         const isSelected = selectedItems.some(i => i.id === item.id);
                         return (
-                        <div
-                          key={item.id}
-                          className={`p-4 border rounded-lg cursor-pointer transition-colors ${
-                            isSelected
-                              ? 'bg-blue-50 border-blue-300'
-                              : 'border-slate-200 hover:bg-slate-50'
-                          }`}
-                          onClick={() => {
-                            if (isSelected) {
-                              setSelectedItems(selectedItems.filter(i => i.id !== item.id));
-                            } else {
-                              setSelectedItems([...selectedItems, item]);
-                            }
-                          }}
-                        >
-                          <div className="flex items-center justify-between">
-                            <div>
-                              <h4 className="font-medium text-slate-800">{item.name}</h4>
-                              <p className="text-sm text-slate-600">SKU: {item.sku} • Stock: {item.currentStock}</p>
+                          <div
+                            key={item.id}
+                            className={`p-4 border rounded-lg cursor-pointer transition-colors ${isSelected
+                                ? 'bg-blue-50 border-blue-300'
+                                : 'border-slate-200 hover:bg-slate-50'
+                              }`}
+                            onClick={() => {
+                              if (isSelected) {
+                                setSelectedItems(selectedItems.filter(i => i.id !== item.id));
+                              } else {
+                                setSelectedItems([...selectedItems, item]);
+                              }
+                            }}
+                          >
+                            <div className="flex items-center justify-between">
+                              <div>
+                                <h4 className="font-medium text-slate-800">{item.name}</h4>
+                                <p className="text-sm text-slate-600">SKU: {item.sku} • Stock: {item.currentStock}</p>
+                              </div>
+                              <input
+                                type="checkbox"
+                                checked={isSelected}
+                                onChange={() => { }}
+                                className="w-5 h-5 text-blue-600 border-slate-300 rounded focus:ring-blue-500"
+                              />
                             </div>
-                            <input
-                              type="checkbox"
-                              checked={isSelected}
-                              onChange={() => {}}
-                              className="w-5 h-5 text-blue-600 border-slate-300 rounded focus:ring-blue-500"
-                            />
                           </div>
-                        </div>
-                      );
-                    })}
+                        );
+                      })}
                   </div>
                 )}
               </div>
@@ -425,15 +458,21 @@ const NewStockCountPage = () => {
                       currentStock: item.currentStock
                     }));
 
-                    // Create stock count
-                    await stockCountService.createStockCount({
+                    const payload = {
                       description,
                       location,
                       assignTo,
                       items: stockCountItems
-                    });
+                    };
 
-                    alert('Stock Count saved successfully!');
+                    if (isEditMode) {
+                      await stockCountService.updateStockCount(id!, payload);
+                      alert('Stock Count updated successfully!');
+                    } else {
+                      await stockCountService.createStockCount(payload);
+                      alert('Stock Count saved successfully!');
+                    }
+
                     navigate('/items/stock-count');
                   } catch (error) {
                     console.error('Error saving stock count:', error);
@@ -442,7 +481,7 @@ const NewStockCountPage = () => {
                 }}
                 className="px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-medium"
               >
-                Save
+                {isEditMode ? 'Update' : 'Save'}
               </button>
               <button
                 onClick={handleCancel}

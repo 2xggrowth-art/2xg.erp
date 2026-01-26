@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Users, Plus, Search } from 'lucide-react';
 import { vendorsService, Vendor } from '../services/vendors.service';
+import BulkActionBar, { createBulkDeleteAction, createBulkExportAction } from '../components/common/BulkActionBar';
 
 const VendorManagementPage = () => {
   const navigate = useNavigate();
@@ -9,6 +10,7 @@ const VendorManagementPage = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [selectedVendors, setSelectedVendors] = useState<string[]>([]);
 
   useEffect(() => {
     fetchVendors();
@@ -40,6 +42,69 @@ const VendorManagementPage = () => {
     vendor.supplier_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
     (vendor.email && vendor.email.toLowerCase().includes(searchQuery.toLowerCase()))
   );
+
+  // Selection handlers
+  const handleSelectVendor = (vendorId: string) => {
+    setSelectedVendors(prev =>
+      prev.includes(vendorId)
+        ? prev.filter(id => id !== vendorId)
+        : [...prev, vendorId]
+    );
+  };
+
+  const handleSelectAll = () => {
+    if (selectedVendors.length === filteredVendors.length) {
+      setSelectedVendors([]);
+    } else {
+      setSelectedVendors(filteredVendors.map(vendor => vendor.id!));
+    }
+  };
+
+  const clearSelection = () => {
+    setSelectedVendors([]);
+  };
+
+  // Bulk action handlers
+  const handleBulkDelete = async () => {
+    if (window.confirm(`Are you sure you want to delete ${selectedVendors.length} vendor(s)?`)) {
+      try {
+        await Promise.all(selectedVendors.map(id => vendorsService.deleteVendor(id)));
+        setSelectedVendors([]);
+        fetchVendors();
+      } catch (error) {
+        console.error('Error deleting vendors:', error);
+        alert('Failed to delete some vendors. Please try again.');
+      }
+    }
+  };
+
+  const handleBulkExport = () => {
+    const selectedData = vendors.filter(vendor => selectedVendors.includes(vendor.id!));
+    const csv = [
+      ['Name', 'Company Name', 'Email', 'Work Phone', 'GST Treatment', 'Payables (INR)'].join(','),
+      ...selectedData.map(vendor => [
+        vendor.supplier_name,
+        vendor.company_name || '',
+        vendor.email || '',
+        vendor.work_phone || '',
+        vendor.gst_treatment || '',
+        vendor.current_balance || '0'
+      ].join(','))
+    ].join('\n');
+
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `vendors_export_${new Date().toISOString().split('T')[0]}.csv`;
+    a.click();
+  };
+
+  // Bulk actions configuration
+  const bulkActions = [
+    createBulkDeleteAction(handleBulkDelete),
+    createBulkExportAction(handleBulkExport)
+  ];
 
   return (
     <div className="h-full flex flex-col bg-gray-50">
@@ -108,7 +173,12 @@ const VendorManagementPage = () => {
                 <thead className="bg-gray-50 border-b border-gray-200">
                   <tr>
                     <th className="px-6 py-3 text-left">
-                      <input type="checkbox" className="rounded" />
+                      <input
+                        type="checkbox"
+                        checked={selectedVendors.length === filteredVendors.length && filteredVendors.length > 0}
+                        onChange={handleSelectAll}
+                        className="rounded"
+                      />
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       NAME
@@ -154,7 +224,12 @@ const VendorManagementPage = () => {
                         onClick={() => navigate(`/vendor-management/${vendor.id}`)}
                       >
                         <td className="px-6 py-4" onClick={(e) => e.stopPropagation()}>
-                          <input type="checkbox" className="rounded" />
+                          <input
+                            type="checkbox"
+                            checked={selectedVendors.includes(vendor.id!)}
+                            onChange={() => handleSelectVendor(vendor.id!)}
+                            className="rounded"
+                          />
                         </td>
                         <td className="px-6 py-4">
                           <div className="text-sm font-medium text-blue-600 hover:underline">
@@ -190,6 +265,18 @@ const VendorManagementPage = () => {
           )}
         </div>
       </div>
+
+      {/* Bulk Action Bar */}
+      {selectedVendors.length > 0 && (
+        <BulkActionBar
+          selectedCount={selectedVendors.length}
+          totalCount={filteredVendors.length}
+          onClearSelection={clearSelection}
+          onSelectAll={handleSelectAll}
+          actions={bulkActions}
+          entityName="vendor"
+        />
+      )}
     </div>
   );
 };

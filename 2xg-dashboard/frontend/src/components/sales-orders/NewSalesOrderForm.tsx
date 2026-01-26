@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { ArrowLeft, Save, Send, Plus, Trash2, X } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import ItemSelector from '../shared/ItemSelector';
 import { salesOrdersService, SalesOrderItem } from '../../services/sales-orders.service';
 import { itemsService, Item } from '../../services/items.service';
 import { customersService, Customer } from '../../services/customers.service';
@@ -94,7 +95,7 @@ const NewSalesOrderForm = () => {
       item_id: '',
       item_name: '',
       description: '',
-      quantity: 1,
+      quantity: 0,
       unit_of_measurement: 'pcs',
       rate: 0,
       amount: 0,
@@ -149,12 +150,15 @@ const NewSalesOrderForm = () => {
       quantity: 1,
       unit_of_measurement: item.unit_of_measurement || 'pcs',
       rate: Number(item.unit_price) || 0,
-      amount: Number(item.unit_price) || 0,
-      stock_on_hand: Number(item.current_stock) || 0
+      amount: updatedItems[index].quantity * (item.unit_price || 0),
+      stock_on_hand: item.current_stock || 0,
+      serial_numbers: (item.sku && updatedItems[index].quantity > 0)
+        ? Array.from({ length: updatedItems[index].quantity }, (_, i) => `${item.sku}/${i + 1}`)
+        : []
     };
     setSalesOrderItems(updatedItems);
     setShowItemDropdown(null);
-    setItemSearchQuery({ ...itemSearchQuery, [index]: item.item_name || '' });
+    setItemSearchQuery({ ...itemSearchQuery, [index]: '' });
   };
 
   const handleItemChange = (index: number, field: keyof SalesOrderItem, value: any) => {
@@ -172,9 +176,19 @@ const NewSalesOrderForm = () => {
     (updatedItems[index] as any)[field] = processedValue;
 
     if (field === 'quantity' || field === 'rate') {
-      const quantity = field === 'quantity' ? Number(processedValue) : Number(updatedItems[index].quantity);
-      const rate = field === 'rate' ? Number(processedValue) : Number(updatedItems[index].rate);
+      const quantity = field === 'quantity' ? value : updatedItems[index].quantity;
+      const rate = field === 'rate' ? value : updatedItems[index].rate;
       updatedItems[index].amount = quantity * rate;
+
+      // Generate Serial Numbers if Quantity Changes or Item Changed (handled in select too, but just in case)
+      if (field === 'quantity') {
+        const item = items.find(i => i.id === updatedItems[index].item_id);
+        if (item && item.sku && quantity > 0) {
+          updatedItems[index].serial_numbers = Array.from({ length: quantity }, (_, i) => `${item.sku}/${i + 1}`);
+        } else {
+          updatedItems[index].serial_numbers = [];
+        }
+      }
     }
 
     setSalesOrderItems(updatedItems);
@@ -195,7 +209,7 @@ const NewSalesOrderForm = () => {
         item_id: '',
         item_name: '',
         description: '',
-        quantity: 1,
+        quantity: 0,
         unit_of_measurement: 'pcs',
         rate: 0,
         amount: 0,
@@ -361,9 +375,9 @@ const NewSalesOrderForm = () => {
       console.error('Error creating sales order:', error);
       console.error('Error response:', error.response);
       const errorMessage = error.response?.data?.error ||
-                          error.response?.data?.message ||
-                          error.message ||
-                          'Failed to create sales order';
+        error.response?.data?.message ||
+        error.message ||
+        'Failed to create sales order';
       alert(errorMessage);
     } finally {
       setLoading(false);
@@ -371,7 +385,7 @@ const NewSalesOrderForm = () => {
   };
 
   return (
-    <div className="max-w-7xl mx-auto w-full p-6">
+    <div className="max-w-[98%] mx-auto w-full p-6">
       <div className="space-y-6">
         {/* Header */}
         <div className="flex items-center justify-between">
@@ -586,7 +600,7 @@ const NewSalesOrderForm = () => {
               <table className="w-full">
                 <thead className="bg-slate-50 border-b border-slate-200">
                   <tr>
-                    <th className="px-4 py-3 text-left text-sm font-semibold text-slate-700">ITEM DETAILS</th>
+                    <th className="px-4 py-3 text-left text-sm font-semibold text-slate-700 min-w-[300px]">ITEM DETAILS</th>
                     <th className="px-4 py-3 text-left text-sm font-semibold text-slate-700">QUANTITY</th>
                     <th className="px-4 py-3 text-left text-sm font-semibold text-slate-700">RATE</th>
                     <th className="px-4 py-3 text-left text-sm font-semibold text-slate-700">STOCK</th>
@@ -599,39 +613,14 @@ const NewSalesOrderForm = () => {
                     <tr key={index}>
                       <td className="px-4 py-3">
                         <div className="relative">
-                          <input
-                            type="text"
-                            value={itemSearchQuery[index] || item.item_name || ''}
-                            onChange={(e) => {
-                              setItemSearchQuery({ ...itemSearchQuery, [index]: e.target.value });
-                              setShowItemDropdown(index);
-                            }}
-                            onFocus={() => setShowItemDropdown(index)}
+                          <ItemSelector
+                            items={items}
+                            value={item.item_id || ''}
+                            inputValue={item.item_name || ''}
+                            onSelect={(selectedItem) => handleItemSelect(index, selectedItem)}
+                            onInputChange={(value) => handleItemChange(index, 'item_name', value)}
                             placeholder="Click to select item"
-                            className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                           />
-                          {showItemDropdown === index && (
-                            <>
-                              <div
-                                className="fixed inset-0 z-10"
-                                onClick={() => setShowItemDropdown(null)}
-                              />
-                              <div className="absolute z-20 mt-1 w-full max-h-60 overflow-y-auto bg-white border border-slate-300 rounded-lg shadow-lg">
-                                {getFilteredItems(index).map((availableItem) => (
-                                  <div
-                                    key={availableItem.id}
-                                    onClick={() => handleItemSelect(index, availableItem)}
-                                    className="px-4 py-2 hover:bg-blue-50 cursor-pointer"
-                                  >
-                                    <div className="font-medium text-slate-800">{availableItem.item_name}</div>
-                                    <div className="text-sm text-slate-600">
-                                      Stock: {availableItem.current_stock || 0} {availableItem.unit_of_measurement || 'pcs'} | Rate: ₹{availableItem.unit_price || 0}
-                                    </div>
-                                  </div>
-                                ))}
-                              </div>
-                            </>
-                          )}
                         </div>
                         <input
                           type="text"
@@ -644,12 +633,32 @@ const NewSalesOrderForm = () => {
                       <td className="px-4 py-3">
                         <input
                           type="number"
-                          value={item.quantity || 0}
-                          onChange={(e) => handleItemChange(index, 'quantity', Number(e.target.value))}
+                          value={item.quantity > 0 ? item.quantity : ''}
+                          onChange={(e) => handleItemChange(index, 'quantity', parseInt(e.target.value) || 0)}
                           className="w-24 px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                          min="0"
+                          min="1"
                           step="1"
+                          onKeyDown={(e) => {
+                            if (e.key === '.' || e.key === 'e') {
+                              e.preventDefault();
+                            }
+                          }}
+                          placeholder="Qty"
                         />
+                        {item.serial_numbers && item.serial_numbers.length > 0 && (
+                          <div className="mt-2 flex flex-wrap gap-1 max-w-[200px]">
+                            {item.serial_numbers.map((sn, i) => (
+                              <span key={i} className="inline-flex items-center px-2 py-0.5 rounded textxs font-medium bg-blue-100 text-blue-800 border border-blue-200">
+                                {sn}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                        {item.quantity > 0 && (!item.serial_numbers || item.serial_numbers.length === 0) && (
+                          <div className="mt-1 text-[10px] text-orange-500 font-medium">
+                            Select Item w/ SKU
+                          </div>
+                        )}
                       </td>
                       <td className="px-4 py-3">
                         <input

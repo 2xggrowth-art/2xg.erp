@@ -26,6 +26,23 @@ export class ExpensesService {
   }
 
   /**
+   * Get expense by ID
+   */
+  async getExpenseById(id: string) {
+    const { data, error } = await supabaseAdmin
+      .from('expenses')
+      .select(`
+        *,
+        expense_categories!fk_category (category_name)
+      `)
+      .eq('id', id)
+      .single();
+
+    if (error) throw error;
+    return data;
+  }
+
+  /**
    * Get expenses summary
    */
   async getExpensesSummary(startDate?: string, endDate?: string) {

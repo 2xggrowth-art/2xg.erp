@@ -174,7 +174,10 @@ export class ItemsService {
     const updateData: any = {};
 
     // Only include fields that are actually being updated
-    if (itemData.name !== undefined) updateData.item_name = itemData.name;
+    if (itemData.name !== undefined) {
+      console.log('Updating item name from:', itemData.name);
+      updateData.item_name = itemData.name;
+    }
     if (itemData.sku !== undefined) updateData.sku = itemData.sku;
     if (itemData.unit !== undefined) updateData.unit_of_measurement = itemData.unit;
     if (itemData.category !== undefined) updateData.category_id = itemData.category || null;
@@ -218,6 +221,8 @@ export class ItemsService {
     if (itemData.inventory_account !== undefined) updateData.inventory_account = itemData.inventory_account || null;
     if (itemData.valuation_method !== undefined) updateData.valuation_method = itemData.valuation_method || null;
 
+    console.log('Update data being sent:', updateData);
+
     const { data, error } = await supabaseAdmin
       .from('items')
       .update(updateData)
@@ -226,6 +231,7 @@ export class ItemsService {
       .single();
 
     if (error) throw error;
+    console.log('Updated item data returned:', data);
     return data;
   }
 

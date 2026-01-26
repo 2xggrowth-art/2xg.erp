@@ -1,26 +1,31 @@
 import { useState, useEffect } from 'react';
 import { ArrowLeft, Save, AlertCircle } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { paymentsReceivedService } from '../../services/payments-received.service';
 import { customersService, Customer } from '../../services/customers.service';
 
 const NewPaymentReceivedForm = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const [loading, setLoading] = useState(false);
   const [showExcessPaymentModal, setShowExcessPaymentModal] = useState(false);
   const [customers, setCustomers] = useState<Customer[]>([]);
 
+  // Check for passed invoice data
+  const invoiceFromState = location.state?.invoice;
+  console.log('NewPaymentReceivedForm initialized. Location State:', location.state);
+
   const [formData, setFormData] = useState({
-    customer_name: '',
+    customer_name: invoiceFromState?.customer_name || '',
     payment_number: '',
     payment_date: new Date().toISOString().split('T')[0],
-    amount_received: 0,
+    amount_received: invoiceFromState?.balance_due || 0,
     bank_charges: 0,
     payment_mode: 'Cash',
     deposit_to: 'Petty Cash',
     location: 'Head Office',
-    reference_number: '',
-    notes: ''
+    reference_number: invoiceFromState ? `Payment for ${invoiceFromState.invoice_number}` : '',
+    notes: invoiceFromState ? `Payment received for Invoice ${invoiceFromState.invoice_number}` : ''
   });
 
   const [paymentModes] = useState<string[]>([
@@ -129,6 +134,8 @@ const NewPaymentReceivedForm = () => {
         deposit_to: formData.deposit_to,
         location: formData.location,
         reference_number: formData.reference_number || null,
+        invoice_id: invoiceFromState?.id || null, // Link payment to invoice
+        invoice_number: invoiceFromState?.invoice_number || null, // Create linkage
         amount_used: 0,
         amount_excess: netAmount,
         status: 'recorded',
@@ -136,6 +143,7 @@ const NewPaymentReceivedForm = () => {
       };
 
       console.log('Payment Data to Submit:', paymentData);
+      console.log('Current invoiceFromState:', invoiceFromState); // Debugging
 
       const response = await paymentsReceivedService.createPaymentReceived(paymentData);
 
@@ -143,14 +151,18 @@ const NewPaymentReceivedForm = () => {
 
       if (response.success) {
         alert('Payment recorded successfully!');
-        navigate('/sales/payment-received');
+        if (invoiceFromState?.id) {
+          navigate(`/sales/invoices/${invoiceFromState.id}`);
+        } else {
+          navigate('/sales/payment-received');
+        }
       }
     } catch (error: any) {
       console.error('Error creating payment:', error);
       const errorMessage = error.response?.data?.error ||
-                          error.response?.data?.message ||
-                          error.message ||
-                          'Failed to record payment';
+        error.response?.data?.message ||
+        error.message ||
+        'Failed to record payment';
       alert(errorMessage);
       throw error;
     }

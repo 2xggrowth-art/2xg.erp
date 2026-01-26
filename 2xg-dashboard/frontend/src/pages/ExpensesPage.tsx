@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, DollarSign, TrendingUp, CheckCircle, Clock, X } from 'lucide-react';
-import { expensesService } from '../services/expenses.service';
+import { Plus, DollarSign, TrendingUp, CheckCircle, Clock, X, FileText, Calendar, User, Eye, Edit, Trash2 } from 'lucide-react';
+import { expensesService, Expense } from '../services/expenses.service';
 
 interface ExpenseSummary {
   totalExpenses: number;
@@ -12,16 +12,12 @@ interface ExpenseSummary {
   currency: string;
 }
 
-interface CategoryData {
-  name: string;
-  total: number;
-  count: number;
-}
-
 const ExpensesPage = () => {
   const navigate = useNavigate();
   const [summary, setSummary] = useState<ExpenseSummary | null>(null);
-  const [categoryData, setCategoryData] = useState<CategoryData[]>([]);
+  const [expenses, setExpenses] = useState<Expense[]>([]);
+  const [filteredExpenses, setFilteredExpenses] = useState<Expense[]>([]);
+  const [selectedStatus, setSelectedStatus] = useState<string>('All');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -29,33 +25,99 @@ const ExpensesPage = () => {
     fetchData();
   }, []);
 
+  useEffect(() => {
+    filterExpenses();
+  }, [expenses, selectedStatus]);
+
   const fetchData = async () => {
     try {
       setLoading(true);
       setError(null);
 
-      const [summaryResponse, categoryResponse] = await Promise.all([
+      const [summaryResponse, expensesResponse] = await Promise.all([
         expensesService.getExpensesSummary(),
-        expensesService.getExpensesByCategory()
+        expensesService.getAllExpenses()
       ]);
 
       // Extract data from API response
-      // Service already returns response.data, so we just need to extract the inner data
       const summaryData = summaryResponse.data || summaryResponse;
-      const categoryDataArray = categoryResponse.data || categoryResponse;
+      const expensesData = expensesResponse.data || expensesResponse;
 
       console.log('Summary Response:', summaryResponse);
-      console.log('Summary Data:', summaryData);
-      console.log('Category Response:', categoryResponse);
-      console.log('Category Data:', categoryDataArray);
+      console.log('Expenses Response:', expensesResponse);
 
       setSummary(summaryData);
-      setCategoryData(categoryDataArray || []);
+      setExpenses(expensesData || []);
     } catch (err: any) {
       console.error('Error fetching expense data:', err);
       setError(err.message || 'Failed to load expense data');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const filterExpenses = () => {
+    if (selectedStatus === 'All') {
+      setFilteredExpenses(expenses);
+    } else {
+      const filtered = expenses.filter(
+        (expense) => expense.approval_status === selectedStatus
+      );
+      setFilteredExpenses(filtered);
+    }
+  };
+
+  const formatDate = (dateString?: string) => {
+    if (!dateString) return 'N/A';
+    const date = new Date(dateString);
+    return date.toLocaleDateString('en-IN', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric'
+    });
+  };
+
+  const handleView = (expenseId: string) => {
+    navigate(`/expenses/${expenseId}`);
+  };
+
+  const handleEdit = (expenseId: string) => {
+    // Navigate to edit page or open edit modal
+    console.log('Edit expense:', expenseId);
+    // navigate(`/expenses/${expenseId}/edit`);
+  };
+
+  const handleDelete = async (expenseId: string) => {
+    if (window.confirm('Are you sure you want to delete this expense?')) {
+      try {
+        // await expensesService.deleteExpense(expenseId);
+        console.log('Delete expense:', expenseId);
+        // Refresh data after deletion
+        // fetchData();
+      } catch (error) {
+        console.error('Error deleting expense:', error);
+      }
+    }
+  };
+
+  const handleStatusChange = async (expenseId: string, newStatus: string) => {
+    try {
+      // await expensesService.updateExpenseStatus(expenseId, newStatus);
+      console.log('Update expense status:', expenseId, 'to', newStatus);
+
+      // Update local state to reflect the change immediately
+      setExpenses(prevExpenses =>
+        prevExpenses.map(expense =>
+          expense.id === expenseId
+            ? { ...expense, approval_status: newStatus as 'Pending' | 'Approved' | 'Rejected' }
+            : expense
+        )
+      );
+
+      // Optionally refresh data from server
+      // fetchData();
+    } catch (error) {
+      console.error('Error updating expense status:', error);
     }
   };
 
@@ -159,45 +221,219 @@ const ExpensesPage = () => {
         </div>
       </div>
 
-      {/* Category Breakdown */}
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-        <h2 className="text-lg font-semibold text-gray-900 mb-4">Expenses by Category</h2>
-        {categoryData.length > 0 ? (
-          <div className="space-y-3">
-            {categoryData.map((category, index) => (
-              <div key={index} className="flex items-center justify-between py-3 border-b border-gray-100 last:border-0">
-                <div>
-                  <p className="font-medium text-gray-900">{category.name}</p>
-                  <p className="text-sm text-gray-500">{category.count} expense(s)</p>
-                </div>
-                <p className="text-lg font-semibold text-gray-900">
-                  ₹{category.total.toLocaleString()}
-                </p>
-              </div>
-            ))}
+      {/* Expenses List */}
+      <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+        {/* Status Filter Tabs */}
+        <div className="border-b border-gray-200 bg-gray-50 px-6 py-4">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-sm font-medium text-gray-700 mr-2">Filter by Status:</span>
+            <button
+              onClick={() => setSelectedStatus('All')}
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                selectedStatus === 'All'
+                  ? 'bg-blue-600 text-white shadow-sm'
+                  : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
+              }`}
+            >
+              All ({expenses.length})
+            </button>
+            <button
+              onClick={() => setSelectedStatus('Pending')}
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                selectedStatus === 'Pending'
+                  ? 'bg-orange-600 text-white shadow-sm'
+                  : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
+              }`}
+            >
+              Pending ({expenses.filter(e => e.approval_status === 'Pending').length})
+            </button>
+            <button
+              onClick={() => setSelectedStatus('Approved')}
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                selectedStatus === 'Approved'
+                  ? 'bg-green-600 text-white shadow-sm'
+                  : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
+              }`}
+            >
+              Approved ({expenses.filter(e => e.approval_status === 'Approved').length})
+            </button>
+            <button
+              onClick={() => setSelectedStatus('Rejected')}
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                selectedStatus === 'Rejected'
+                  ? 'bg-red-600 text-white shadow-sm'
+                  : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
+              }`}
+            >
+              Rejected ({expenses.filter(e => e.approval_status === 'Rejected').length})
+            </button>
           </div>
-        ) : (
-          <p className="text-gray-500 text-center py-8">No expense data available</p>
-        )}
-      </div>
+        </div>
 
-      {/* Coming Soon Features */}
-      <div className="mt-8 bg-gradient-to-r from-blue-50 to-purple-50 rounded-lg border border-blue-200 p-6">
-        <h3 className="text-lg font-semibold text-gray-900 mb-4">Coming Soon</h3>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {[
-            'Add & Edit Expenses',
-            'Receipt Upload',
-            'Approval Workflows',
-            'Expense Reports',
-            'Export to Excel/PDF',
-            'Mobile App Support'
-          ].map((feature, index) => (
-            <div key={index} className="flex items-center gap-2 text-gray-700">
-              <div className="w-2 h-2 bg-blue-600 rounded-full"></div>
-              <span className="text-sm">{feature}</span>
-            </div>
-          ))}
+        <div className="overflow-x-auto">
+          <table className="w-full">
+            <thead className="bg-gray-50 border-b border-gray-200">
+              <tr>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Expense #
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Date
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Category
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Item
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Amount
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Paid By
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Status
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Actions
+                </th>
+              </tr>
+            </thead>
+            <tbody className="bg-white divide-y divide-gray-200">
+              {filteredExpenses.length > 0 ? (
+                filteredExpenses.map((expense) => (
+                  <tr
+                    key={expense.id}
+                    className="hover:bg-gray-50 transition-colors"
+                  >
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="flex items-center gap-2">
+                        <FileText size={16} className="text-gray-400" />
+                        <span className="text-sm font-medium text-gray-900">
+                          {expense.expense_number || 'N/A'}
+                        </span>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="flex items-center gap-2">
+                        <Calendar size={16} className="text-gray-400" />
+                        <span className="text-sm text-gray-900">
+                          {formatDate(expense.expense_date)}
+                        </span>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <span className="text-sm text-gray-900">
+                        {expense.category_name || 'N/A'}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4">
+                      <div className="text-sm text-gray-900">
+                        {expense.expense_item}
+                      </div>
+                      {expense.description && (
+                        <div className="text-xs text-gray-500 mt-1 line-clamp-1">
+                          {expense.description}
+                        </div>
+                      )}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <span className="text-sm font-semibold text-gray-900">
+                        ₹{expense.amount.toLocaleString()}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="flex items-center gap-2">
+                        <User size={16} className="text-gray-400" />
+                        <span className="text-sm text-gray-900">
+                          {expense.paid_by_name}
+                        </span>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      {expense.approval_status === 'Pending' ? (
+                        <select
+                          value={expense.approval_status || 'Pending'}
+                          onChange={(e) => handleStatusChange(expense.id!, e.target.value)}
+                          className="px-3 py-1.5 text-xs font-semibold rounded-lg border-2 cursor-pointer transition-all focus:outline-none focus:ring-2 focus:ring-offset-1 bg-orange-50 text-orange-800 border-orange-300 hover:bg-orange-100 focus:ring-orange-500"
+                        >
+                          <option value="Pending">Pending</option>
+                          <option value="Approved">Approved</option>
+                          <option value="Rejected">Rejected</option>
+                        </select>
+                      ) : (
+                        <span
+                          className={`inline-flex px-3 py-1.5 text-xs font-semibold rounded-lg border-2 ${
+                            expense.approval_status === 'Approved'
+                              ? 'bg-green-50 text-green-800 border-green-300'
+                              : 'bg-red-50 text-red-800 border-red-300'
+                          }`}
+                        >
+                          {expense.approval_status}
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleView(expense.id!);
+                          }}
+                          className="px-3 py-1.5 text-xs font-medium text-blue-700 bg-blue-50 border border-blue-200 rounded-md hover:bg-blue-100 transition-colors flex items-center gap-1"
+                          title="View Details"
+                        >
+                          <Eye size={14} />
+                          View
+                        </button>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleEdit(expense.id!);
+                          }}
+                          className="px-3 py-1.5 text-xs font-medium text-green-700 bg-green-50 border border-green-200 rounded-md hover:bg-green-100 transition-colors flex items-center gap-1"
+                          title="Edit Expense"
+                        >
+                          <Edit size={14} />
+                          Edit
+                        </button>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDelete(expense.id!);
+                          }}
+                          className="px-3 py-1.5 text-xs font-medium text-red-700 bg-red-50 border border-red-200 rounded-md hover:bg-red-100 transition-colors flex items-center gap-1"
+                          title="Delete Expense"
+                        >
+                          <Trash2 size={14} />
+                          Delete
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))
+              ) : (
+                <tr>
+                  <td colSpan={8} className="px-6 py-12 text-center">
+                    <div className="flex flex-col items-center gap-3">
+                      <FileText size={48} className="text-gray-300" />
+                      <p className="text-gray-500 font-medium">
+                        {selectedStatus === 'All'
+                          ? 'No expenses found'
+                          : `No ${selectedStatus.toLowerCase()} expenses found`}
+                      </p>
+                      <p className="text-sm text-gray-400">
+                        {selectedStatus === 'All'
+                          ? 'Get started by adding your first expense'
+                          : 'Try selecting a different status filter'}
+                      </p>
+                    </div>
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
         </div>
       </div>
     </div>

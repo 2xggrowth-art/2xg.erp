@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { ArrowLeft, Save, Send, Plus, Trash2, AlertTriangle } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import { invoicesService, InvoiceItem } from '../../services/invoices.service';
 import { customersService, Customer } from '../../services/customers.service';
 import { itemsService, Item } from '../../services/items.service';
@@ -37,6 +37,8 @@ interface TCSTax {
 
 const NewInvoiceForm = () => {
   const navigate = useNavigate();
+  const { id } = useParams<{ id: string }>();
+  const isEditMode = !!id;
   const [loading, setLoading] = useState(false);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [items, setItems] = useState<Item[]>([]);
@@ -134,8 +136,72 @@ const NewInvoiceForm = () => {
   useEffect(() => {
     fetchCustomers();
     fetchItems();
-    generateInvoiceNumber();
-  }, []);
+    if (!isEditMode) {
+      generateInvoiceNumber();
+    }
+  }, [isEditMode]);
+
+  useEffect(() => {
+    if (isEditMode && id) {
+      fetchInvoiceDetails();
+    }
+  }, [isEditMode, id]);
+
+  const fetchInvoiceDetails = async () => {
+    try {
+      setLoading(true);
+      const response = await invoicesService.getInvoiceById(id!);
+      if (response.success && response.data) {
+        const invoice = response.data;
+
+        // Map invoice data to form data
+        setFormData({
+          customer_id: invoice.customer_id || '',
+          customer_name: invoice.customer_name || '',
+          customer_email: invoice.customer_email || '',
+          invoice_number: invoice.invoice_number || '',
+          auto_invoice_number: false, // Turn off auto for edit
+          order_number: invoice.order_number || '',
+          invoice_date: invoice.invoice_date ? new Date(invoice.invoice_date).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
+          due_date: invoice.due_date ? new Date(invoice.due_date).toISOString().split('T')[0] : '',
+          payment_terms: invoice.payment_terms || 'due_on_receipt',
+          salesperson_id: invoice.salesperson_id || '',
+          salesperson_name: invoice.salesperson_name || '',
+          location_id: invoice.location_id || '',
+          subject: invoice.subject || '',
+          discount_type: invoice.discount_type || 'percentage',
+          discount_value: invoice.discount_value || 0,
+          tds_tcs_type: invoice.tds_tcs_type || '',
+          tds_tcs_rate: invoice.tds_tcs_rate || 0,
+          adjustment: invoice.adjustment || 0,
+          notes: invoice.notes || '',
+          terms_and_conditions: invoice.terms_and_conditions || '',
+          status: invoice.status || 'draft',
+          customer_notes: invoice.customer_notes || ''
+        });
+
+        // Map items
+        if (invoice.items && invoice.items.length > 0) {
+          setInvoiceItems(invoice.items.map((item: any) => ({
+            item_id: item.item_id || '',
+            item_name: item.item_name || '',
+            account: item.account || 'Sales',
+            description: item.description || '',
+            quantity: item.quantity || 1,
+            unit_of_measurement: item.unit_of_measurement || 'pcs',
+            rate: item.rate || 0,
+            amount: item.amount || 0,
+            stock_on_hand: item.stock_on_hand || 0
+          })));
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching invoice details:', error);
+      alert('Failed to load invoice details');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const fetchCustomers = async () => {
     try {
@@ -474,12 +540,17 @@ const NewInvoiceForm = () => {
 
       console.log('Submitting invoice data:', invoiceData);
 
-      const response = await invoicesService.createInvoice(invoiceData);
+      let response;
+      if (isEditMode && id) {
+        response = await invoicesService.updateInvoice(id, invoiceData);
+      } else {
+        response = await invoicesService.createInvoice(invoiceData);
+      }
 
       if (response.success) {
         navigate('/sales/invoices');
       } else {
-        alert(response.message || 'Failed to create invoice');
+        alert(response.message || `Failed to ${isEditMode ? 'update' : 'create'} invoice`);
       }
     } catch (error: any) {
       console.error('Error creating invoice:', error);
@@ -713,8 +784,8 @@ const NewInvoiceForm = () => {
             <ArrowLeft size={24} className="text-slate-600" />
           </button>
           <div>
-            <h1 className="text-3xl font-bold text-slate-800">New Invoice</h1>
-            <p className="text-slate-600 mt-1">Create a new invoice for your customer</p>
+            <h1 className="text-3xl font-bold text-slate-800">{isEditMode ? 'Edit Invoice' : 'New Invoice'}</h1>
+            <p className="text-slate-600 mt-1">{isEditMode ? 'Update existing invoice details' : 'Create a new invoice for your customer'}</p>
           </div>
         </div>
 

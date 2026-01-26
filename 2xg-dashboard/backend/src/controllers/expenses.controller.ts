@@ -13,6 +13,16 @@ export const getAllExpenses = async (req: Request, res: Response) => {
   }
 };
 
+export const getExpenseById = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const expense = await expensesService.getExpenseById(id);
+    res.json({ success: true, data: expense });
+  } catch (error: any) {
+    res.status(404).json({ success: false, error: error.message || 'Expense not found' });
+  }
+};
+
 export const getExpensesSummary = async (req: Request, res: Response) => {
   try {
     const { startDate, endDate } = req.query;

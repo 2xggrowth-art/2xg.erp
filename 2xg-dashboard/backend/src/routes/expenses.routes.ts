@@ -8,6 +8,7 @@ router.get('/', expensesController.getAllExpenses);
 router.get('/summary', expensesController.getExpensesSummary);
 router.get('/by-category', expensesController.getExpensesByCategory);
 router.get('/categories', expensesController.getExpenseCategories);
+router.get('/:id', expensesController.getExpenseById);
 router.post('/', uploadExpenseVoucher.single('voucher'), expensesController.createExpense);
 
 export default router;

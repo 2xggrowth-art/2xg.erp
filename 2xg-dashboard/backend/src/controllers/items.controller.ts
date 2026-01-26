@@ -64,9 +64,15 @@ export const createItem = async (req: Request, res: Response) => {
 export const updateItem = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
+    console.log('=== UPDATE ITEM REQUEST ===');
+    console.log('Item ID:', id);
+    console.log('Request body:', JSON.stringify(req.body, null, 2));
+    console.log('Name field:', req.body.name);
     const item = await itemsService.updateItem(id, req.body);
+    console.log('Updated item returned:', JSON.stringify(item, null, 2));
     res.json({ success: true, data: item });
   } catch (error: any) {
+    console.error('Error updating item:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 };

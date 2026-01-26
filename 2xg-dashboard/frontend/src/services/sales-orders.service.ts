@@ -9,6 +9,7 @@ export interface SalesOrderItem {
   rate: number;
   amount: number;
   stock_on_hand?: number;
+  serial_numbers?: string[];
 }
 
 export interface SalesOrder {
@@ -80,9 +81,9 @@ class SalesOrdersService {
     } catch (error: any) {
       console.error('Error creating sales order:', error);
       const errorMessage = error.response?.data?.error ||
-                          error.response?.data?.message ||
-                          error.message ||
-                          'Failed to create sales order';
+        error.response?.data?.message ||
+        error.message ||
+        'Failed to create sales order';
       const errorDetails = error.response?.data?.details;
       const fullMessage = errorDetails ? `${errorMessage}\n${errorDetails}` : errorMessage;
       throw new Error(fullMessage);

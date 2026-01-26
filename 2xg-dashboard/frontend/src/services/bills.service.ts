@@ -1,6 +1,4 @@
-import axios from 'axios';
-
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5002/api';
+import apiClient from './api.client';
 
 export interface Bill {
   id: string;
@@ -48,6 +46,7 @@ export interface BillItem {
   discount: number;
   total: number;
   account?: string;
+  serial_numbers?: string[];
   created_at: string;
 }
 
@@ -111,8 +110,8 @@ export const billsService = {
       if (filters?.to_date) params.append('to_date', filters.to_date);
       if (filters?.search) params.append('search', filters.search);
 
-      const response = await axios.get<APIResponse<Bill[]>>(
-        `${API_BASE_URL}/bills?${params.toString()}`
+      const response = await apiClient.get<APIResponse<Bill[]>>(
+        `/bills?${params.toString()}`
       );
       return response.data;
     } catch (error) {
@@ -126,8 +125,8 @@ export const billsService = {
    */
   getBillById: async (id: string): Promise<APIResponse<Bill & { items: BillItem[] }>> => {
     try {
-      const response = await axios.get<APIResponse<Bill & { items: BillItem[] }>>(
-        `${API_BASE_URL}/bills/${id}`
+      const response = await apiClient.get<APIResponse<Bill & { items: BillItem[] }>>(
+        `/bills/${id}`
       );
       return response.data;
     } catch (error) {
@@ -141,8 +140,8 @@ export const billsService = {
    */
   generateBillNumber: async (): Promise<APIResponse<{ bill_number: string }>> => {
     try {
-      const response = await axios.get<APIResponse<{ bill_number: string }>>(
-        `${API_BASE_URL}/bills/generate-bill-number`
+      const response = await apiClient.get<APIResponse<{ bill_number: string }>>(
+        `/bills/generate-bill-number`
       );
       return response.data;
     } catch (error) {
@@ -156,8 +155,8 @@ export const billsService = {
    */
   createBill: async (data: CreateBillData): Promise<APIResponse<Bill>> => {
     try {
-      const response = await axios.post<APIResponse<Bill>>(
-        `${API_BASE_URL}/bills`,
+      const response = await apiClient.post<APIResponse<Bill>>(
+        `/bills`,
         data
       );
       return response.data;
@@ -172,8 +171,8 @@ export const billsService = {
    */
   updateBill: async (id: string, data: Partial<CreateBillData>): Promise<APIResponse<Bill>> => {
     try {
-      const response = await axios.put<APIResponse<Bill>>(
-        `${API_BASE_URL}/bills/${id}`,
+      const response = await apiClient.put<APIResponse<Bill>>(
+        `/bills/${id}`,
         data
       );
       return response.data;
@@ -188,8 +187,8 @@ export const billsService = {
    */
   deleteBill: async (id: string): Promise<APIResponse<Bill>> => {
     try {
-      const response = await axios.delete<APIResponse<Bill>>(
-        `${API_BASE_URL}/bills/${id}`
+      const response = await apiClient.delete<APIResponse<Bill>>(
+        `/bills/${id}`
       );
       return response.data;
     } catch (error) {
@@ -203,8 +202,8 @@ export const billsService = {
    */
   getBillsSummary: async (): Promise<APIResponse<BillsSummary>> => {
     try {
-      const response = await axios.get<APIResponse<BillsSummary>>(
-        `${API_BASE_URL}/bills/summary`
+      const response = await apiClient.get<APIResponse<BillsSummary>>(
+        `/bills/summary`
       );
       return response.data;
     } catch (error) {
@@ -227,8 +226,8 @@ export const billsService = {
     }
   ): Promise<APIResponse<Bill>> => {
     try {
-      const response = await axios.post<APIResponse<Bill>>(
-        `${API_BASE_URL}/bills/${billId}/payments`,
+      const response = await apiClient.post<APIResponse<Bill>>(
+        `/bills/${billId}/payments`,
         paymentData
       );
       return response.data;
@@ -243,8 +242,8 @@ export const billsService = {
    */
   convertPOToBill: async (poId: string): Promise<APIResponse<Bill>> => {
     try {
-      const response = await axios.post<APIResponse<Bill>>(
-        `${API_BASE_URL}/bills/convert-from-po/${poId}`
+      const response = await apiClient.post<APIResponse<Bill>>(
+        `/bills/convert-from-po/${poId}`
       );
       return response.data;
     } catch (error) {
@@ -264,8 +263,8 @@ export const billsService = {
     }
   ): Promise<APIResponse<Bill>> => {
     try {
-      const response = await axios.post<APIResponse<Bill>>(
-        `${API_BASE_URL}/bills/${billId}/apply-credit`,
+      const response = await apiClient.post<APIResponse<Bill>>(
+        `/bills/${billId}/apply-credit`,
         creditData
       );
       return response.data;
