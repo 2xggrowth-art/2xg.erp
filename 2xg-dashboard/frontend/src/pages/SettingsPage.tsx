@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { Settings, Users, Plus, Trash2, Edit2, Save, X, Shield, CheckSquare, Square } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
-import { authService, User as APIUser } from '../services/auth.service';
+import { authService, User } from '../services/auth.service';
 
 interface Permission {
   module: string;
@@ -17,17 +17,6 @@ interface Role {
   description: string;
   permissions: Permission[];
   isSystem?: boolean; // Cannot delete system roles
-}
-
-interface User {
-  id: string;
-  name: string;
-  email: string;
-  password?: string;
-  role: string;
-  phone?: string;
-  department?: string;
-  status: 'Active' | 'Inactive' | 'Suspended';
 }
 
 const SettingsPage = () => {
@@ -53,17 +42,11 @@ const SettingsPage = () => {
 
   const [users, setUsers] = useState<User[]>([]);
 
-  const [newUser, setNewUser] = useState<{
-    name: string;
-    email: string;
-    password: string;
-    role: string;
-    status: 'Active' | 'Inactive';
-  }>({
+  const [newUser, setNewUser] = useState({
     name: '',
     email: '',
     password: '',
-    role: 'User',
+    role: 'Staff',
     status: 'Active'
   });
 
@@ -94,7 +77,7 @@ const SettingsPage = () => {
         console.error('Error loading roles from localStorage:', error);
       }
     } else {
-      // Initialize with default roles
+      // Initialize with default roles (must match database constraints)
       const defaultRoles = [
         {
           id: '1',
@@ -124,8 +107,21 @@ const SettingsPage = () => {
         },
         {
           id: '3',
-          name: 'User',
-          description: 'Basic read access',
+          name: 'Staff',
+          description: 'Standard employee access',
+          isSystem: true,
+          permissions: availableModules.map(module => ({
+            module,
+            create: module === 'Tasks' || module === 'Expenses',
+            read: true,
+            update: module === 'Tasks' || module === 'Expenses',
+            delete: false
+          }))
+        },
+        {
+          id: '4',
+          name: 'Viewer',
+          description: 'Read-only access',
           isSystem: true,
           permissions: availableModules.map(module => ({
             module,
@@ -189,7 +185,7 @@ const SettingsPage = () => {
       });
 
       setUsers([...users, createdUser]);
-      setNewUser({ name: '', email: '', password: '', role: 'User', status: 'Active' });
+      setNewUser({ name: '', email: '', password: '', role: 'Staff', status: 'Active' });
       setShowAddUserModal(false);
       alert('User created successfully!');
     } catch (error: any) {
@@ -776,14 +772,12 @@ const SettingsPage = () => {
                 <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
                 <select
                   value={newUser.status}
-                  onChange={(e) => {
-                    const status = e.target.value as 'Active' | 'Inactive';
-                    setNewUser({ ...newUser, status });
-                  }}
+                  onChange={(e) => setNewUser({ ...newUser, status: e.target.value })}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 >
                   <option value="Active">Active</option>
                   <option value="Inactive">Inactive</option>
+                  <option value="Suspended">Suspended</option>
                 </select>
               </div>
             </div>

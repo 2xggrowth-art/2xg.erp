@@ -127,6 +127,17 @@ router.post('/register', async (req: Request, res: Response) => {
     const saltRounds = 10;
     const passwordHash = await bcrypt.hash(password, saltRounds);
 
+    // Validate role against database constraints
+    const validRoles = ['Admin', 'Manager', 'Staff', 'Viewer'];
+    const userRole = role || 'Staff';
+
+    if (!validRoles.includes(userRole)) {
+      return res.status(400).json({
+        success: false,
+        error: `Invalid role. Must be one of: ${validRoles.join(', ')}`
+      });
+    }
+
     // Create user
     const { data: newUser, error: createError } = await supabaseAdmin
       .from('users')
@@ -134,7 +145,7 @@ router.post('/register', async (req: Request, res: Response) => {
         name,
         email: email.toLowerCase(),
         password_hash: passwordHash,
-        role: role || 'Staff',
+        role: userRole,
         phone,
         department,
         status: 'Active'
@@ -143,6 +154,7 @@ router.post('/register', async (req: Request, res: Response) => {
       .single();
 
     if (createError) {
+      console.error('Database error creating user:', createError);
       throw createError;
     }
 
