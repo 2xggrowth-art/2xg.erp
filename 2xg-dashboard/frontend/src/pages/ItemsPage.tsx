@@ -225,15 +225,39 @@ const ItemsPage = () => {
 
       if (importResponse.data.success) {
         const result = importResponse.data.data;
+        console.log('Import result:', result);
+
+        const errors: string[] = [];
+        const duplicateCount = result.duplicates?.length || 0;
+        const failedCount = result.failed?.length || 0;
+
+        // Add duplicate warnings
+        if (duplicateCount > 0) {
+          const duplicateList = result.duplicates.slice(0, 3).join(', ');
+          errors.push(`⚠️ Skipped ${duplicateCount} duplicate SKU(s): ${duplicateList}${duplicateCount > 3 ? ` and ${duplicateCount - 3} more` : ''}`);
+        }
+
+        // Add failed items
+        if (failedCount > 0) {
+          errors.push(...result.failed.map((f: any) => `❌ Row ${f.row} (${f.sku}): ${f.error}`));
+        }
+
+        // If nothing was imported, add a helpful message
+        if (result.successful.length === 0 && duplicateCount > 0 && failedCount === 0) {
+          errors.push('💡 Tip: All items already exist. Try "Update Existing Items Only" or "Create New or Update Existing" mode.');
+        }
+
         setImportProgress({
           status: 'complete',
           current: result.successful.length,
-          total: itemsData.length,
-          errors: result.failed.map((f: any) => `Row ${f.row}: ${f.error}`)
+          total: result.successful.length + duplicateCount + failedCount,
+          errors
         });
 
-        // Refresh items list
-        fetchItems();
+        // Refresh items list if any items were successfully imported
+        if (result.successful.length > 0) {
+          fetchItems();
+        }
       }
     } catch (error: any) {
       setImportProgress({
@@ -596,16 +620,16 @@ const ItemsPage = () => {
                         <span className="font-medium">Import Complete!</span>
                       </div>
                       <p className="text-sm text-gray-600">
-                        Successfully imported: {importProgress.current} items
+                        Successfully imported: {importProgress.current} of {importProgress.total} items
                       </p>
                       {importProgress.errors.length > 0 && (
                         <div className="mt-2">
-                          <p className="text-sm text-orange-600 font-medium">
-                            Failed: {importProgress.errors.length} items
+                          <p className="text-sm text-orange-600 font-medium mb-1">
+                            {importProgress.current === 0 ? 'No items imported:' : 'Issues:'}
                           </p>
-                          <div className="mt-1 max-h-32 overflow-y-auto text-xs text-gray-600">
+                          <div className="mt-1 max-h-32 overflow-y-auto text-xs text-gray-600 space-y-1">
                             {importProgress.errors.map((err, idx) => (
-                              <div key={idx}>{err}</div>
+                              <div key={idx} className="bg-orange-50 p-2 rounded">{err}</div>
                             ))}
                           </div>
                         </div>
