@@ -249,4 +249,102 @@ export class ItemsService {
     if (error) throw error;
     return data;
   }
+
+  /**
+   * Bulk create items from import
+   */
+  async bulkCreateItems(itemsData: any[], skipDuplicates: boolean = true) {
+    const results = {
+      successful: [] as any[],
+      failed: [] as { row: number; sku: string; error: string }[],
+      duplicates: [] as string[]
+    };
+
+    for (let i = 0; i < itemsData.length; i++) {
+      try {
+        if (skipDuplicates && itemsData[i].sku) {
+          const { data: existing } = await supabaseAdmin
+            .from('items')
+            .select('sku')
+            .eq('sku', itemsData[i].sku)
+            .single();
+
+          if (existing) {
+            results.duplicates.push(itemsData[i].sku);
+            continue;
+          }
+        }
+
+        const created = await this.createItem(itemsData[i]);
+        results.successful.push(created);
+      } catch (error: any) {
+        results.failed.push({
+          row: i + 2,
+          sku: itemsData[i].sku || 'N/A',
+          error: error.message
+        });
+      }
+    }
+
+    return results;
+  }
+
+  /**
+   * Bulk update items
+   */
+  async bulkUpdateItems(itemsData: any[]) {
+    const results = {
+      successful: [] as any[],
+      failed: [] as { row: number; sku: string; error: string }[],
+      notFound: [] as string[]
+    };
+
+    for (let i = 0; i < itemsData.length; i++) {
+      try {
+        const { data: existing } = await supabaseAdmin
+          .from('items')
+          .select('id')
+          .eq('sku', itemsData[i].sku)
+          .single();
+
+        if (!existing) {
+          results.notFound.push(itemsData[i].sku);
+          continue;
+        }
+
+        const updated = await this.updateItem(existing.id, itemsData[i]);
+        results.successful.push(updated);
+      } catch (error: any) {
+        results.failed.push({
+          row: i + 2,
+          sku: itemsData[i].sku || 'N/A',
+          error: error.message
+        });
+      }
+    }
+
+    return results;
+  }
+
+  /**
+   * Export items
+   */
+  async exportItems(filters?: { includeInactive?: boolean; itemIds?: string[] }) {
+    let query = supabaseAdmin
+      .from('items')
+      .select('*')
+      .order('item_name', { ascending: true });
+
+    if (!filters?.includeInactive) {
+      query = query.eq('is_active', true);
+    }
+
+    if (filters?.itemIds && filters.itemIds.length > 0) {
+      query = query.in('id', filters.itemIds);
+    }
+
+    const { data, error } = await query;
+    if (error) throw error;
+    return data;
+  }
 }

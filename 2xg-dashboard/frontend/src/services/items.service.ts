@@ -69,6 +69,19 @@ export interface ItemsSummary {
   currency: string;
 }
 
+export interface ImportResult {
+  successful: Item[];
+  failed: { row: number; sku: string; error: string }[];
+  duplicates: string[];
+}
+
+export interface ValidationResult {
+  valid: boolean;
+  errors: { row: number; field: string; message: string }[];
+  warnings: { row: number; field: string; message: string }[];
+  totalRows: number;
+}
+
 export const itemsService = {
   getAllItems: (filters?: {
     category?: string;
@@ -96,5 +109,27 @@ export const itemsService = {
     apiClient.get('/items/summary'),
 
   getTopSellingItems: (limit?: number): AxiosPromise<APIResponse<any[]>> =>
-    apiClient.get('/items/top-selling', { params: { limit } })
+    apiClient.get('/items/top-selling', { params: { limit } }),
+
+  // Import/Export operations
+  importItems: (
+    items: any[],
+    mode: 'create' | 'update' | 'upsert' = 'create'
+  ): AxiosPromise<APIResponse<ImportResult>> =>
+    apiClient.post('/items/import', { items, mode }),
+
+  validateImportData: (items: any[]): AxiosPromise<APIResponse<ValidationResult>> =>
+    apiClient.post('/items/import/validate', { items }),
+
+  importFromGoogleSheets: (
+    sheetUrl: string,
+    mode: 'create' | 'update' | 'upsert' = 'create'
+  ): AxiosPromise<APIResponse<ImportResult>> =>
+    apiClient.post('/items/import/google-sheets', { sheetUrl, mode }),
+
+  exportItems: (filters?: {
+    includeInactive?: boolean;
+    itemIds?: string[];
+  }): AxiosPromise<APIResponse<Item[]>> =>
+    apiClient.get('/items/export', { params: filters }),
 };
