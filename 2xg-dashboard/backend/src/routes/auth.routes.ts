@@ -127,18 +127,10 @@ router.post('/register', async (req: Request, res: Response) => {
     const saltRounds = 10;
     const passwordHash = await bcrypt.hash(password, saltRounds);
 
-    // Validate role against database constraints
-    const validRoles = ['Admin', 'Manager', 'Staff', 'Viewer'];
+    // Use provided role or default to 'Staff'
     const userRole = role || 'Staff';
 
-    if (!validRoles.includes(userRole)) {
-      return res.status(400).json({
-        success: false,
-        error: `Invalid role. Must be one of: ${validRoles.join(', ')}`
-      });
-    }
-
-    // Create user
+    // Create user (role validation will be done by database constraint)
     const { data: newUser, error: createError } = await supabaseAdmin
       .from('users')
       .insert({
