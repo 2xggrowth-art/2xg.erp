@@ -463,4 +463,100 @@ export class InvoicesService {
       throw error;
     }
   }
+
+  /**
+   * Bulk import invoices
+   */
+  async importInvoices(invoices: any[], mode: string = 'create') {
+    const results = {
+      success: [] as any[],
+      failed: [] as any[],
+      duplicates: [] as any[],
+      updated: [] as any[]
+    };
+
+    // Get organization_id
+    const { data: org } = await supabase
+      .from('organizations')
+      .select('id')
+      .limit(1)
+      .single();
+
+    const organizationId = org?.id || '00000000-0000-0000-0000-000000000000';
+
+    for (const invoiceData of invoices) {
+      try {
+        // Check for duplicates
+        const { data: existing } = await supabase
+          .from('invoices')
+          .select('id, invoice_number')
+          .eq('invoice_number', invoiceData.invoice_number)
+          .single();
+
+        if (existing) {
+          if (mode === 'create') {
+            results.duplicates.push({
+              invoice_number: invoiceData.invoice_number,
+              reason: 'Invoice number already exists'
+            });
+            continue;
+          } else if (mode === 'update' || mode === 'upsert') {
+            // Update existing invoice
+            const { error } = await supabase
+              .from('invoices')
+              .update({
+                ...invoiceData,
+                organization_id: organizationId,
+                updated_at: new Date().toISOString()
+              })
+              .eq('id', existing.id);
+
+            if (error) {
+              results.failed.push({
+                invoice_number: invoiceData.invoice_number,
+                reason: error.message
+              });
+            } else {
+              results.updated.push({
+                invoice_number: invoiceData.invoice_number,
+                id: existing.id
+              });
+            }
+            continue;
+          }
+        }
+
+        // Create new invoice
+        if (mode === 'create' || mode === 'upsert') {
+          const { data: newInvoice, error } = await supabase
+            .from('invoices')
+            .insert({
+              ...invoiceData,
+              organization_id: organizationId
+            })
+            .select()
+            .single();
+
+          if (error) {
+            results.failed.push({
+              invoice_number: invoiceData.invoice_number,
+              reason: error.message
+            });
+          } else {
+            results.success.push({
+              invoice_number: invoiceData.invoice_number,
+              id: newInvoice.id
+            });
+          }
+        }
+      } catch (error: any) {
+        results.failed.push({
+          invoice_number: invoiceData.invoice_number || 'Unknown',
+          reason: error.message
+        });
+      }
+    }
+
+    return results;
+  }
 }

@@ -188,6 +188,22 @@ class InvoicesService {
       };
     }
   }
+
+  async importInvoices(invoices: any[], importMode: string = 'create') {
+    try {
+      const response = await apiClient.post('/invoices/import', {
+        invoices,
+        import_mode: importMode
+      });
+      return {
+        success: true,
+        data: response.data
+      };
+    } catch (error: any) {
+      console.error('Error importing invoices:', error);
+      throw error;
+    }
+  }
 }
 
 export const invoicesService = new InvoicesService();

@@ -33,24 +33,10 @@ export class DeliveryChallansController {
     try {
       console.log('Creating delivery challan with data:', JSON.stringify(req.body, null, 2));
 
-      if (!req.body.customer_name || req.body.customer_name.trim() === '') {
+      if (!req.body.invoice_number || req.body.invoice_number.trim() === '') {
         return res.status(400).json({
           success: false,
-          error: 'Customer name is required'
-        });
-      }
-
-      if (!req.body.challan_date) {
-        return res.status(400).json({
-          success: false,
-          error: 'Challan date is required'
-        });
-      }
-
-      if (!req.body.items || !Array.isArray(req.body.items) || req.body.items.length === 0) {
-        return res.status(400).json({
-          success: false,
-          error: 'At least one item is required'
+          error: 'Invoice number is required'
         });
       }
 

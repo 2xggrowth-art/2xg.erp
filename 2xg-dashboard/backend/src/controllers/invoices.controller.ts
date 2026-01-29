@@ -177,4 +177,35 @@ export class InvoicesController {
       });
     }
   };
+
+  /**
+   * Bulk import invoices
+   */
+  importInvoices = async (req: Request, res: Response) => {
+    try {
+      const { invoices, import_mode } = req.body;
+
+      if (!invoices || !Array.isArray(invoices) || invoices.length === 0) {
+        return res.status(400).json({
+          success: false,
+          error: 'Invalid import data. Expected an array of invoices.'
+        });
+      }
+
+      const mode = import_mode || 'create'; // 'create', 'update', or 'upsert'
+
+      const result = await this.invoicesService.importInvoices(invoices, mode);
+
+      res.json({
+        success: true,
+        data: result
+      });
+    } catch (error: any) {
+      console.error('Error importing invoices:', error);
+      res.status(500).json({
+        success: false,
+        error: error.message
+      });
+    }
+  };
 }

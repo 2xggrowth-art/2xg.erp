@@ -7,6 +7,9 @@ const invoicesController = new InvoicesController();
 // Generate invoice number
 router.get('/generate-number', invoicesController.generateInvoiceNumber);
 
+// Bulk import
+router.post('/import', invoicesController.importInvoices);
+
 // CRUD operations
 router.post('/', invoicesController.createInvoice);
 router.get('/', invoicesController.getAllInvoices);

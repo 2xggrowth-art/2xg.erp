@@ -18,6 +18,8 @@ interface Invoice {
   payment_status?: string;
   total_amount: number;
   balance_due: number;
+  subtotal?: number;
+  tax_amount?: number;
   items?: any[];
 }
 
@@ -115,17 +117,26 @@ const InvoicesPage = () => {
   const handleBulkExport = () => {
     const selectedData = invoices.filter(invoice => selectedInvoices.includes(invoice.id));
     const csv = [
-      ['Date', 'Invoice#', 'Order#', 'Customer Name', 'Status', 'Due Date', 'Amount', 'Balance Due'].join(','),
-      ...selectedData.map(invoice => [
-        invoice.invoice_date,
-        invoice.invoice_number,
-        invoice.order_number || '',
-        invoice.customer_name,
-        invoice.status,
-        invoice.due_date || '',
-        invoice.total_amount.toString(),
-        invoice.balance_due.toString()
-      ].join(','))
+      ['Date', 'Invoice#', 'Order#', 'Customer Name', 'Status', 'Due Date', 'Taxable Value', 'GST', 'Invoice Value', 'Balance Due'].join(','),
+      ...selectedData.map(invoice => {
+        // Calculate taxable value and GST from total_amount
+        const invoiceValue = invoice.total_amount || 0;
+        const taxAmount = (invoice as any).tax_amount || (invoice as any).gst || 0;
+        const taxableValue = (invoice as any).subtotal || (invoice as any).taxable_value || (invoiceValue - taxAmount);
+
+        return [
+          invoice.invoice_date,
+          invoice.invoice_number,
+          invoice.order_number || '',
+          invoice.customer_name,
+          invoice.status,
+          invoice.due_date || '',
+          taxableValue.toFixed(2),
+          taxAmount.toFixed(2),
+          invoiceValue.toFixed(2),
+          invoice.balance_due.toFixed(2)
+        ].join(',');
+      })
     ].join('\n');
 
     const blob = new Blob([csv], { type: 'text/csv' });

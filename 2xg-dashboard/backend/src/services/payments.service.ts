@@ -22,6 +22,7 @@ export interface CreatePaymentData {
   bill_id?: string;
   bill_number?: string;
   allocations?: PaymentAllocation[];
+  status?: string;
 }
 
 export class PaymentsService {
@@ -30,28 +31,29 @@ export class PaymentsService {
    */
   async generatePaymentNumber(): Promise<string> {
     try {
-      const { data: latestPayment, error } = await supabase
+      const { data, error } = await supabase
         .from('payments_made')
         .select('payment_number')
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .single();
+        .not('payment_number', 'is', null);
 
-      if (error && error.code !== 'PGRST116') {
-        throw error;
-      }
+      if (error) throw error;
 
-      if (!latestPayment) {
+      if (!data || data.length === 0) {
         return 'PAY-0001';
       }
 
-      const match = latestPayment.payment_number.match(/PAY-(\d+)/);
-      if (match) {
-        const nextNumber = parseInt(match[1]) + 1;
-        return `PAY-${nextNumber.toString().padStart(4, '0')}`;
+      // Find the highest payment number matching PAY-XXXX format
+      let maxNum = 0;
+      for (const p of data) {
+        const match = p.payment_number.match(/^PAY-(\d+)$/);
+        if (match) {
+          const num = parseInt(match[1]);
+          if (num > maxNum) maxNum = num;
+        }
       }
 
-      return 'PAY-0001';
+      const nextNum = maxNum + 1;
+      return `PAY-${nextNum.toString().padStart(4, '0')}`;
     } catch (error) {
       console.error('Error generating payment number:', error);
       throw error;
@@ -65,10 +67,23 @@ export class PaymentsService {
     try {
       const paymentNumber = await this.generatePaymentNumber();
 
+      // Get organization_id
+      const { data: org } = await supabase
+        .from('organizations')
+        .select('id')
+        .limit(1)
+        .single();
+
+      // Debug: Log the status being received
+      console.log('=== PAYMENT STATUS DEBUG ===');
+      console.log('Received status from frontend:', data.status);
+      console.log('Final status to be saved:', data.status || 'draft');
+      console.log('===========================');
+
       const { data: payment, error: paymentError } = await supabase
         .from('payments_made')
         .insert({
-          organization_id: '00000000-0000-0000-0000-000000000000',
+          organization_id: org?.id || '00000000-0000-0000-0000-000000000000',
           payment_number: paymentNumber,
           vendor_id: data.vendor_id || null,
           vendor_name: data.vendor_name,
@@ -84,7 +99,7 @@ export class PaymentsService {
           deposit_to: data.deposit_to || null,
           bill_id: data.bill_id || null,
           bill_number: data.bill_number || null,
-          status: 'completed',
+          status: data.status || 'draft',
         })
         .select()
         .single();
@@ -92,6 +107,11 @@ export class PaymentsService {
       if (paymentError) {
         throw paymentError;
       }
+
+      // Debug: Log what was actually saved in the database
+      console.log('Payment saved in database:', payment);
+      console.log('Status in database:', payment.status);
+      console.log('===========================');
 
       // Create payment allocations if provided
       if (data.allocations && data.allocations.length > 0) {
@@ -219,6 +239,7 @@ export class PaymentsService {
           deposit_to: data.deposit_to,
           bill_id: data.bill_id,
           bill_number: data.bill_number,
+          status: data.status,
         })
         .eq('id', id)
         .select()
