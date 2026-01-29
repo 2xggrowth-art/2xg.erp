@@ -1,356 +1,236 @@
-# CLAUDE.md
+# CLAUDE.md — 2XG ERP System
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+This file provides guidance to Claude Code when working with this repository.
 
 ## Repository Structure
 
-This is a monorepo containing two main projects:
+Monorepo for the 2XG ERP system. **Active code is at root level** (not inside `2xg-dashboard/`).
 
-### 1. **2xg-dashboard** (Primary - In GitHub)
-Full-stack ERP dashboard with React frontend and Express backend.
-- **Frontend**: React 18 + Vite + TypeScript + Tailwind CSS
-- **Backend**: Express + TypeScript + Supabase (PostgreSQL)
-- **Deployment**: Frontend on Vercel, Backend on Vercel Serverless
+```
+/backend/              → Express + TypeScript + Supabase (DEPLOYED by Coolify)
+/frontend/             → React 18 + Vite + TypeScript + Tailwind CSS (DEPLOYED by Coolify)
+/2xg-dashboard/        → LEGACY copy — DO NOT EDIT or deploy from here
+/api/                  → Legacy Vercel serverless entry — not used
+```
 
-### 2. **buildline-pro** (Local Only - Not in GitHub)
-Next.js cycle assembly tracking system.
-- **Framework**: Next.js 16 + React 19 + TypeScript
-- **Database**: Supabase
-- **Features**: Bulk cycle inward, technician assignment, error boundaries
+## Deployment — Self-Hosted Coolify (NOT Vercel)
+
+Production runs on an OVH server via **Coolify** (Docker-based PaaS). `vercel.json` files are legacy artifacts.
+
+| Component | URL | Coolify UUID |
+|-----------|-----|-------------|
+| Frontend  | https://erp.2xg.in | `z8wwkcgs4koc00c044skw00w` |
+| Backend   | https://api.erp.2xg.in | `ws8swsow4wg88kwkswkkc48c` |
+| Supabase  | internal Kong gateway | `joo0o40k84kw8wk0skc0o0g8` |
+| Coolify Panel | http://51.195.46.40:8000 | — |
+
+### Coolify Config
+
+**Backend**: base_directory `/backend`, Nixpacks, port 5000, `npm run build` → `npm start`
+**Frontend**: base_directory `/frontend`, Nixpacks, `npm run build` → serves `dist/`
+
+### Environment Variables
+
+Backend (Coolify):
+```
+PORT=5000  NODE_ENV=production  FRONTEND_URL=https://erp.2xg.in
+SUPABASE_URL=<kong-url>/rest/v1  SUPABASE_SERVICE_ROLE_KEY=<jwt>
+JWT_SECRET=<secret>  JWT_EXPIRES_IN=7d
+```
+
+Frontend (Coolify build-time):
+```
+VITE_API_URL=https://api.erp.2xg.in/api
+```
+
+### Self-Hosted Supabase
+
+Runs as Coolify service with Kong API Gateway, PostgREST, PostgreSQL, Studio, GoTrue (unused — app uses custom JWT auth), Realtime, Storage, etc.
+
+After DDL changes, always reload PostgREST cache:
+```sql
+NOTIFY pgrst, 'reload schema';
+```
 
 ## Development Commands
 
-### 2xg-dashboard Backend
 ```bash
-cd 2xg-dashboard/backend
+# Backend
+cd backend
+npm run dev              # Dev with nodemon
+npm run build            # Compile TypeScript
+npm start                # Run compiled JS
+npm run seed             # Seed mock data
+npm run test-connection  # Test Supabase
 
-# Development with auto-reload
-npm run dev
-
-# Build for production
-npm run build
-
-# Run production build
-npm start
-
-# Seed database with mock data (6 months)
-npm run seed
-
-# Test Supabase connection
-npm run test-connection
-```
-
-### 2xg-dashboard Frontend
-```bash
-cd 2xg-dashboard/frontend
-
-# Development server (http://localhost:3000)
-npm run dev
-
-# Build for production
-npm run build
-
-# Build with TypeScript check
-npm run build:check
-
-# Preview production build
-npm run preview
-```
-
-### buildline-pro
-```bash
-cd buildline-pro
-
-# Development server
-npm run dev
-
-# Build for production
-npm run build
-
-# Run production build
-npm start
-
-# Lint code
-npm run lint
+# Frontend
+cd frontend
+npm run dev              # Dev server (localhost:3000)
+npm run build            # Vite production build
+npm run build:check      # TypeScript + Vite build
 ```
 
 ## Architecture
 
-### 2xg-dashboard Backend Architecture
-
-**Layered Pattern**: Controllers → Services → Database
+### Backend — Routes → Controllers → Services → Supabase
 
 ```
 backend/src/
-├── server.ts              # Express app entry, middleware setup, CORS config
-├── config/
-│   └── supabase.ts        # Supabase client initialization
-├── controllers/           # HTTP request handlers
-│   ├── erp.controller.ts
-│   ├── logistics.controller.ts
-│   ├── care.controller.ts
-│   ├── crm.controller.ts
-│   ├── items.controller.ts
-│   └── [module].controller.ts
-├── services/              # Business logic layer
-│   ├── erp.service.ts
-│   ├── logistics.service.ts
-│   └── [module].service.ts
-├── routes/                # API route definitions
-│   ├── erp.routes.ts
-│   └── [module].routes.ts
-├── types/
-│   └── index.ts           # TypeScript type definitions
+├── server.ts              # Express app, CORS, route registration
+├── config/supabase.ts     # Supabase admin client (service role key)
+├── middleware/             # Auth middleware
+├── routes/                # 24 route files
+├── controllers/           # 23 controller files
+├── services/              # 25 service files
+├── types/index.ts
 └── utils/
-    ├── database-schema.sql  # Complete database schema
-    └── seedData.ts          # Mock data generation
+    ├── database-schema.sql
+    └── seedData.ts
 ```
 
-**Pattern**: Each module follows the same structure:
-1. **Routes** define endpoints and HTTP methods
-2. **Controllers** handle requests, call services, send responses
-3. **Services** contain business logic and database queries
-4. All database operations use Supabase client
+**24 API route prefixes:**
+`/api/auth`, `/api/erp`, `/api/logistics`, `/api/care`, `/api/crm`, `/api/items`, `/api/purchases`, `/api/vendors`, `/api/purchase-orders`, `/api/bills`, `/api/sales`, `/api/expenses`, `/api/tasks`, `/api/reports`, `/api/search`, `/api/ai`, `/api/payments`, `/api/vendor-credits`, `/api/transfer-orders`, `/api/invoices`, `/api/customers`, `/api/sales-orders`, `/api/payments-received`, `/api/delivery-challans`
 
-### 2xg-dashboard Frontend Architecture
-
-**Component-based with service layer**:
+### Frontend — Components → Services (axios) → Backend API
 
 ```
 frontend/src/
-├── App.tsx                # Main app with routing
+├── App.tsx                 # All routes
 ├── components/
-│   ├── layout/           # Layout components (Sidebar, Header, etc.)
-│   ├── dashboard/        # Dashboard widgets (MetricCard, etc.)
-│   ├── common/           # Shared components (DateRangeFilter, etc.)
-│   └── modules/          # Feature modules (ERPModule, LogisticsModule, etc.)
-├── contexts/
-│   └── DateFilterContext.tsx  # Global date range state
-├── services/              # API communication layer
-│   ├── api.client.ts     # Axios instance with base config
-│   ├── erp.service.ts
-│   └── [module].service.ts
-└── types/
-    └── index.ts          # TypeScript type definitions
+│   ├── auth/               # Login, user management
+│   ├── layout/             # Sidebar, Header
+│   ├── dashboard/          # MetricCard, charts
+│   ├── common/             # DateRangeFilter, shared UI
+│   ├── items/              # Inventory CRUD
+│   ├── vendors/            # Vendor management
+│   ├── invoices/           # Invoice generation
+│   ├── expenses/           # Expense management
+│   ├── bills/              # Bill management
+│   ├── purchase-orders/    # PO management
+│   ├── sales-orders/       # SO management
+│   ├── delivery-challans/  # Delivery challans
+│   ├── transfer-orders/    # Transfer orders
+│   ├── vendor-credits/     # Vendor credits
+│   ├── customers/          # Customer management
+│   ├── payments/           # Payments made
+│   ├── payments-received/  # Payments received
+│   ├── pos/                # Point of sale
+│   ├── shared/             # Shared components
+│   └── modules/            # ERP, Logistics, CARE, CRM
+├── contexts/               # Auth, DateFilter contexts
+├── hooks/
+├── pages/                  # 42 page components
+├── services/               # 21 API service files
+├── types/
+└── utils/
+    ├── csvParser.ts
+    ├── itemImportTemplate.ts
+    ├── invoiceImportTemplate.ts
+    └── pdfGenerators/
 ```
 
-**Pattern**:
-- All API calls go through service files
-- Components consume services, never call axios directly
-- Global state managed via React Context
-- Date filtering applies to all modules simultaneously
+## Authentication
 
-### buildline-pro Architecture
+Custom JWT auth (NOT Supabase Auth):
+- `POST /api/auth/login` — bcrypt compare → JWT
+- `GET /api/auth/verify` — validate JWT, return user
+- `POST /api/auth/register` — create user (admin only)
+- `POST /api/auth/change-password`
+- `GET /api/auth/users` — list all users
+- `PUT /api/auth/users/:id` — update user
+- `DELETE /api/auth/users/:id` — delete user
 
-**Next.js App Router with API Routes**:
+## CORS
 
-```
-buildline-pro/
-├── app/
-│   ├── layout.tsx        # Root layout with ErrorBoundary
-│   ├── page.tsx          # Homepage
-│   ├── supervisor/
-│   │   └── page.tsx      # Supervisor dashboard
-│   └── api/
-│       └── cycles/
-│           ├── bulk-inward/route.ts   # POST bulk cycle inward
-│           └── bulk-assign/route.ts   # POST bulk technician assignment
-├── components/
-│   ├── ErrorBoundary.tsx
-│   ├── bulk-inward/
-│   │   └── BulkInwardModal.tsx       # CSV upload + manual entry
-│   └── bulk-assign/
-│       └── BulkAssignModal.tsx       # Bulk technician assignment
-└── lib/
-    └── supabase/
-        ├── client.ts                  # Supabase browser client
-        └── database.types.ts          # Generated types
-```
+Configured in `backend/src/server.ts`. Allowed origins:
+- `http://localhost:*` (any port)
+- `https://erp.2xg.in`
+- `https://2xg-erp.vercel.app` (legacy)
+- `https://2xg-dashboard-pi.vercel.app` (legacy)
+- `process.env.FRONTEND_URL`
 
-## Critical Patterns & Conventions
+## Database Schema Quirks
 
-### CORS Configuration (2xg-dashboard)
+| Detail | Notes |
+|--------|-------|
+| `expense_categories` column | Uses `category_name` (NOT `name`) |
+| Expenses FK constraint | Named `fk_category` (NOT auto-generated) |
+| Vendors service | Queries `suppliers` table (NOT `vendors`) |
+| Items table | Has both `name` and `item_name` columns |
+| Items FK | `category_id` → `product_categories` table |
+| Vendor credits | Has `vendor_credit_items` child table |
 
-**Issue**: Vercel serverless functions need explicit CORS headers in `vercel.json`
+## API Patterns
 
-**Solution**: CORS is configured in TWO places:
-1. **Express middleware** in `backend/src/server.ts` (lines 44-69)
-2. **Vercel headers** in `backend/vercel.json` (lines 16-38)
-
-**Allowed origins** (update both files when adding new frontend domains):
-- `http://localhost:3000` (development)
-- `https://2xg-dashboard-pi.vercel.app` (production frontend)
-- `https://2xg-erp.vercel.app` (alternate domain)
-
-### Database Patterns
-
-**2xg-dashboard**:
-- Uses Supabase service role key (full access)
-- Schema in `backend/src/utils/database-schema.sql`
-- Main tables: organizations, sales_transactions, inventory_items, shipments, service_tickets, leads, customers
-
-**buildline-pro**:
-- Uses Supabase with Row Level Security (RLS)
-- Schema in `supabase/migrations/001_assembly_tracking_schema.sql`
-- 6-stage workflow: inwarded → assigned → in_progress → completed → qc_in_progress → qc_passed
-- Sales safety lock enforced at database level
-
-### Environment Variables
-
-**Backend (.env)**:
-```env
-PORT=5000
-NODE_ENV=development|production
-FRONTEND_URL=http://localhost:3000
-SUPABASE_URL=https://xxx.supabase.co
-SUPABASE_SERVICE_ROLE_KEY=eyJhbG...
-JWT_SECRET=your_jwt_secret
-```
-
-**Frontend (.env)**:
-```env
-VITE_API_URL=http://localhost:5000/api
-```
-
-**buildline-pro (.env.local)**:
-```env
-NEXT_PUBLIC_SUPABASE_URL=https://xxx.supabase.co
-NEXT_PUBLIC_SUPABASE_ANON_KEY=your_anon_key
-```
-
-## Key API Patterns
-
-### Date Range Filtering
-All ERP, Logistics, CARE, and CRM endpoints accept:
-```
-?startDate=YYYY-MM-DD&endDate=YYYY-MM-DD
-```
-
-### Response Format
-```typescript
-{
-  success: boolean
-  data?: any
-  error?: string
-  message?: string
-}
-```
-
-### Error Handling Pattern (buildline-pro)
-- All pages wrapped with `<ErrorBoundary>`
-- Network errors caught and displayed with helpful messages
-- Loading states for all async operations
-- Retry buttons on error screens
-
-## Vercel Deployment
-
-### Backend Deployment Configuration
-- **Build command**: `npm run build` (compiles TypeScript)
-- **Start command**: `npm start` (runs compiled JS)
-- **Entry point**: `api/index.js` (imports compiled `dist/server.js`)
-- **Root directory**: `2xg-dashboard/backend`
-
-### Important: Vercel Serverless Functions
-The Express app is exported for Vercel serverless in `server.ts`:
-```typescript
-export default app;  // For Vercel
-```
-
-Server only starts if not in Vercel environment:
-```typescript
-if (process.env.VERCEL !== '1') {
-  app.listen(PORT, ...);
-}
-```
-
-## Database Setup
-
-### Initial Setup (2xg-dashboard)
-1. Create Supabase project
-2. Run SQL from `backend/src/utils/database-schema.sql`
-3. Get service role key (not anon key) from Settings → API
-4. Run `npm run seed` to populate with mock data
-
-### Initial Setup (buildline-pro)
-1. Use same Supabase project or create new one
-2. Run SQL from `supabase/migrations/001_assembly_tracking_schema.sql`
-3. Get anon key from Settings → API (for browser client)
-4. Schema includes triggers, RLS policies, and functions
-
-## Module Structure (2xg-dashboard)
-
-When adding a new module:
-1. Create service: `backend/src/services/module-name.service.ts`
-2. Create controller: `backend/src/controllers/module-name.controller.ts`
-3. Create routes: `backend/src/routes/module-name.routes.ts`
-4. Register in `server.ts`: `app.use('/api/module-name', moduleRoutes)`
-5. Create frontend service: `frontend/src/services/module-name.service.ts`
-6. Create component: `frontend/src/components/modules/ModuleNameModule.tsx`
-7. Add to `App.tsx` routing
-
-## Testing
-
-**Backend Connection Test**:
-```bash
-cd 2xg-dashboard/backend
-npm run test-connection
-```
-
-**Test Specific Endpoints**:
-```bash
-# Health check
-curl http://localhost:5000/api/health
-
-# Test CORS
-curl -H "Origin: http://localhost:3000" http://localhost:5000/api/erp/sales/total
-```
-
-## Important Files & Locations
-
-### Documentation
-- `2xg-dashboard/README.md` - Complete setup guide
-- `2xg-dashboard/backend/VERCEL_CORS_FIX.md` - CORS troubleshooting
-- `buildline-pro/BULK_INWARD_GUIDE.md` - Bulk operations guide
-- `buildline-pro/ERROR_HANDLING_ADDED.md` - Error handling details
-- `buildline-pro/IMPLEMENTATION_SUMMARY.md` - Feature overview
-
-### Configuration Files
-- `2xg-dashboard/backend/vercel.json` - Vercel serverless config + CORS headers
-- `2xg-dashboard/frontend/tailwind.config.js` - Tailwind customization
-- `2xg-dashboard/frontend/vite.config.ts` - Vite build config
-
-### Database Schemas
-- `2xg-dashboard/backend/src/utils/database-schema.sql` - Main ERP schema
-- `buildline-pro/supabase/migrations/001_assembly_tracking_schema.sql` - Assembly tracking schema
-
-## Monorepo Navigation
-
-```bash
-# Always work from project root
-cd /e/2xg
-
-# Navigate to specific project
-cd 2xg-dashboard/backend    # Express API
-cd 2xg-dashboard/frontend   # React app
-cd buildline-pro            # Next.js app
-
-# Common mistake: Running commands from wrong directory
-# ❌ Don't: cd 2xg-dashboard && npm run dev
-# ✅ Do:    cd 2xg-dashboard/backend && npm run dev
-```
+**Date filtering**: `?startDate=YYYY-MM-DD&endDate=YYYY-MM-DD`
+**Response format**: `{ success: boolean, data?: any, error?: string, message?: string }`
 
 ## Git Workflow
 
 - **Main branch**: `main`
-- **Remote**: https://github.com/Zaheer7779/2xg.ERP.git
-- **Included in GitHub**: `2xg-dashboard/` only
-- **Local only**: `buildline-pro/`, `Buildline/`, `Buildline-temp/`, `lead-CRM/`
+- **Remote**: https://github.com/2xggrowth-art/2xg.erp.git
+- **Auto-deploy**: Coolify watches `main` and auto-deploys on push
 
-When committing:
+## Developer Rules
+
+### 1. NEVER change directory structure without updating Coolify
+Coolify deploys from `/backend` and `/frontend` at root. Moving these breaks deployment silently.
+
+### 2. NEVER edit files in `/2xg-dashboard/`
+This is the legacy directory. All work must happen in root `/backend/` and `/frontend/`. Changes to `2xg-dashboard/` will NOT be deployed.
+
+### 3. NEVER hardcode API URLs
+Use `VITE_API_URL` (frontend) and `SUPABASE_URL` / `FRONTEND_URL` (backend) env vars.
+
+### 4. VITE_ env vars require REBUILD
+`VITE_*` variables are baked into the JS bundle at build time. Changing in Coolify needs a rebuild, not restart.
+
+### 5. Keep schema and service code in sync
+Column names in service files must match database. After DDL changes run `NOTIFY pgrst, 'reload schema'`.
+
+### 6. PostgREST FK hints must match constraint names
+If code uses `expense_categories!fk_category`, the DB constraint must be named `fk_category`.
+
+## PR Review Checklist
+
+Before merging:
+- [ ] All changes are in root `/backend/` and `/frontend/` (NOT `2xg-dashboard/`)
+- [ ] No hardcoded URLs — uses env vars
+- [ ] CORS origins updated if new domains added (in `server.ts`)
+- [ ] Database migrations included if schema changes
+- [ ] PostgREST FK hints match DB constraint names
+- [ ] New env vars documented
+- [ ] No secrets committed
+- [ ] `cd backend && npm run build` succeeds
+- [ ] `cd frontend && npm run build` succeeds
+- [ ] Service file column names match DB columns
+
+## Adding a New Module
+
+1. `backend/src/services/module.service.ts`
+2. `backend/src/controllers/module.controller.ts`
+3. `backend/src/routes/module.routes.ts`
+4. Register in `server.ts`: `app.use('/api/module', moduleRoutes)`
+5. `frontend/src/services/module.service.ts`
+6. `frontend/src/components/module/`
+7. Add route in `App.tsx`
+
+## Testing
+
 ```bash
-# Only add 2xg-dashboard changes
-git add 2xg-dashboard/
-
-# Don't accidentally add buildline-pro
-git status  # Verify before committing
+curl https://api.erp.2xg.in/api/health                              # Health check
+curl -H "Origin: https://erp.2xg.in" https://api.erp.2xg.in/api/health  # CORS test
+cd backend && npm run test-connection                                 # Supabase test
 ```
+
+## Key Files
+
+| File | Purpose |
+|------|---------|
+| `backend/src/server.ts` | Express entry, CORS, route registration |
+| `backend/src/config/supabase.ts` | Supabase admin client |
+| `backend/src/routes/auth.routes.ts` | All auth endpoints |
+| `backend/COMPLETE_SCHEMA_FIXED.sql` | Full DB schema for fresh setup |
+| `frontend/.env.production` | API URL (overridden by Coolify env) |
+| `frontend/src/services/api.client.ts` | Axios base config |
+| `frontend/src/App.tsx` | All frontend routes |
