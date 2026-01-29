@@ -1,0 +1,22 @@
+{
+  "name": "2xg-dashboard",
+  "version": "1.0.0",
+  "description": "2XG Dashboard - Full Stack Application",
+  "scripts": {
+    "build": "bash build.sh",
+    "build:backend": "cd backend && npm install && npm run build",
+    "build:frontend": "cd frontend && npm install && npm run build",
+    "vercel-build": "bash build.sh",
+    "dev": "concurrently \"npm run dev --prefix backend\" \"npm run dev --prefix frontend\""
+  },
+  "keywords": [
+    "2xg",
+    "dashboard",
+    "fullstack"
+  ],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "concurrently": "^9.2.1"
+  }
+}
