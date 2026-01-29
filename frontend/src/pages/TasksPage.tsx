@@ -3,7 +3,7 @@ import ComingSoon from '../components/common/ComingSoon';
 const TasksPage = () => {
   return (
     <ComingSoon
-      moduleName="Task Management"
+      moduleName="Workchat"
       description="Organize, assign, and track tasks and projects with powerful collaboration tools."
       features={[
         'Task creation and assignment',
