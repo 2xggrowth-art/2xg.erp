@@ -29,7 +29,8 @@ import {
   FilePlus,
   FileCheck,
   Clock,
-  Calculator // Added for the POS icon
+  Calculator, // Added for the POS icon
+  TrendingUp
 } from 'lucide-react';
 
 const Sidebar = () => {
@@ -44,6 +45,7 @@ const Sidebar = () => {
     { icon: Headphones, label: '2XG CARE', path: '/care', module: 'Tasks' },
     { icon: Receipt, label: 'Expenses', path: '/expenses', module: 'Expenses' },
     { icon: CheckSquare, label: 'Workchat', path: '/tasks', module: 'Workchat' },
+    { icon: TrendingUp, label: '2XG Earn', path: '/earn', module: 'Reports' },
     { icon: FileText, label: 'Reports', path: '/reports', module: 'Reports' },
     { icon: Search, label: 'Search', path: '/search', module: 'Reports' },
     { icon: Users, label: 'Sales Pipeline', path: '/crm', module: 'Customers' },

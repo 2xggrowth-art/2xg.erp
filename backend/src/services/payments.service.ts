@@ -22,6 +22,7 @@ export interface CreatePaymentData {
   bill_id?: string;
   bill_number?: string;
   allocations?: PaymentAllocation[];
+  status?: string;
 }
 
 export class PaymentsService {
@@ -84,7 +85,7 @@ export class PaymentsService {
           deposit_to: data.deposit_to || null,
           bill_id: data.bill_id || null,
           bill_number: data.bill_number || null,
-          status: 'completed',
+          status: data.status || 'completed',
         })
         .select()
         .single();
@@ -219,6 +220,7 @@ export class PaymentsService {
           deposit_to: data.deposit_to,
           bill_id: data.bill_id,
           bill_number: data.bill_number,
+          status: data.status,
         })
         .eq('id', id)
         .select()

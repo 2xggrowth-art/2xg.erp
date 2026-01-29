@@ -18,6 +18,8 @@ interface Invoice {
   payment_status?: string;
   total_amount: number;
   balance_due: number;
+  subtotal?: number;
+  tax_amount?: number;
   items?: any[];
 }
 

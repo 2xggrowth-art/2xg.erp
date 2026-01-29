@@ -47,6 +47,7 @@ export interface CreatePaymentData {
   bill_id?: string;
   bill_number?: string;
   allocations?: PaymentAllocation[];
+  status?: string;
 }
 
 interface APIResponse<T> {
