@@ -53,6 +53,7 @@ app.use(cors({
       'http://localhost:3003',
       'https://2xg-erp.vercel.app',
       'https://2xg-dashboard-pi.vercel.app',
+      'https://erp.2xg.in',
       process.env.FRONTEND_URL
     ];
 
