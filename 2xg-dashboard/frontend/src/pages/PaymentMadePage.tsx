@@ -55,6 +55,8 @@ const PaymentMadePage: React.FC = () => {
     switch (status) {
       case 'completed':
         return 'bg-green-100 text-green-800';
+      case 'draft':
+        return 'bg-gray-100 text-gray-800';
       case 'pending':
         return 'bg-yellow-100 text-yellow-800';
       case 'failed':
@@ -63,6 +65,17 @@ const PaymentMadePage: React.FC = () => {
         return 'bg-gray-100 text-gray-800';
       default:
         return 'bg-blue-100 text-blue-800';
+    }
+  };
+
+  const getStatusLabel = (status: string) => {
+    switch (status) {
+      case 'completed':
+        return 'Paid';
+      case 'draft':
+        return 'Draft';
+      default:
+        return status.charAt(0).toUpperCase() + status.slice(1);
     }
   };
 
@@ -196,7 +209,8 @@ const PaymentMadePage: React.FC = () => {
             className="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
           >
             <option value="all">All Status</option>
-            <option value="completed">Completed</option>
+            <option value="completed">Paid</option>
+            <option value="draft">Draft</option>
             <option value="pending">Pending</option>
             <option value="failed">Failed</option>
             <option value="cancelled">Cancelled</option>
@@ -305,7 +319,7 @@ const PaymentMadePage: React.FC = () => {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${getStatusColor(payment.status)}`}>
-                        {payment.status}
+                        {getStatusLabel(payment.status)}
                       </span>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">

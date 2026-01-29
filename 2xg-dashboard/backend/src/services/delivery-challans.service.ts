@@ -85,14 +85,6 @@ export class DeliveryChallansService {
         throw new Error('Customer name is required');
       }
 
-      if (!data.challan_date) {
-        throw new Error('Challan date is required');
-      }
-
-      if (!data.items || data.items.length === 0) {
-        throw new Error('At least one item is required');
-      }
-
       const { items, ...challanData } = data;
       const defaultOrgId = '00000000-0000-0000-0000-000000000001';
 
