@@ -95,12 +95,24 @@ async function seedDatabase() {
     const categoryData = [];
 
     for (const name of categories) {
-      const { data } = await supabaseAdmin
+      // Check if category already exists
+      const { data: existing } = await supabaseAdmin
         .from('product_categories')
-        .upsert({ organization_id: org.id, name }, { onConflict: 'organization_id,name' })
-        .select()
+        .select('*')
+        .eq('organization_id', org.id)
+        .eq('name', name)
         .single();
-      if (data) categoryData.push(data);
+
+      if (existing) {
+        categoryData.push(existing);
+      } else {
+        const { data } = await supabaseAdmin
+          .from('product_categories')
+          .insert({ organization_id: org.id, name })
+          .select()
+          .single();
+        if (data) categoryData.push(data);
+      }
     }
     console.log(`✅ Created ${categoryData.length} categories`);
 

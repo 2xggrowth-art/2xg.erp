@@ -34,7 +34,8 @@ Production runs on an OVH server via **Coolify** (Docker-based PaaS). `vercel.js
 Backend (Coolify):
 ```
 PORT=5000  NODE_ENV=production  FRONTEND_URL=https://erp.2xg.in
-SUPABASE_URL=<kong-url>/rest/v1  SUPABASE_SERVICE_ROLE_KEY=<jwt>
+SUPABASE_URL=<kong-url>            # Base URL only — NO /rest/v1 suffix (Supabase JS client adds it)
+SUPABASE_SERVICE_ROLE_KEY=<jwt>
 JWT_SECRET=<secret>  JWT_EXPIRES_IN=7d
 ```
 
@@ -149,16 +150,90 @@ Configured in `backend/src/server.ts`. Allowed origins:
 - `https://2xg-dashboard-pi.vercel.app` (legacy)
 - `process.env.FRONTEND_URL`
 
-## Database Schema Quirks
+## Database Schema — Actual Column Names (Verified Jan 2026)
 
+> **CRITICAL**: The schema file `COMPLETE_SCHEMA_FIXED.sql` is OUTDATED. The actual deployed
+> database has extra columns added via migrations. Always verify against PostgREST before
+> adding new queries. Never trust the .sql file alone.
+
+### `items` table
+| Column | Type | Notes |
+|--------|------|-------|
+| `name` | TEXT NOT NULL | Original column — **REQUIRED** |
+| `item_name` | TEXT | Added later — backend service uses THIS for display |
+| `sku` | TEXT UNIQUE | |
+| `unit_price` | DECIMAL | Backend uses this (not `selling_price`) |
+| `selling_price` | DECIMAL | Original schema column |
+| `cost_price` | DECIMAL | |
+| `current_stock` | INTEGER | Added later — backend uses this |
+| `opening_stock` | INTEGER | Original schema column |
+| `reorder_point` | INTEGER | |
+| `unit_of_measurement` | TEXT | Added later — backend uses this (not `unit`) |
+| `is_active` | BOOLEAN | Added later |
+| `category_id` | UUID | FK → `product_categories` |
+| **NO** `organization_id` | — | This table has NO org column |
+| **NO** `tax_rate` | — | Not in table |
+
+### `suppliers` table (queried by vendors service)
+| Column | Type | Notes |
+|--------|------|-------|
+| `supplier_name` | TEXT NOT NULL | **NOT** `name` — REQUIRED |
+| `organization_id` | UUID | |
+| `contact_person` | TEXT | |
+| `email` | TEXT | |
+| `phone` | TEXT | |
+| `city`, `state`, `country` | TEXT | Separate fields, **NOT** single `address` |
+| `payment_terms` | TEXT | Default: `Due on Receipt` |
+| `is_active` | BOOLEAN | |
+| **NO** `company_name` | — | Does not exist |
+| **NO** `name` | — | Use `supplier_name` |
+| **NO** `address` | — | Use `city`/`state`/`country` separately |
+| **NO** `status` | — | Use `is_active` boolean |
+
+### `customers` table
+| Column | Type | Notes |
+|--------|------|-------|
+| `customer_name` | TEXT NOT NULL | **NOT** `name` — REQUIRED |
+| `company_name` | TEXT | |
+| `email` | TEXT | |
+| `phone` | TEXT | |
+| `billing_address` | TEXT | **NOT** `address` |
+| `shipping_address` | TEXT | |
+| `gstin`, `pan` | TEXT | Indian tax IDs |
+| `payment_terms` | TEXT | Default: `Net 30` |
+| **NO** `name` | — | Use `customer_name` |
+| **NO** `address` | — | Use `billing_address` |
+| **NO** `organization_id` | — | Not in table |
+| **NO** `status` | — | Not in table |
+
+### `expense_categories` table
+| Column | Type | Notes |
+|--------|------|-------|
+| `category_name` | TEXT NOT NULL | **NOT** `name` — has UNIQUE constraint |
+| `description` | TEXT | |
+| **NO** `organization_id` | — | Not in table |
+
+### `expenses` table
+| Column | Type | Notes |
+|--------|------|-------|
+| `expense_number` | TEXT NOT NULL | **REQUIRED** |
+| `expense_date` | DATE NOT NULL | **REQUIRED** |
+| `amount` | DECIMAL NOT NULL | **REQUIRED** |
+| `total_amount` | DECIMAL NOT NULL | **REQUIRED** |
+| `category_id` | UUID | FK → `expense_categories` |
+| `category_name` | TEXT | Denormalized |
+| `status` | TEXT | Default: `pending` |
+| `organization_id` | UUID | |
+| `vendor_id`, `vendor_name` | — | Optional vendor link |
+| `payment_method` | TEXT | |
+
+### Other schema quirks
 | Detail | Notes |
 |--------|-------|
-| `expense_categories` column | Uses `category_name` (NOT `name`) |
 | Expenses FK constraint | Named `fk_category` (NOT auto-generated) |
-| Vendors service | Queries `suppliers` table (NOT `vendors`) |
-| Items table | Has both `name` and `item_name` columns |
-| Items FK | `category_id` → `product_categories` table |
 | Vendor credits | Has `vendor_credit_items` child table |
+| `product_categories` | Has `organization_id` column |
+| `sales_transactions` | Has `organization_id` column |
 
 ## API Patterns
 
@@ -172,6 +247,8 @@ Configured in `backend/src/server.ts`. Allowed origins:
 - **Auto-deploy**: Coolify watches `main` and auto-deploys on push
 
 ## Developer Rules
+
+> **These rules are NON-NEGOTIABLE. Violating them will break production.**
 
 ### 1. NEVER change directory structure without updating Coolify
 Coolify deploys from `/backend` and `/frontend` at root. Moving these breaks deployment silently.
@@ -190,6 +267,56 @@ Column names in service files must match database. After DDL changes run `NOTIFY
 
 ### 6. PostgREST FK hints must match constraint names
 If code uses `expense_categories!fk_category`, the DB constraint must be named `fk_category`.
+
+### 7. NEVER rename or remove database columns without a migration plan
+Existing columns are referenced by deployed backend services. Renaming a column (e.g. `supplier_name` → `name`) will immediately break the production API. If a column needs renaming:
+1. Add the new column
+2. Update all backend services to use the new column
+3. Migrate data
+4. Deploy and verify
+5. Only then drop the old column
+
+### 8. NEVER change the authentication system
+Auth uses custom JWT (NOT Supabase Auth). Do not:
+- Switch to Supabase GoTrue
+- Change the JWT signing algorithm or secret
+- Modify the `users` table `password_hash` column format
+- Remove bcrypt password hashing
+
+### 9. NEVER change the Supabase client configuration
+The Supabase client in `backend/src/config/supabase.ts` uses the **service role key** (bypasses RLS). Do not:
+- Switch to anon key (will break all queries behind RLS)
+- Add RLS policies without updating the client
+- Change the `global.headers.Prefer` setting (breaks return=representation)
+
+### 10. NEVER modify CORS without testing
+CORS in `backend/src/server.ts` controls which domains can call the API. Do not:
+- Remove `https://erp.2xg.in` from allowed origins
+- Change the CORS middleware to `origin: '*'` in production
+- Remove the `credentials: true` setting
+
+### 11. NEVER delete or restructure existing API routes
+All 24 API route prefixes are consumed by the deployed frontend. Renaming `/api/items` to `/api/inventory` will break the frontend immediately. Add new routes alongside existing ones if needed.
+
+### 12. NEVER push directly to main without building first
+`main` branch auto-deploys via Coolify. Always verify before pushing:
+```bash
+cd backend && npm run build
+cd frontend && npm run build
+```
+If either build fails, the deploy will fail and production goes down.
+
+### 13. NEVER commit secrets or credentials
+Files like `.env`, `.github_token`, service role keys, JWT secrets must stay in `.gitignore`. Check `git status` before committing.
+
+### 14. NEVER change the database column names that services depend on
+These column-to-table mappings are sacred — changing them breaks the API:
+- `items.item_name` — used by items service for display
+- `items.current_stock` / `items.unit_price` — used by items service
+- `suppliers.supplier_name` — used by vendors service
+- `customers.customer_name` — used by customers service
+- `expense_categories.category_name` — used by expenses service
+- `expenses.expense_number` / `expenses.total_amount` — required fields
 
 ## PR Review Checklist
 
