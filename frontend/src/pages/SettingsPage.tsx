@@ -35,7 +35,7 @@ const SettingsPage = () => {
 
   // Available modules for permission management
   const availableModules = [
-    'Items', 'Purchase', 'Sales', 'Logistics', 'Expenses', 'Tasks', 'Reports', 'Customers', 'Vendors'
+    'Items', 'Purchase', 'Sales', 'Logistics', 'Expenses', 'Workchat', 'Reports', 'Customers', 'Vendors'
   ];
 
   const [roles, setRoles] = useState<Role[]>([]);
@@ -112,9 +112,9 @@ const SettingsPage = () => {
           isSystem: true,
           permissions: availableModules.map(module => ({
             module,
-            create: module === 'Tasks' || module === 'Expenses',
+            create: module === 'Workchat' || module === 'Expenses',
             read: true,
-            update: module === 'Tasks' || module === 'Expenses',
+            update: module === 'Workchat' || module === 'Expenses',
             delete: false
           }))
         },
@@ -354,11 +354,10 @@ const SettingsPage = () => {
         <div className="px-6 flex gap-6 border-t border-gray-200">
           <button
             onClick={() => setActiveTab('roles')}
-            className={`py-3 px-1 font-medium text-sm border-b-2 transition ${
-              activeTab === 'roles'
+            className={`py-3 px-1 font-medium text-sm border-b-2 transition ${activeTab === 'roles'
                 ? 'border-blue-600 text-blue-600'
                 : 'border-transparent text-gray-500 hover:text-gray-700'
-            }`}
+              }`}
           >
             <div className="flex items-center gap-2">
               <Shield size={18} />
@@ -367,11 +366,10 @@ const SettingsPage = () => {
           </button>
           <button
             onClick={() => setActiveTab('users')}
-            className={`py-3 px-1 font-medium text-sm border-b-2 transition ${
-              activeTab === 'users'
+            className={`py-3 px-1 font-medium text-sm border-b-2 transition ${activeTab === 'users'
                 ? 'border-blue-600 text-blue-600'
                 : 'border-transparent text-gray-500 hover:text-gray-700'
-            }`}
+              }`}
           >
             <div className="flex items-center gap-2">
               <Users size={18} />
@@ -611,11 +609,10 @@ const SettingsPage = () => {
                             </select>
                           </td>
                           <td className="px-6 py-4">
-                            <span className={`px-2 py-1 text-xs font-medium rounded-full ${
-                              user.status === 'Active'
+                            <span className={`px-2 py-1 text-xs font-medium rounded-full ${user.status === 'Active'
                                 ? 'bg-green-100 text-green-700'
                                 : 'bg-gray-100 text-gray-700'
-                            }`}>
+                              }`}>
                               {user.status}
                             </span>
                           </td>
@@ -654,20 +651,18 @@ const SettingsPage = () => {
                             {isAdmin ? (
                               <button
                                 onClick={() => handleToggleStatus(user.id)}
-                                className={`px-2 py-1 text-xs font-medium rounded-full cursor-pointer transition ${
-                                  user.status === 'Active'
+                                className={`px-2 py-1 text-xs font-medium rounded-full cursor-pointer transition ${user.status === 'Active'
                                     ? 'bg-green-100 text-green-700 hover:bg-green-200'
                                     : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                                }`}
+                                  }`}
                               >
                                 {user.status}
                               </button>
                             ) : (
-                              <span className={`px-2 py-1 text-xs font-medium rounded-full ${
-                                user.status === 'Active'
+                              <span className={`px-2 py-1 text-xs font-medium rounded-full ${user.status === 'Active'
                                   ? 'bg-green-100 text-green-700'
                                   : 'bg-gray-100 text-gray-700'
-                              }`}>
+                                }`}>
                                 {user.status}
                               </span>
                             )}

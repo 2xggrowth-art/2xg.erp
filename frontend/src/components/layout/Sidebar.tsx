@@ -43,7 +43,7 @@ const Sidebar = () => {
   const navItems = [
     { icon: Headphones, label: '2XG CARE', path: '/care', module: 'Tasks' },
     { icon: Receipt, label: 'Expenses', path: '/expenses', module: 'Expenses' },
-    { icon: CheckSquare, label: 'Tasks', path: '/tasks', module: 'Tasks' },
+    { icon: CheckSquare, label: 'Workchat', path: '/tasks', module: 'Workchat' },
     { icon: FileText, label: 'Reports', path: '/reports', module: 'Reports' },
     { icon: Search, label: 'Search', path: '/search', module: 'Reports' },
     { icon: Users, label: 'Sales Pipeline', path: '/crm', module: 'Customers' },
@@ -62,11 +62,10 @@ const Sidebar = () => {
           <div>
             <button
               onClick={() => setIsItemsOpen(!isItemsOpen)}
-              className={`w-full flex items-center justify-between px-6 py-3 transition-colors border-l-4 ${
-                location.pathname.startsWith('/items')
-                  ? 'bg-slate-700 border-blue-500 text-white'
-                  : 'border-transparent hover:bg-slate-700 hover:border-blue-500'
-              }`}
+              className={`w-full flex items-center justify-between px-6 py-3 transition-colors border-l-4 ${location.pathname.startsWith('/items')
+                ? 'bg-slate-700 border-blue-500 text-white'
+                : 'border-transparent hover:bg-slate-700 hover:border-blue-500'
+                }`}
             >
               <div className="flex items-center gap-3">
                 <Box size={20} />
@@ -116,11 +115,10 @@ const Sidebar = () => {
           <div>
             <button
               onClick={() => setIsPurchaseOpen(!isPurchaseOpen)}
-              className={`w-full flex items-center justify-between px-6 py-3 transition-colors border-l-4 ${
-                location.pathname.startsWith('/purchases')
-                  ? 'bg-slate-700 border-blue-500 text-white'
-                  : 'border-transparent hover:bg-slate-700 hover:border-blue-500'
-              }`}
+              className={`w-full flex items-center justify-between px-6 py-3 transition-colors border-l-4 ${location.pathname.startsWith('/purchases')
+                ? 'bg-slate-700 border-blue-500 text-white'
+                : 'border-transparent hover:bg-slate-700 hover:border-blue-500'
+                }`}
             >
               <div className="flex items-center gap-3">
                 <ShoppingCart size={20} />
@@ -184,11 +182,10 @@ const Sidebar = () => {
           <div>
             <button
               onClick={() => setIsSalesOpen(!isSalesOpen)}
-              className={`w-full flex items-center justify-between px-6 py-3 transition-colors border-l-4 ${
-                location.pathname.startsWith('/sales')
-                  ? 'bg-slate-700 border-blue-500 text-white'
-                  : 'border-transparent hover:bg-slate-700 hover:border-blue-500'
-              }`}
+              className={`w-full flex items-center justify-between px-6 py-3 transition-colors border-l-4 ${location.pathname.startsWith('/sales')
+                ? 'bg-slate-700 border-blue-500 text-white'
+                : 'border-transparent hover:bg-slate-700 hover:border-blue-500'
+                }`}
             >
               <div className="flex items-center gap-3">
                 <DollarSign size={20} />
@@ -203,9 +200,8 @@ const Sidebar = () => {
                 {/* POS Link Added Below */}
                 <Link
                   to="/sales/pos"
-                  className={`flex items-center gap-3 px-6 py-2 pl-12 hover:bg-slate-700 transition-colors text-sm ${
-                    location.pathname === '/sales/pos' ? 'text-white' : 'text-slate-300'
-                  } hover:text-white`}
+                  className={`flex items-center gap-3 px-6 py-2 pl-12 hover:bg-slate-700 transition-colors text-sm ${location.pathname === '/sales/pos' ? 'text-white' : 'text-slate-300'
+                    } hover:text-white`}
                 >
                   <Calculator size={16} />
                   <span>POS</span>
@@ -248,11 +244,10 @@ const Sidebar = () => {
           <div>
             <button
               onClick={() => setIsLogisticsOpen(!isLogisticsOpen)}
-              className={`w-full flex items-center justify-between px-6 py-3 transition-colors border-l-4 ${
-                location.pathname.startsWith('/logistics')
-                  ? 'bg-slate-700 border-blue-500 text-white'
-                  : 'border-transparent hover:bg-slate-700 hover:border-blue-500'
-              }`}
+              className={`w-full flex items-center justify-between px-6 py-3 transition-colors border-l-4 ${location.pathname.startsWith('/logistics')
+                ? 'bg-slate-700 border-blue-500 text-white'
+                : 'border-transparent hover:bg-slate-700 hover:border-blue-500'
+                }`}
             >
               <div className="flex items-center gap-3">
                 <Truck size={20} />
@@ -300,11 +295,10 @@ const Sidebar = () => {
             <Link
               key={item.path}
               to={item.path}
-              className={`flex items-center gap-3 px-6 py-3 transition-colors border-l-4 ${
-                isActive
-                  ? 'bg-slate-700 border-blue-500 text-white'
-                  : 'border-transparent hover:bg-slate-700 hover:border-blue-500'
-              }`}
+              className={`flex items-center gap-3 px-6 py-3 transition-colors border-l-4 ${isActive
+                ? 'bg-slate-700 border-blue-500 text-white'
+                : 'border-transparent hover:bg-slate-700 hover:border-blue-500'
+                }`}
             >
               <item.icon size={20} />
               <span className="font-medium">{item.label}</span>
