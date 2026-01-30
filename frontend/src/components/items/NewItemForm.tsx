@@ -1,8 +1,12 @@
 import { useState, useEffect } from 'react';
-import { ArrowLeft, Package, Save } from 'lucide-react';
+import { ArrowLeft, Package, Save, Upload } from 'lucide-react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { itemsService } from '../../services/items.service';
 import { vendorsService, Vendor } from '../../services/vendors.service';
+import { brandsService, Brand } from '../../services/brands.service';
+import { manufacturersService, Manufacturer } from '../../services/manufacturers.service';
+import CreatableSelect from '../shared/CreatableSelect';
+import BrandManufacturerUploadModal from './BrandManufacturerUploadModal';
 
 const NewItemForm = () => {
   const navigate = useNavigate();
@@ -11,6 +15,12 @@ const NewItemForm = () => {
   const [loading, setLoading] = useState(false);
   const [fetching, setFetching] = useState(false);
   const [vendors, setVendors] = useState<Vendor[]>([]);
+
+  // Brands & Manufacturers State
+  const [brands, setBrands] = useState<Brand[]>([]);
+  const [manufacturers, setManufacturers] = useState<Manufacturer[]>([]);
+  const [showUploadModal, setShowUploadModal] = useState(false);
+
   const [formData, setFormData] = useState({
     type: 'goods',
     name: '',
@@ -51,7 +61,9 @@ const NewItemForm = () => {
 
   useEffect(() => {
     fetchVendors();
-    fetchItems(); // Fetch items for SKU validation and last SKU
+    fetchItems();
+    fetchBrands();
+    fetchManufacturers();
     if (isEditMode && id) {
       fetchItemDetails(id);
     }
@@ -86,6 +98,82 @@ const NewItemForm = () => {
       }
     } catch (error) {
       console.error('Error fetching vendors:', error);
+    }
+  };
+
+  const fetchBrands = async () => {
+    try {
+      const response = await brandsService.getAllBrands();
+      if (response.data.success) {
+        setBrands(response.data.data);
+      }
+    } catch (error) {
+      console.error('Error fetching brands:', error);
+    }
+  };
+
+  const fetchManufacturers = async () => {
+    try {
+      const response = await manufacturersService.getAllManufacturers();
+      if (response.data.success) {
+        setManufacturers(response.data.data);
+      }
+    } catch (error) {
+      console.error('Error fetching manufacturers:', error);
+    }
+  };
+
+  const handleCreateBrand = async (name: string) => {
+    try {
+      const response = await brandsService.createBrand({ name });
+      if (response.data.success) {
+        setBrands([...brands, response.data.data]);
+        setFormData(prev => ({ ...prev, brand: name }));
+      }
+    } catch (error) {
+      console.error('Error creating brand:', error);
+      alert('Failed to create brand');
+    }
+  };
+
+  const handleCreateManufacturer = async (name: string) => {
+    try {
+      const response = await manufacturersService.createManufacturer({ name });
+      if (response.data.success) {
+        setManufacturers([...manufacturers, response.data.data]);
+        setFormData(prev => ({ ...prev, manufacturer: name }));
+      }
+    } catch (error) {
+      console.error('Error creating manufacturer:', error);
+      alert('Failed to create manufacturer');
+    }
+  };
+
+  const handleUploadComplete = async (data: { brands: any[], manufacturers: any[] }) => {
+    try {
+      let brandsCreated = 0;
+      let manufacturersCreated = 0;
+
+      if (data.brands && data.brands.length > 0) {
+        const response = await brandsService.bulkCreateBrands(data.brands);
+        if (response.data.success) {
+          fetchBrands();
+          brandsCreated = data.brands.length;
+        }
+      }
+
+      if (data.manufacturers && data.manufacturers.length > 0) {
+        const response = await manufacturersService.bulkCreateManufacturers(data.manufacturers);
+        if (response.data.success) {
+          fetchManufacturers();
+          manufacturersCreated = data.manufacturers.length;
+        }
+      }
+
+      return { brands: brandsCreated, manufacturers: manufacturersCreated };
+    } catch (error) {
+      console.error('Bulk create failed', error);
+      throw error;
     }
   };
 
@@ -476,25 +564,38 @@ const NewItemForm = () => {
             <label className="text-sm font-medium text-gray-700">
               Manufacturer
             </label>
-            <div className="col-span-3 grid grid-cols-2 gap-6">
-              <input
-                type="text"
-                name="manufacturer"
-                value={formData.manufacturer}
-                onChange={handleInputChange}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                placeholder="Enter manufacturer"
-              />
-              <div>
-                <label className="text-sm font-medium text-gray-700 block mb-2">Brand</label>
-                <input
-                  type="text"
-                  name="brand"
-                  value={formData.brand}
-                  onChange={handleInputChange}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  placeholder="Enter brand"
-                />
+            <div className="col-span-3">
+              <div className="flex justify-end mb-2">
+                <button
+                  type="button"
+                  onClick={() => setShowUploadModal(true)}
+                  className="text-sm text-blue-600 hover:text-blue-800 flex items-center gap-1"
+                >
+                  <Upload className="w-4 h-4" />
+                  Import from Excel
+                </button>
+              </div>
+              <div className="grid grid-cols-2 gap-6">
+                <div>
+                  <CreatableSelect
+                    options={manufacturers.map(m => ({ id: m.id, name: m.name }))}
+                    value={formData.manufacturer}
+                    onChange={(val) => setFormData(prev => ({ ...prev, manufacturer: val }))}
+                    onCreateOption={handleCreateManufacturer}
+                    placeholder="Select or add manufacturer"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-sm font-medium text-gray-700 block mb-2">Brand</label>
+                  <CreatableSelect
+                    options={brands.map(b => ({ id: b.id, name: b.name }))}
+                    value={formData.brand}
+                    onChange={(val) => setFormData(prev => ({ ...prev, brand: val }))}
+                    onCreateOption={handleCreateBrand}
+                    placeholder="Select or add brand"
+                  />
+                </div>
               </div>
             </div>
           </div>
@@ -836,6 +937,12 @@ const NewItemForm = () => {
 
         </form>
       </div>
+      {showUploadModal && (
+        <BrandManufacturerUploadModal
+          onClose={() => setShowUploadModal(false)}
+          onUpload={handleUploadComplete}
+        />
+      )}
     </div>
   );
 };
