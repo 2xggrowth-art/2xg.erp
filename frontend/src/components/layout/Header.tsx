@@ -1,9 +1,13 @@
-import { Search, Bell, Settings, LogOut, ChevronDown } from 'lucide-react';
+import { Search, Bell, Settings, LogOut, ChevronDown, Menu } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { useState } from 'react';
 
-const Header = () => {
+interface HeaderProps {
+  onMenuClick?: () => void;
+}
+
+const Header = ({ onMenuClick }: HeaderProps) => {
   const navigate = useNavigate();
   const { user, logout } = useAuth();
   const [showUserMenu, setShowUserMenu] = useState(false);
@@ -11,6 +15,17 @@ const Header = () => {
   return (
     <header className="bg-white shadow-sm border-b px-6 py-4 sticky top-0 z-10">
       <div className="flex items-center justify-between">
+        {/* Mobile menu button */}
+        {onMenuClick && (
+          <button
+            onClick={onMenuClick}
+            className="lg:hidden p-2 mr-2 hover:bg-gray-100 rounded-full transition"
+            aria-label="Open menu"
+          >
+            <Menu size={24} className="text-gray-600" />
+          </button>
+        )}
+
         {/* Search Bar */}
         <div className="flex-1 max-w-xl">
           <div className="relative">
