@@ -32,8 +32,6 @@ export const getBinLocationById = async (req: Request, res: Response) => {
 
 export const createBinLocation = async (req: Request, res: Response) => {
   try {
-    console.log('Creating bin location with data:', req.body);
-
     // Validate required fields
     if (!req.body.bin_code || !req.body.warehouse) {
       return res.status(400).json({
@@ -43,7 +41,6 @@ export const createBinLocation = async (req: Request, res: Response) => {
     }
 
     const binLocation = await binLocationsService.createBinLocation(req.body);
-    console.log('Bin location created successfully:', binLocation);
     res.status(201).json({ success: true, data: binLocation });
   } catch (error: any) {
     console.error('Error creating bin location:', error);
@@ -60,11 +57,7 @@ export const createBinLocation = async (req: Request, res: Response) => {
 export const updateBinLocation = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    console.log('Updating bin location:', id);
-    console.log('Request body:', req.body);
-
     const binLocation = await binLocationsService.updateBinLocation(id, req.body);
-    console.log('Bin location updated successfully:', binLocation);
     res.json({ success: true, data: binLocation });
   } catch (error: any) {
     console.error('Error updating bin location:', error);
@@ -81,8 +74,6 @@ export const updateBinLocation = async (req: Request, res: Response) => {
 export const deleteBinLocation = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    console.log('Deleting bin location:', id);
-
     const binLocation = await binLocationsService.deleteBinLocation(id);
     res.json({ success: true, data: binLocation });
   } catch (error: any) {

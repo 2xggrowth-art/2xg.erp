@@ -126,6 +126,7 @@ export class BillsService {
       }
 
       // Create bill items
+      const binAllocationWarnings: string[] = [];
       if (data.items && data.items.length > 0) {
         const billItems = data.items.map((item) => ({
           bill_id: bill.id,
@@ -154,13 +155,20 @@ export class BillsService {
 
         // Insert bin allocations if provided
         if (insertedItems && insertedItems.length > 0) {
-          for (let i = 0; i < data.items.length; i++) {
-            const item = data.items[i];
-            const insertedItem = insertedItems[i];
-
+          for (const item of data.items) {
             if (item.bin_allocations && item.bin_allocations.length > 0) {
+              // Match inserted item by item_name to avoid index correlation issues
+              const matchedItem = insertedItems.find(
+                (inserted: any) => inserted.item_name === item.item_name && inserted.item_id === (item.item_id || null)
+              );
+
+              if (!matchedItem) {
+                binAllocationWarnings.push(`Could not match inserted item for "${item.item_name}" — bin allocations skipped`);
+                continue;
+              }
+
               const binAllocations = item.bin_allocations.map((allocation) => ({
-                bill_item_id: insertedItem.id,
+                bill_item_id: matchedItem.id,
                 bin_location_id: allocation.bin_location_id,
                 quantity: allocation.quantity,
               }));
@@ -171,7 +179,7 @@ export class BillsService {
 
               if (binError) {
                 console.error('Error inserting bin allocations:', binError);
-                // Continue processing other items even if bin allocation fails
+                binAllocationWarnings.push(`Bin allocation failed for "${item.item_name}": ${binError.message}`);
               }
             }
           }
@@ -198,6 +206,9 @@ export class BillsService {
         }
       }
 
+      if (binAllocationWarnings.length > 0) {
+        return { ...bill, _warnings: binAllocationWarnings };
+      }
       return bill;
     } catch (error) {
       console.error('Error creating bill:', error);

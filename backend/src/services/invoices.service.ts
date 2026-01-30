@@ -179,6 +179,7 @@ export class InvoicesService {
       console.log('InvoicesService: Invoice created successfully:', invoice.id);
 
       // Insert invoice items
+      const binAllocationWarnings: string[] = [];
       if (items && items.length > 0) {
         const itemsToInsert = items.map(item => {
           // Validate item_id is a proper UUID
@@ -215,13 +216,20 @@ export class InvoicesService {
 
         // Insert bin allocations if provided (for sales/invoices - tracking which bins stock is sold from)
         if (insertedItems && insertedItems.length > 0) {
-          for (let i = 0; i < items.length; i++) {
-            const item = items[i];
-            const insertedItem = insertedItems[i];
-
+          for (const item of items) {
             if (item.bin_allocations && item.bin_allocations.length > 0) {
+              // Match inserted item by item_name to avoid index correlation issues
+              const matchedItem = insertedItems.find(
+                (inserted: any) => inserted.item_name === item.item_name && inserted.item_id === (item.item_id || null)
+              );
+
+              if (!matchedItem) {
+                binAllocationWarnings.push(`Could not match inserted item for "${item.item_name}" — bin allocations skipped`);
+                continue;
+              }
+
               const binAllocations = item.bin_allocations.map((allocation) => ({
-                invoice_item_id: insertedItem.id,
+                invoice_item_id: matchedItem.id,
                 bin_location_id: allocation.bin_location_id,
                 quantity: allocation.quantity,
               }));
@@ -232,7 +240,7 @@ export class InvoicesService {
 
               if (binError) {
                 console.error('Error inserting invoice bin allocations:', binError);
-                // Continue processing other items even if bin allocation fails
+                binAllocationWarnings.push(`Bin allocation failed for "${item.item_name}": ${binError.message}`);
               }
             }
           }
@@ -281,6 +289,9 @@ export class InvoicesService {
       // Fetch the complete invoice with items
       const completeInvoice = await this.getInvoiceById(invoice.id);
       console.log('InvoicesService: Complete invoice fetched:', completeInvoice.id);
+      if (binAllocationWarnings.length > 0) {
+        return { ...completeInvoice, _warnings: binAllocationWarnings };
+      }
       return completeInvoice;
     } catch (error: any) {
       console.error('InvoicesService: Error creating invoice:', error);

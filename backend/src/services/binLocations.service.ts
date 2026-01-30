@@ -159,7 +159,7 @@ export class BinLocationsService {
   }
 
   /**
-   * Get bin locations with their current stock (items and quantities)
+   * Get bin locations with their current NET stock (purchases minus sales)
    */
   async getBinLocationsWithStock() {
     try {
@@ -171,8 +171,8 @@ export class BinLocationsService {
 
       if (binsError) throw binsError;
 
-      // Get all bill item bin allocations with item details
-      const { data: allocations, error: allocationsError } = await supabaseAdmin
+      // Get all bill item bin allocations (PURCHASES — adds stock)
+      const { data: purchaseAllocations, error: purchaseError } = await supabaseAdmin
         .from('bill_item_bin_allocations')
         .select(`
           id,
@@ -193,13 +193,38 @@ export class BinLocationsService {
         `)
         .order('created_at', { ascending: false });
 
-      if (allocationsError) throw allocationsError;
+      if (purchaseError) throw purchaseError;
+
+      // Get all invoice item bin allocations (SALES — deducts stock)
+      const { data: salesAllocations, error: salesError } = await supabaseAdmin
+        .from('invoice_item_bin_allocations')
+        .select(`
+          id,
+          bin_location_id,
+          quantity,
+          created_at,
+          invoice_items!inner (
+            id,
+            item_id,
+            item_name,
+            unit_of_measurement,
+            invoice_id,
+            invoices!inner (
+              invoice_number,
+              invoice_date
+            )
+          )
+        `)
+        .order('created_at', { ascending: false });
+
+      if (salesError) throw salesError;
 
       // Group allocations by bin_location_id and aggregate quantities
       const binStockMap = new Map();
 
-      if (allocations) {
-        allocations.forEach((allocation: any) => {
+      // Process PURCHASES (add to stock)
+      if (purchaseAllocations) {
+        purchaseAllocations.forEach((allocation: any) => {
           const binId = allocation.bin_location_id;
           const itemId = allocation.bill_items?.item_id || allocation.bill_items?.id;
           const itemName = allocation.bill_items?.item_name || 'Unknown Item';
@@ -213,25 +238,25 @@ export class BinLocationsService {
           const binItems = binStockMap.get(binId);
 
           if (binItems.has(itemId)) {
-            // Add to existing item quantity
             const existing = binItems.get(itemId);
             existing.quantity += quantity;
             existing.transactions.push({
-              bill_number: allocation.bill_items?.bills?.bill_number,
-              bill_date: allocation.bill_items?.bills?.bill_date,
+              type: 'purchase',
+              reference: allocation.bill_items?.bills?.bill_number,
+              date: allocation.bill_items?.bills?.bill_date,
               quantity: allocation.quantity,
               created_at: allocation.created_at
             });
           } else {
-            // Create new item entry
             binItems.set(itemId, {
               item_id: itemId,
               item_name: itemName,
               quantity: quantity,
               unit_of_measurement: unitOfMeasurement,
               transactions: [{
-                bill_number: allocation.bill_items?.bills?.bill_number,
-                bill_date: allocation.bill_items?.bills?.bill_date,
+                type: 'purchase',
+                reference: allocation.bill_items?.bills?.bill_number,
+                date: allocation.bill_items?.bills?.bill_date,
                 quantity: allocation.quantity,
                 created_at: allocation.created_at
               }]
@@ -240,10 +265,55 @@ export class BinLocationsService {
         });
       }
 
-      // Combine bins with their stock information
+      // Process SALES (deduct from stock)
+      if (salesAllocations) {
+        salesAllocations.forEach((allocation: any) => {
+          const binId = allocation.bin_location_id;
+          const itemId = allocation.invoice_items?.item_id || allocation.invoice_items?.id;
+          const itemName = allocation.invoice_items?.item_name || 'Unknown Item';
+          const quantity = parseFloat(allocation.quantity) || 0;
+          const unitOfMeasurement = allocation.invoice_items?.unit_of_measurement || 'pcs';
+
+          if (!binStockMap.has(binId)) {
+            binStockMap.set(binId, new Map());
+          }
+
+          const binItems = binStockMap.get(binId);
+
+          if (binItems.has(itemId)) {
+            const existing = binItems.get(itemId);
+            existing.quantity -= quantity;
+            existing.transactions.push({
+              type: 'sale',
+              reference: allocation.invoice_items?.invoices?.invoice_number,
+              date: allocation.invoice_items?.invoices?.invoice_date,
+              quantity: -quantity,
+              created_at: allocation.created_at
+            });
+          } else {
+            binItems.set(itemId, {
+              item_id: itemId,
+              item_name: itemName,
+              quantity: -quantity,
+              unit_of_measurement: unitOfMeasurement,
+              transactions: [{
+                type: 'sale',
+                reference: allocation.invoice_items?.invoices?.invoice_number,
+                date: allocation.invoice_items?.invoices?.invoice_date,
+                quantity: -quantity,
+                created_at: allocation.created_at
+              }]
+            });
+          }
+        });
+      }
+
+      // Combine bins with their stock information (filter out zero/negative items)
       const binsWithStock = bins?.map(bin => {
         const items = binStockMap.get(bin.id);
-        const itemsArray = items ? Array.from(items.values()) : [];
+        const itemsArray = items
+          ? Array.from(items.values()).filter((item: any) => item.quantity > 0)
+          : [];
         const totalQuantity = itemsArray.reduce((sum, item: any) => sum + item.quantity, 0);
 
         return {

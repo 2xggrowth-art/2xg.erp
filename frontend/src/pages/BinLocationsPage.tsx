@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Package, MapPin, Search, Plus, ChevronDown, ChevronUp } from 'lucide-react';
+import { Package, MapPin, Search, Plus, ChevronDown, ChevronUp, X } from 'lucide-react';
 import { binLocationService, BinLocationWithStock } from '../services/binLocation.service';
 
 const BinLocationsPage = () => {
@@ -7,6 +7,9 @@ const BinLocationsPage = () => {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [expandedBins, setExpandedBins] = useState<Set<string>>(new Set());
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [newBin, setNewBin] = useState({ bin_code: '', warehouse: '', description: '' });
+  const [addError, setAddError] = useState('');
 
   useEffect(() => {
     fetchBinsWithStock();
@@ -23,6 +26,30 @@ const BinLocationsPage = () => {
       console.error('Error fetching bins:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleAddBinLocation = async () => {
+    if (!newBin.bin_code.trim() || !newBin.warehouse.trim()) {
+      setAddError('Bin code and warehouse are required');
+      return;
+    }
+    try {
+      setAddError('');
+      const response = await binLocationService.createBinLocation({
+        bin_code: newBin.bin_code.trim(),
+        warehouse: newBin.warehouse.trim(),
+        description: newBin.description.trim() || undefined,
+      });
+      if (response.success) {
+        setShowAddModal(false);
+        setNewBin({ bin_code: '', warehouse: '', description: '' });
+        fetchBinsWithStock();
+      } else {
+        setAddError(response.error || 'Failed to create bin location');
+      }
+    } catch (error: any) {
+      setAddError(error?.message || 'Failed to create bin location');
     }
   };
 
@@ -130,7 +157,10 @@ const BinLocationsPage = () => {
               className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             />
           </div>
-          <button className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center gap-2">
+          <button
+            onClick={() => setShowAddModal(true)}
+            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center gap-2"
+          >
             <Plus size={20} />
             Add Bin Location
           </button>
@@ -207,9 +237,11 @@ const BinLocationsPage = () => {
                               {item.transactions.slice(0, 3).map((transaction, txIndex) => (
                                 <div key={txIndex} className="flex items-center justify-between text-xs text-gray-600">
                                   <span>
-                                    Bill {transaction.bill_number} - {new Date(transaction.bill_date).toLocaleDateString()}
+                                    {transaction.type === 'purchase' ? 'Bill' : 'Invoice'} {transaction.reference} - {new Date(transaction.date).toLocaleDateString()}
                                   </span>
-                                  <span className="font-medium">+{transaction.quantity} {item.unit_of_measurement}</span>
+                                  <span className={`font-medium ${transaction.quantity < 0 ? 'text-red-600' : 'text-green-600'}`}>
+                                    {transaction.quantity > 0 ? '+' : ''}{transaction.quantity} {item.unit_of_measurement}
+                                  </span>
                                 </div>
                               ))}
                               {item.transactions.length > 3 && (
@@ -247,6 +279,69 @@ const BinLocationsPage = () => {
           </div>
         )}
       </div>
+
+      {/* Add Bin Location Modal */}
+      {showAddModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg shadow-xl w-full max-w-md mx-4">
+            <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
+              <h3 className="text-lg font-semibold text-gray-900">Add Bin Location</h3>
+              <button onClick={() => { setShowAddModal(false); setAddError(''); }} className="p-1 hover:bg-gray-100 rounded">
+                <X size={20} className="text-gray-500" />
+              </button>
+            </div>
+            <div className="p-6 space-y-4">
+              {addError && (
+                <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-600">{addError}</div>
+              )}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Bin Code *</label>
+                <input
+                  type="text"
+                  value={newBin.bin_code}
+                  onChange={(e) => setNewBin({ ...newBin, bin_code: e.target.value })}
+                  placeholder="e.g. BIN-A01"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Warehouse *</label>
+                <input
+                  type="text"
+                  value={newBin.warehouse}
+                  onChange={(e) => setNewBin({ ...newBin, warehouse: e.target.value })}
+                  placeholder="e.g. Main Warehouse"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
+                <input
+                  type="text"
+                  value={newBin.description}
+                  onChange={(e) => setNewBin({ ...newBin, description: e.target.value })}
+                  placeholder="Optional description"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+              </div>
+            </div>
+            <div className="px-6 py-4 border-t border-gray-200 flex justify-end gap-3">
+              <button
+                onClick={() => { setShowAddModal(false); setAddError(''); }}
+                className="px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleAddBinLocation}
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+              >
+                Create
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

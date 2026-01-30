@@ -29,8 +29,9 @@ export interface BinItemStock {
   quantity: number;
   unit_of_measurement: string;
   transactions: Array<{
-    bill_number: string;
-    bill_date: string;
+    type: 'purchase' | 'sale';
+    reference: string;
+    date: string;
     quantity: number;
     created_at: string;
   }>;

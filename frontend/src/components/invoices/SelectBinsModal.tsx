@@ -140,12 +140,6 @@ const SelectBinsModal = ({
             </div>
           )}
 
-          {/* Location Info */}
-          <div className="mb-4">
-            <span className="text-sm text-slate-600">Location: </span>
-            <span className="text-sm text-blue-600 font-medium">Head Office</span>
-          </div>
-
           {/* Item Info */}
           <div className="mb-6">
             <h4 className="font-medium text-slate-800">{itemName}</h4>
