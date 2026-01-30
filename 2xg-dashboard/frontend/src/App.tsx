@@ -28,6 +28,7 @@ import ExpensesPage from './pages/ExpensesPage';
 import ExpenseDetailPage from './pages/ExpenseDetailPage';
 import TasksPage from './pages/TasksPage';
 import ReportsPage from './pages/ReportsPage';
+import ReportViewerPage from './pages/ReportViewerPage';
 import SearchPage from './pages/SearchPage';
 import AIReportingPage from './pages/AIReportingPage';
 import PaymentMadePage from './pages/PaymentMadePage';
@@ -48,6 +49,7 @@ import PurchaseOrderDetailPage from './pages/PurchaseOrderDetailPage';
 import BillDetailPage from './pages/BillDetailPage';
 import CustomerDetailPage from './pages/CustomerDetailPage';
 import VendorDetailPage from './pages/VendorDetailPage';
+import VendorCreditDetailPage from './pages/VendorCreditDetailPage';
 import NewPaymentReceivedForm from './components/payments-received/NewPaymentReceivedForm';
 import DeliveryChallansPage from './pages/DeliveryChallansPage';
 import NewDeliveryChallanForm from './components/delivery-challans/NewDeliveryChallanForm';
@@ -110,6 +112,7 @@ function App() {
             <Route path="/purchases/payments-made/edit/:id" element={<ProtectedRoute><DashboardLayout><NewPaymentForm /></DashboardLayout></ProtectedRoute>} />
             <Route path="/purchases/vendor-credits" element={<ProtectedRoute><DashboardLayout><VendorCreditsPage /></DashboardLayout></ProtectedRoute>} />
             <Route path="/purchases/vendor-credits/new" element={<ProtectedRoute><DashboardLayout><NewVendorCreditForm /></DashboardLayout></ProtectedRoute>} />
+            <Route path="/purchases/vendor-credits/:id" element={<ProtectedRoute><DashboardLayout><VendorCreditDetailPage /></DashboardLayout></ProtectedRoute>} />
             <Route path="/purchases/ledger-account" element={<ProtectedRoute><DashboardLayout><PurchasesPage /></DashboardLayout></ProtectedRoute>} />
 
             {/* Vendor Management Routes */}
@@ -159,6 +162,7 @@ function App() {
             <Route path="/expenses/:id" element={<ProtectedRoute><DashboardLayout><ExpenseDetailPage /></DashboardLayout></ProtectedRoute>} />
             <Route path="/tasks" element={<ProtectedRoute><DashboardLayout><TasksPage /></DashboardLayout></ProtectedRoute>} />
             <Route path="/reports" element={<ProtectedRoute><DashboardLayout><ReportsPage /></DashboardLayout></ProtectedRoute>} />
+            <Route path="/reports/:reportId" element={<ProtectedRoute><DashboardLayout><ReportViewerPage /></DashboardLayout></ProtectedRoute>} />
             <Route path="/search" element={<ProtectedRoute><DashboardLayout><SearchPage /></DashboardLayout></ProtectedRoute>} />
             <Route path="/ai-reporting" element={<ProtectedRoute><DashboardLayout><AIReportingPage /></DashboardLayout></ProtectedRoute>} />
             <Route path="/settings" element={<ProtectedRoute><DashboardLayout><SettingsPage /></DashboardLayout></ProtectedRoute>} />
