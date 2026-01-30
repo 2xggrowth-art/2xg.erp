@@ -83,6 +83,9 @@ export interface ValidationResult {
 }
 
 export const itemsService = {
+  generateSku: (): AxiosPromise<APIResponse<{ sku: string }>> =>
+    apiClient.get('/items/generate-sku'),
+
   getAllItems: (filters?: {
     category?: string;
     isActive?: boolean;

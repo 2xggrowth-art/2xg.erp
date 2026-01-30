@@ -3,6 +3,41 @@ import { DateRangeParams } from '../types';
 
 export class ItemsService {
   /**
+   * Generate a new SKU automatically
+   */
+  async generateSku(): Promise<string> {
+    try {
+      const { data, error } = await supabaseAdmin
+        .from('items')
+        .select('sku')
+        .not('sku', 'is', null)
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+
+      if (!data || data.length === 0) {
+        return 'SKU-0001';
+      }
+
+      // Find the highest SKU number matching SKU-XXXX format
+      let maxNum = 0;
+      for (const item of data) {
+        const match = item.sku?.match(/^SKU-(\d+)$/);
+        if (match) {
+          const num = parseInt(match[1]);
+          if (num > maxNum) maxNum = num;
+        }
+      }
+
+      const nextNum = maxNum + 1;
+      return `SKU-${nextNum.toString().padStart(4, '0')}`;
+    } catch (error) {
+      console.error('Error generating SKU:', error);
+      throw error;
+    }
+  }
+
+  /**
    * Get all items with optional filters
    */
   async getAllItems(filters?: {
