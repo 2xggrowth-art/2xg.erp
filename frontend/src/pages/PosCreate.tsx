@@ -1,11 +1,20 @@
 import React, { useState, ChangeEvent, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Search, User, X, Plus, Edit2, ShoppingCart, Package, Trash2, Check, Printer, Clock, DollarSign, TrendingUp } from 'lucide-react';
+import { Search, User, X, Plus, Edit2, ShoppingCart, Package, Trash2, Check, Printer, Clock, DollarSign, TrendingUp, MapPin } from 'lucide-react';
 import { customersService, Customer, CreateCustomerData } from '../services/customers.service';
 import { itemsService, Item } from '../services/items.service';
 import { salespersonService, Salesperson } from '../services/salesperson.service';
 import { invoicesService } from '../services/invoices.service';
 import SplitPaymentModal from '../components/pos/SplitPaymentModal';
+import SelectBinsModal from '../components/invoices/SelectBinsModal';
+
+// Bin allocation interface
+interface BinAllocation {
+  bin_location_id: string;
+  bin_code: string;
+  warehouse: string;
+  quantity: number;
+}
 
 // Define the shape of a Cart Item
 interface CartItem {
@@ -17,6 +26,7 @@ interface CartItem {
   qty: number;
   rate: number;
   cost_price: number;
+  bin_allocations?: BinAllocation[];
 }
 
 interface HeldCart {
@@ -77,6 +87,10 @@ const PosCreate: React.FC = () => {
   const [processingPayment, setProcessingPayment] = useState(false);
   const [showBillSuccess, setShowBillSuccess] = useState(false);
   const [generatedInvoice, setGeneratedInvoice] = useState<any>(null);
+
+  // Bin location states
+  const [binModalOpen, setBinModalOpen] = useState(false);
+  const [selectedCartIndex, setSelectedCartIndex] = useState<number | null>(null);
 
   const [newCustomer, setNewCustomer] = useState<CreateCustomerData>({
     display_name: '',
@@ -302,6 +316,25 @@ const PosCreate: React.FC = () => {
     }
   };
 
+  // Bin location handlers
+  const openBinModal = (index: number) => {
+    setSelectedCartIndex(index);
+    setBinModalOpen(true);
+  };
+
+  const handleBinAllocationSave = (allocations: BinAllocation[]) => {
+    if (selectedCartIndex !== null) {
+      const updatedCart = [...cart];
+      updatedCart[selectedCartIndex] = {
+        ...updatedCart[selectedCartIndex],
+        bin_allocations: allocations
+      };
+      setCart(updatedCart);
+    }
+    setBinModalOpen(false);
+    setSelectedCartIndex(null);
+  };
+
   const filteredCustomers = customers.filter(customer =>
     customer.customer_name?.toLowerCase().includes(customerSearch.toLowerCase()) ||
     customer.mobile?.includes(customerSearch) ||
@@ -434,7 +467,8 @@ const PosCreate: React.FC = () => {
           unit_of_measurement: 'pcs',
           rate: item.rate,
           amount: item.qty * item.rate,
-          stock_on_hand: 0
+          stock_on_hand: 0,
+          bin_allocations: item.bin_allocations || []
         }))
       };
 
@@ -542,7 +576,8 @@ const PosCreate: React.FC = () => {
           unit_of_measurement: 'pcs',
           rate: item.rate,
           amount: item.qty * item.rate,
-          stock_on_hand: 0
+          stock_on_hand: 0,
+          bin_allocations: item.bin_allocations || []
         }))
       };
 
@@ -874,6 +909,22 @@ const PosCreate: React.FC = () => {
                             onChange={(e: ChangeEvent<HTMLInputElement>) => handleQtyChange(item.id, e.target.value)}
                             className="w-16 bg-gray-50 border border-gray-300 rounded px-2 py-1 text-center text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                           />
+                          {item.qty > 0 && item.item_id && (
+                            <button
+                              onClick={() => openBinModal(index)}
+                              className={`mt-1 px-2 py-0.5 text-[10px] rounded flex items-center gap-1 mx-auto transition-colors ${
+                                item.bin_allocations && item.bin_allocations.length > 0
+                                  ? 'bg-green-100 text-green-700 hover:bg-green-200 border border-green-300'
+                                  : 'bg-amber-100 text-amber-700 hover:bg-amber-200 border border-amber-300'
+                              }`}
+                              title="Select bin locations for this item"
+                            >
+                              <MapPin size={10} />
+                              {item.bin_allocations && item.bin_allocations.length > 0
+                                ? `${item.bin_allocations.length} bin(s)`
+                                : '⚠ Select Bins'}
+                            </button>
+                          )}
                         </div>
                         <div className="col-span-2 text-right">
                           <div className="flex items-center justify-end bg-gray-50 rounded border border-gray-300 focus-within:border-blue-500 focus-within:ring-2 focus-within:ring-blue-500/20 transition-all px-2">
@@ -1874,6 +1925,23 @@ const PosCreate: React.FC = () => {
           customerMobile={selectedCustomer?.mobile}
           onComplete={handleSplitPaymentComplete}
         />
+
+        {/* Bin Selection Modal */}
+        {binModalOpen && selectedCartIndex !== null && (
+          <SelectBinsModal
+            isOpen={binModalOpen}
+            onClose={() => {
+              setBinModalOpen(false);
+              setSelectedCartIndex(null);
+            }}
+            itemName={cart[selectedCartIndex].name}
+            itemSku={cart[selectedCartIndex].sku}
+            totalQuantity={cart[selectedCartIndex].qty}
+            unitOfMeasurement="pcs"
+            currentAllocations={cart[selectedCartIndex].bin_allocations || []}
+            onSave={handleBinAllocationSave}
+          />
+        )}
       </div>
     </>
   );

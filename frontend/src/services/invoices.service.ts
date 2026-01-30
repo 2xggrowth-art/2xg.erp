@@ -10,6 +10,8 @@ export interface InvoiceItem {
   rate: number;
   amount: number;
   stock_on_hand?: number;
+  bin_location_id?: string;
+  bin_location_code?: string;
 }
 
 export interface Invoice {

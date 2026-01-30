@@ -61,6 +61,7 @@ import PosPage from './pages/PosPage';
 import SessionDetailPage from './pages/SessionDetailPage';
 import ComingSoonPage from './pages/ComingSoonPage';
 import TransferOrderDetailPage from './pages/TransferOrderDetailPage';
+import BinLocationsPage from './pages/BinLocationsPage';
 
 function App() {
   return (
@@ -89,6 +90,7 @@ function App() {
             <Route path="/items/stock-count/:id" element={<ProtectedRoute><DashboardLayout><StockCountDetailPage /></DashboardLayout></ProtectedRoute>} />
             <Route path="/items/stock-count/edit/:id" element={<ProtectedRoute><DashboardLayout><NewStockCountPage /></DashboardLayout></ProtectedRoute>} />
             <Route path="/items/transfer-order" element={<ProtectedRoute><DashboardLayout><TransferOrderPage /></DashboardLayout></ProtectedRoute>} />
+            <Route path="/items/bin-locations" element={<ProtectedRoute><DashboardLayout><BinLocationsPage /></DashboardLayout></ProtectedRoute>} />
 
             {/* Transfer Orders Routes (Inventory Module) */}
             <Route path="/inventory/transfer-orders" element={<ProtectedRoute><DashboardLayout><TransferOrdersPage /></DashboardLayout></ProtectedRoute>} />

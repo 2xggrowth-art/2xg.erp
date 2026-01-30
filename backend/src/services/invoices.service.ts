@@ -1,5 +1,12 @@
 import { supabaseAdmin as supabase } from '../config/supabase';
 
+export interface BinAllocation {
+  bin_location_id: string;
+  bin_code: string;
+  warehouse: string;
+  quantity: number;
+}
+
 export interface InvoiceItem {
   item_id?: string;
   item_name: string;
@@ -9,6 +16,7 @@ export interface InvoiceItem {
   unit_of_measurement: string;
   rate: number;
   amount: number;
+  bin_allocations?: BinAllocation[];
 }
 
 export interface CreateInvoiceData {
@@ -191,9 +199,10 @@ export class InvoicesService {
 
         console.log('InvoicesService: Inserting invoice items:', JSON.stringify(itemsToInsert, null, 2));
 
-        const { error: itemsError } = await supabase
+        const { data: insertedItems, error: itemsError } = await supabase
           .from('invoice_items')
-          .insert(itemsToInsert);
+          .insert(itemsToInsert)
+          .select();
 
         if (itemsError) {
           console.error('InvoicesService: Error inserting items:', itemsError);
@@ -203,6 +212,31 @@ export class InvoicesService {
         }
 
         console.log('InvoicesService: Invoice items created successfully');
+
+        // Insert bin allocations if provided (for sales/invoices - tracking which bins stock is sold from)
+        if (insertedItems && insertedItems.length > 0) {
+          for (let i = 0; i < items.length; i++) {
+            const item = items[i];
+            const insertedItem = insertedItems[i];
+
+            if (item.bin_allocations && item.bin_allocations.length > 0) {
+              const binAllocations = item.bin_allocations.map((allocation) => ({
+                invoice_item_id: insertedItem.id,
+                bin_location_id: allocation.bin_location_id,
+                quantity: allocation.quantity,
+              }));
+
+              const { error: binError } = await supabase
+                .from('invoice_item_bin_allocations')
+                .insert(binAllocations);
+
+              if (binError) {
+                console.error('Error inserting invoice bin allocations:', binError);
+                // Continue processing other items even if bin allocation fails
+              }
+            }
+          }
+        }
 
         // Update stock for each item
         for (const item of items) {

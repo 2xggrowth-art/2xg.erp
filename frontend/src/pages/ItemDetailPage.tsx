@@ -1,18 +1,22 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { itemsService, Item } from '../services/items.service';
-import { ArrowLeft, Edit2, Trash2, Package, DollarSign, TrendingUp, AlertCircle } from 'lucide-react';
+import { binLocationService } from '../services/binLocation.service';
+import { ArrowLeft, Edit2, Trash2, Package, DollarSign, TrendingUp, AlertCircle, MapPin } from 'lucide-react';
 
 const ItemDetailPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const [item, setItem] = useState<Item | null>(null);
+  const [binLocations, setBinLocations] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadingBins, setLoadingBins] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (id) {
       fetchItemDetails(id);
+      fetchBinLocations(id);
     }
   }, [id]);
 
@@ -31,6 +35,20 @@ const ItemDetailPage: React.FC = () => {
       setError(err.message || 'Failed to load item details');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchBinLocations = async (itemId: string) => {
+    try {
+      setLoadingBins(true);
+      const response = await binLocationService.getBinLocationsForItem(itemId);
+      if (response.success && response.data) {
+        setBinLocations(response.data);
+      }
+    } catch (err: any) {
+      console.error('Error fetching bin locations:', err);
+    } finally {
+      setLoadingBins(false);
     }
   };
 
@@ -250,6 +268,73 @@ const ItemDetailPage: React.FC = () => {
               <DetailRow label="Created At" value={new Date(item.created_at).toLocaleString()} />
               <DetailRow label="Updated At" value={new Date(item.updated_at).toLocaleString()} />
             </div>
+          </div>
+        </div>
+
+        {/* Bin Locations Section */}
+        <div className="mt-6 bg-white rounded-lg shadow">
+          <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <MapPin className="h-5 w-5 text-blue-600" />
+              <h2 className="text-lg font-semibold text-gray-900">Bin Locations</h2>
+            </div>
+            <span className="text-sm text-gray-600">
+              {binLocations.length} location{binLocations.length !== 1 ? 's' : ''}
+            </span>
+          </div>
+
+          <div className="p-6">
+            {loadingBins ? (
+              <div className="flex items-center justify-center py-8">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+              </div>
+            ) : binLocations.length > 0 ? (
+              <div className="overflow-x-auto">
+                <table className="min-w-full divide-y divide-gray-200">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Bin Location
+                      </th>
+                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Warehouse
+                      </th>
+                      <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Quantity
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-200">
+                    {binLocations.map((binLocation, index) => (
+                      <tr key={index} className="hover:bg-gray-50 transition-colors">
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="flex items-center gap-2">
+                            <MapPin className="h-4 w-4 text-blue-600" />
+                            <span className="text-sm font-medium text-gray-900">{binLocation.bin_code}</span>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <span className="text-sm text-gray-700">{binLocation.warehouse}</span>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-right">
+                          <div className="flex items-baseline justify-end gap-1">
+                            <span className="text-lg font-semibold text-blue-600">{binLocation.quantity}</span>
+                            <span className="text-sm text-gray-600">{binLocation.unit_of_measurement}</span>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <div className="text-center py-12">
+                <MapPin className="mx-auto h-16 w-16 text-gray-300 mb-3" />
+                <h3 className="text-lg font-medium text-gray-900 mb-1">No Bin Locations</h3>
+                <p className="text-gray-600">This item hasn't been allocated to any bins yet.</p>
+                <p className="text-sm text-gray-500 mt-2">Items will appear here when added through bills.</p>
+              </div>
+            )}
           </div>
         </div>
       </div>
