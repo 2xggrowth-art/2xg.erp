@@ -229,41 +229,37 @@ const ExpensesPage = () => {
             <span className="text-sm font-medium text-gray-700 mr-2">Filter by Status:</span>
             <button
               onClick={() => setSelectedStatus('All')}
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                selectedStatus === 'All'
-                  ? 'bg-blue-600 text-white shadow-sm'
-                  : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
-              }`}
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${selectedStatus === 'All'
+                ? 'bg-blue-600 text-white shadow-sm'
+                : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
+                }`}
             >
               All ({expenses.length})
             </button>
             <button
               onClick={() => setSelectedStatus('Pending')}
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                selectedStatus === 'Pending'
-                  ? 'bg-orange-600 text-white shadow-sm'
-                  : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
-              }`}
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${selectedStatus === 'Pending'
+                ? 'bg-orange-600 text-white shadow-sm'
+                : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
+                }`}
             >
               Pending ({expenses.filter(e => e.approval_status === 'Pending').length})
             </button>
             <button
               onClick={() => setSelectedStatus('Approved')}
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                selectedStatus === 'Approved'
-                  ? 'bg-green-600 text-white shadow-sm'
-                  : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
-              }`}
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${selectedStatus === 'Approved'
+                ? 'bg-green-600 text-white shadow-sm'
+                : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
+                }`}
             >
               Approved ({expenses.filter(e => e.approval_status === 'Approved').length})
             </button>
             <button
               onClick={() => setSelectedStatus('Rejected')}
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                selectedStatus === 'Rejected'
-                  ? 'bg-red-600 text-white shadow-sm'
-                  : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
-              }`}
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${selectedStatus === 'Rejected'
+                ? 'bg-red-600 text-white shadow-sm'
+                : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
+                }`}
             >
               Rejected ({expenses.filter(e => e.approval_status === 'Rejected').length})
             </button>
@@ -271,7 +267,7 @@ const ExpensesPage = () => {
         </div>
 
         <div className="overflow-x-auto">
-          <table className="w-full">
+          <table className="w-full min-w-[1000px]">
             <thead className="bg-gray-50 border-b border-gray-200">
               <tr>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -280,22 +276,22 @@ const ExpensesPage = () => {
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Date
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="hidden md:table-cell px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Category
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="hidden md:table-cell px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Item
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="hidden md:table-cell px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Amount
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="hidden md:table-cell px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Paid By
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Status
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="hidden md:table-cell px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Actions
                 </th>
               </tr>
@@ -308,9 +304,12 @@ const ExpensesPage = () => {
                     className="hover:bg-gray-50 transition-colors"
                   >
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="flex items-center gap-2">
+                      <div
+                        className="flex items-center gap-2 cursor-pointer"
+                        onClick={() => handleView(expense.id!)}
+                      >
                         <FileText size={16} className="text-gray-400" />
-                        <span className="text-sm font-medium text-gray-900">
+                        <span className="text-sm font-medium text-blue-600 hover:text-blue-800">
                           {expense.expense_number || 'N/A'}
                         </span>
                       </div>
@@ -323,12 +322,12 @@ const ExpensesPage = () => {
                         </span>
                       </div>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
+                    <td className="hidden md:table-cell px-6 py-4 whitespace-nowrap">
                       <span className="text-sm text-gray-900">
                         {expense.category_name || 'N/A'}
                       </span>
                     </td>
-                    <td className="px-6 py-4">
+                    <td className="hidden md:table-cell px-6 py-4">
                       <div className="text-sm text-gray-900">
                         {expense.expense_item}
                       </div>
@@ -338,12 +337,12 @@ const ExpensesPage = () => {
                         </div>
                       )}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
+                    <td className="hidden md:table-cell px-6 py-4 whitespace-nowrap">
                       <span className="text-sm font-semibold text-gray-900">
                         ₹{expense.amount.toLocaleString()}
                       </span>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
+                    <td className="hidden md:table-cell px-6 py-4 whitespace-nowrap">
                       <div className="flex items-center gap-2">
                         <User size={16} className="text-gray-400" />
                         <span className="text-sm text-gray-900">
@@ -355,6 +354,7 @@ const ExpensesPage = () => {
                       {expense.approval_status === 'Pending' ? (
                         <select
                           value={expense.approval_status || 'Pending'}
+                          onClick={(e) => e.stopPropagation()}
                           onChange={(e) => handleStatusChange(expense.id!, e.target.value)}
                           className="px-3 py-1.5 text-xs font-semibold rounded-lg border-2 cursor-pointer transition-all focus:outline-none focus:ring-2 focus:ring-offset-1 bg-orange-50 text-orange-800 border-orange-300 hover:bg-orange-100 focus:ring-orange-500"
                         >
@@ -364,17 +364,16 @@ const ExpensesPage = () => {
                         </select>
                       ) : (
                         <span
-                          className={`inline-flex px-3 py-1.5 text-xs font-semibold rounded-lg border-2 ${
-                            expense.approval_status === 'Approved'
+                          className={`inline-flex px-3 py-1.5 text-xs font-semibold rounded-lg border-2 ${expense.approval_status === 'Approved'
                               ? 'bg-green-50 text-green-800 border-green-300'
                               : 'bg-red-50 text-red-800 border-red-300'
-                          }`}
+                            }`}
                         >
                           {expense.approval_status}
                         </span>
                       )}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
+                    <td className="hidden md:table-cell px-6 py-4 whitespace-nowrap">
                       <div className="flex items-center gap-2">
                         <button
                           onClick={(e) => {
