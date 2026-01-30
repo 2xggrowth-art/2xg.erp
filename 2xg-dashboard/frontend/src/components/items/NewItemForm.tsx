@@ -3,11 +3,17 @@ import { ArrowLeft, Package, Save } from 'lucide-react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { itemsService } from '../../services/items.service';
 import { vendorsService, Vendor } from '../../services/vendors.service';
+import { useAuth } from '../../contexts/AuthContext';
 
 const NewItemForm = () => {
   const navigate = useNavigate();
   const { id } = useParams<{ id: string }>();
   const isEditMode = !!id;
+  const { user } = useAuth();
+
+  // Check if user is admin or super_admin to show purchase price (case-insensitive)
+  const userRole = user?.role?.toLowerCase() || '';
+  const canViewPurchasePrice = userRole === 'admin' || userRole === 'super_admin' || userRole === 'super admin';
   const [loading, setLoading] = useState(false);
   const [fetching, setFetching] = useState(false);
   const [vendors, setVendors] = useState<Vendor[]>([]);
@@ -44,18 +50,40 @@ const NewItemForm = () => {
     quantity: '0' // Added quantity field
   });
 
-  // Fetch items for SKU validation and last SKU
+  // Fetch items for SKU validation
   const [items, setItems] = useState<any[]>([]);
-  const [lastSku, setLastSku] = useState<string>('');
   const [duplicateSkuError, setDuplicateSkuError] = useState<boolean>(false);
 
   useEffect(() => {
     fetchVendors();
-    fetchItems(); // Fetch items for SKU validation and last SKU
+    fetchItems(); // Fetch items for SKU validation
     if (isEditMode && id) {
       fetchItemDetails(id);
+    } else {
+      // Generate SKU for new items
+      generateNewSku();
     }
   }, [id, isEditMode]);
+
+  // Generate SKU for new items
+  const generateNewSku = async () => {
+    try {
+      const response = await itemsService.generateSku();
+      if (response.data.success && response.data.data) {
+        setFormData(prev => ({
+          ...prev,
+          sku: response.data.data.sku
+        }));
+      }
+    } catch (error) {
+      console.error('Error generating SKU:', error);
+      // Fallback to default SKU
+      setFormData(prev => ({
+        ...prev,
+        sku: 'SKU-0001'
+      }));
+    }
+  };
 
   const fetchItems = async () => {
     try {
@@ -63,14 +91,6 @@ const NewItemForm = () => {
       if (response.data.success && response.data.data) {
         const fetchedItems = response.data.data;
         setItems(fetchedItems);
-        // Find last SKU (assuming simple string sort or creation date if available in sort)
-        // Ideally backend should provide this, but client-side approximation:
-        if (fetchedItems.length > 0) {
-          // Sort by created_at desc if possible, or just look at list
-          // Assuming default list might not be sorted, let's sort by created_at
-          const sorted = [...fetchedItems].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
-          setLastSku(sorted[0].sku);
-        }
       }
     } catch (error) {
       console.error('Error fetching items:', error);
@@ -349,7 +369,7 @@ const NewItemForm = () => {
             </div>
           </div>
 
-          {/* SKU */}
+          {/* SKU - Auto-generated for new items */}
           <div className="grid grid-cols-4 gap-4 items-center">
             <label className="text-sm font-medium text-gray-700 flex items-center gap-1">
               SKU<span className="text-red-500">*</span>
@@ -361,15 +381,16 @@ const NewItemForm = () => {
                 name="sku"
                 value={formData.sku}
                 onChange={handleInputChange}
-                className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent ${duplicateSkuError ? 'border-red-500' : 'border-blue-400'}`}
+                className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent ${!isEditMode ? 'bg-gray-100' : ''} ${duplicateSkuError ? 'border-red-500' : 'border-blue-400'}`}
                 placeholder="Enter SKU"
                 required
+                readOnly={!isEditMode}
               />
               {duplicateSkuError && (
                 <p className="text-xs text-red-500 mt-1">SKU already exists. Please choose a unique SKU.</p>
               )}
-              {lastSku && !isEditMode && (
-                <p className="text-xs text-gray-500 mt-1">Last used SKU: <span className="font-semibold">{lastSku}</span></p>
+              {!isEditMode && (
+                <p className="text-xs text-green-600 mt-1">Auto-generated SKU</p>
               )}
             </div>
           </div>
@@ -591,24 +612,26 @@ const NewItemForm = () => {
 
                 {formData.purchasable && (
                   <div className="space-y-4">
-                    {/* Cost Price */}
-                    <div>
-                      <label className="text-sm font-medium text-red-500 block mb-2">
-                        Cost Price<span>*</span>
-                      </label>
-                      <div className="flex items-center gap-2">
-                        <span className="text-gray-600">INR</span>
-                        <input
-                          type="number"
-                          name="costPrice"
-                          value={formData.costPrice}
-                          onChange={handleInputChange}
-                          className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                          placeholder="0.00"
-                          step="0.01"
-                        />
+                    {/* Cost Price - Only visible to admin and super_admin */}
+                    {canViewPurchasePrice && (
+                      <div>
+                        <label className="text-sm font-medium text-red-500 block mb-2">
+                          Cost Price<span>*</span>
+                        </label>
+                        <div className="flex items-center gap-2">
+                          <span className="text-gray-600">INR</span>
+                          <input
+                            type="number"
+                            name="costPrice"
+                            value={formData.costPrice}
+                            onChange={handleInputChange}
+                            className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            placeholder="0.00"
+                            step="0.01"
+                          />
+                        </div>
                       </div>
-                    </div>
+                    )}
 
                     {/* Account */}
                     <div>

@@ -10,6 +10,7 @@ router.get('/export', itemsController.exportItems);
 router.post('/import', itemsController.importItems);
 router.post('/import/validate', itemsController.validateImportData);
 router.post('/import/google-sheets', itemsController.importFromGoogleSheets);
+router.get('/generate-sku', itemsController.generateSku);
 router.get('/:id', itemsController.getItemById);
 router.post('/', itemsController.createItem);
 router.put('/:id', itemsController.updateItem);

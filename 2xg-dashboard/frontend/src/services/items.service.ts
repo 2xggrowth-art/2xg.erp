@@ -132,4 +132,8 @@ export const itemsService = {
     itemIds?: string[];
   }): AxiosPromise<APIResponse<Item[]>> =>
     apiClient.get('/items/export', { params: filters }),
+
+  // Generate next SKU automatically
+  generateSku: (): AxiosPromise<APIResponse<{ sku: string }>> =>
+    apiClient.get('/items/generate-sku'),
 };
