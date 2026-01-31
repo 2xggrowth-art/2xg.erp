@@ -4,6 +4,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { invoicesService, InvoiceItem } from '../../services/invoices.service';
 import { customersService, Customer } from '../../services/customers.service';
 import { itemsService, Item } from '../../services/items.service';
+import { binLocationService, BinLocation } from '../../services/binLocation.service';
 import ManageTDSModal from './ManageTDSModal';
 import ManageTCSModal from './ManageTCSModal';
 
@@ -42,6 +43,7 @@ const NewInvoiceForm = () => {
   const [loading, setLoading] = useState(false);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [items, setItems] = useState<Item[]>([]);
+  const [binLocations, setBinLocations] = useState<BinLocation[]>([]);
   const [salespersons, setSalespersons] = useState<Salesperson[]>([
     { id: '1', name: 'Zaheer', email: 'mohd.Zaheer@gmail.com' },
     { id: '2', name: 'ssss', email: 'sss@gmail.com' },
@@ -129,13 +131,16 @@ const NewInvoiceForm = () => {
       unit_of_measurement: 'pcs',
       rate: 0,
       amount: 0,
-      stock_on_hand: 0
+      stock_on_hand: 0,
+      bin_location_id: '',
+      bin_location_code: ''
     }
   ]);
 
   useEffect(() => {
     fetchCustomers();
     fetchItems();
+    fetchBinLocations();
     if (!isEditMode) {
       generateInvoiceNumber();
     }
@@ -224,6 +229,17 @@ const NewInvoiceForm = () => {
       }
     } catch (error) {
       console.error('Error fetching items:', error);
+    }
+  };
+
+  const fetchBinLocations = async () => {
+    try {
+      const response = await binLocationService.getAllBinLocations({ status: 'active' });
+      if (response.success && response.data) {
+        setBinLocations(response.data);
+      }
+    } catch (error) {
+      console.error('Error fetching bin locations:', error);
     }
   };
 
@@ -379,6 +395,14 @@ const NewInvoiceForm = () => {
       }
     }
 
+    // If bin location selected, populate bin code
+    if (field === 'bin_location_id' && value) {
+      const selectedBin = binLocations.find(bin => bin.id === value);
+      if (selectedBin) {
+        updatedItems[index].bin_location_code = selectedBin.bin_code;
+      }
+    }
+
     // Calculate amount
     if (field === 'quantity' || field === 'rate') {
       updatedItems[index].amount = (updatedItems[index].quantity || 0) * (updatedItems[index].rate || 0);
@@ -399,7 +423,9 @@ const NewInvoiceForm = () => {
         unit_of_measurement: 'pcs',
         rate: 0,
         amount: 0,
-        stock_on_hand: 0
+        stock_on_hand: 0,
+        bin_location_id: '',
+        bin_location_code: ''
       }
     ]);
   };
@@ -527,7 +553,9 @@ const NewInvoiceForm = () => {
             quantity: Number(item.quantity),
             unit_of_measurement: item.unit_of_measurement || 'pcs',
             rate: Number(item.rate),
-            amount: Number(item.amount.toFixed(2))
+            amount: Number(item.amount.toFixed(2)),
+            bin_location_id: item.bin_location_id || null,
+            bin_location_code: item.bin_location_code || null
           }))
       };
 
@@ -1003,8 +1031,17 @@ const NewInvoiceForm = () => {
                           value={item.description || ''}
                           onChange={(e) => handleItemChange(index, 'description', e.target.value)}
                           placeholder="Description"
-                          className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm"
+                          className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm mb-2"
                         />
+                        {item.item_id && (
+                          <button
+                            type="button"
+                            className="text-sm text-blue-600 hover:text-blue-700 flex items-center gap-1"
+                          >
+                            <span className="text-red-500">⚠</span>
+                            Select Bins
+                          </button>
+                        )}
                       </td>
                       <td className="px-4 py-3">
                         <select

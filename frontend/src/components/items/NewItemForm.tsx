@@ -1,26 +1,22 @@
 import { useState, useEffect } from 'react';
-import { ArrowLeft, Package, Save, Upload } from 'lucide-react';
+import { ArrowLeft, Package, Save } from 'lucide-react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { itemsService } from '../../services/items.service';
 import { vendorsService, Vendor } from '../../services/vendors.service';
-import { brandsService, Brand } from '../../services/brands.service';
-import { manufacturersService, Manufacturer } from '../../services/manufacturers.service';
-import CreatableSelect from '../shared/CreatableSelect';
-import BrandManufacturerUploadModal from './BrandManufacturerUploadModal';
+import { useAuth } from '../../contexts/AuthContext';
 
 const NewItemForm = () => {
   const navigate = useNavigate();
   const { id } = useParams<{ id: string }>();
   const isEditMode = !!id;
+  const { user } = useAuth();
+
+  // Check if user is admin or super_admin to show purchase price (case-insensitive)
+  const userRole = user?.role?.toLowerCase() || '';
+  const canViewPurchasePrice = userRole === 'admin' || userRole === 'super_admin' || userRole === 'super admin';
   const [loading, setLoading] = useState(false);
   const [fetching, setFetching] = useState(false);
   const [vendors, setVendors] = useState<Vendor[]>([]);
-
-  // Brands & Manufacturers State
-  const [brands, setBrands] = useState<Brand[]>([]);
-  const [manufacturers, setManufacturers] = useState<Manufacturer[]>([]);
-  const [showUploadModal, setShowUploadModal] = useState(false);
-
   const [formData, setFormData] = useState({
     type: 'goods',
     name: '',
@@ -54,20 +50,39 @@ const NewItemForm = () => {
     quantity: '0' // Added quantity field
   });
 
-  // Fetch items for SKU validation and last SKU
+  // Fetch items for SKU validation
   const [items, setItems] = useState<any[]>([]);
-  const [lastSku, setLastSku] = useState<string>('');
   const [duplicateSkuError, setDuplicateSkuError] = useState<boolean>(false);
 
   useEffect(() => {
     fetchVendors();
-    fetchItems();
-    fetchBrands();
-    fetchManufacturers();
+    fetchItems(); // Fetch items for SKU validation
     if (isEditMode && id) {
       fetchItemDetails(id);
+    } else {
+      // Auto-generate SKU for new items
+      generateNewSku();
     }
   }, [id, isEditMode]);
+
+  const generateNewSku = async () => {
+    try {
+      const response = await itemsService.generateSku();
+      if (response.data.success && response.data.data) {
+        setFormData(prev => ({
+          ...prev,
+          sku: response.data.data.sku
+        }));
+      }
+    } catch (error) {
+      console.error('Error generating SKU:', error);
+      // Fallback SKU
+      setFormData(prev => ({
+        ...prev,
+        sku: `SKU-${Date.now().toString().slice(-6)}`
+      }));
+    }
+  };
 
   const fetchItems = async () => {
     try {
@@ -75,14 +90,6 @@ const NewItemForm = () => {
       if (response.data.success && response.data.data) {
         const fetchedItems = response.data.data;
         setItems(fetchedItems);
-        // Find last SKU (assuming simple string sort or creation date if available in sort)
-        // Ideally backend should provide this, but client-side approximation:
-        if (fetchedItems.length > 0) {
-          // Sort by created_at desc if possible, or just look at list
-          // Assuming default list might not be sorted, let's sort by created_at
-          const sorted = [...fetchedItems].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
-          setLastSku(sorted[0].sku);
-        }
       }
     } catch (error) {
       console.error('Error fetching items:', error);
@@ -98,82 +105,6 @@ const NewItemForm = () => {
       }
     } catch (error) {
       console.error('Error fetching vendors:', error);
-    }
-  };
-
-  const fetchBrands = async () => {
-    try {
-      const response = await brandsService.getAllBrands();
-      if (response.data.success) {
-        setBrands(response.data.data);
-      }
-    } catch (error) {
-      console.error('Error fetching brands:', error);
-    }
-  };
-
-  const fetchManufacturers = async () => {
-    try {
-      const response = await manufacturersService.getAllManufacturers();
-      if (response.data.success) {
-        setManufacturers(response.data.data);
-      }
-    } catch (error) {
-      console.error('Error fetching manufacturers:', error);
-    }
-  };
-
-  const handleCreateBrand = async (name: string) => {
-    try {
-      const response = await brandsService.createBrand({ name });
-      if (response.data.success) {
-        setBrands([...brands, response.data.data]);
-        setFormData(prev => ({ ...prev, brand: name }));
-      }
-    } catch (error) {
-      console.error('Error creating brand:', error);
-      alert('Failed to create brand');
-    }
-  };
-
-  const handleCreateManufacturer = async (name: string) => {
-    try {
-      const response = await manufacturersService.createManufacturer({ name });
-      if (response.data.success) {
-        setManufacturers([...manufacturers, response.data.data]);
-        setFormData(prev => ({ ...prev, manufacturer: name }));
-      }
-    } catch (error) {
-      console.error('Error creating manufacturer:', error);
-      alert('Failed to create manufacturer');
-    }
-  };
-
-  const handleUploadComplete = async (data: { brands: any[], manufacturers: any[] }) => {
-    try {
-      let brandsCreated = 0;
-      let manufacturersCreated = 0;
-
-      if (data.brands && data.brands.length > 0) {
-        const response = await brandsService.bulkCreateBrands(data.brands);
-        if (response.data.success) {
-          fetchBrands();
-          brandsCreated = data.brands.length;
-        }
-      }
-
-      if (data.manufacturers && data.manufacturers.length > 0) {
-        const response = await manufacturersService.bulkCreateManufacturers(data.manufacturers);
-        if (response.data.success) {
-          fetchManufacturers();
-          manufacturersCreated = data.manufacturers.length;
-        }
-      }
-
-      return { brands: brandsCreated, manufacturers: manufacturersCreated };
-    } catch (error) {
-      console.error('Bulk create failed', error);
-      throw error;
     }
   };
 
@@ -437,7 +368,7 @@ const NewItemForm = () => {
             </div>
           </div>
 
-          {/* SKU */}
+          {/* SKU - Auto-generated for new items */}
           <div className="grid grid-cols-4 gap-4 items-center">
             <label className="text-sm font-medium text-gray-700 flex items-center gap-1">
               SKU<span className="text-red-500">*</span>
@@ -448,16 +379,19 @@ const NewItemForm = () => {
                 type="text"
                 name="sku"
                 value={formData.sku}
-                onChange={handleInputChange}
-                className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent ${duplicateSkuError ? 'border-red-500' : 'border-blue-400'}`}
-                placeholder="Enter SKU"
+                onChange={isEditMode ? handleInputChange : undefined}
+                readOnly={!isEditMode}
+                className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                  duplicateSkuError ? 'border-red-500' : !isEditMode ? 'border-gray-300 bg-gray-50' : 'border-blue-400'
+                }`}
+                placeholder={isEditMode ? "Enter SKU" : "Auto-generating..."}
                 required
               />
               {duplicateSkuError && (
                 <p className="text-xs text-red-500 mt-1">SKU already exists. Please choose a unique SKU.</p>
               )}
-              {lastSku && !isEditMode && (
-                <p className="text-xs text-gray-500 mt-1">Last used SKU: <span className="font-semibold">{lastSku}</span></p>
+              {!isEditMode && formData.sku && (
+                <p className="text-xs text-green-600 mt-1">SKU auto-generated: <span className="font-semibold">{formData.sku}</span></p>
               )}
             </div>
           </div>
@@ -564,38 +498,25 @@ const NewItemForm = () => {
             <label className="text-sm font-medium text-gray-700">
               Manufacturer
             </label>
-            <div className="col-span-3">
-              <div className="flex justify-end mb-2">
-                <button
-                  type="button"
-                  onClick={() => setShowUploadModal(true)}
-                  className="text-sm text-blue-600 hover:text-blue-800 flex items-center gap-1"
-                >
-                  <Upload className="w-4 h-4" />
-                  Import from Excel
-                </button>
-              </div>
-              <div className="grid grid-cols-2 gap-6">
-                <div>
-                  <CreatableSelect
-                    options={manufacturers.map(m => ({ id: m.id, name: m.name }))}
-                    value={formData.manufacturer}
-                    onChange={(val) => setFormData(prev => ({ ...prev, manufacturer: val }))}
-                    onCreateOption={handleCreateManufacturer}
-                    placeholder="Select or add manufacturer"
-                  />
-                </div>
-
-                <div>
-                  <label className="text-sm font-medium text-gray-700 block mb-2">Brand</label>
-                  <CreatableSelect
-                    options={brands.map(b => ({ id: b.id, name: b.name }))}
-                    value={formData.brand}
-                    onChange={(val) => setFormData(prev => ({ ...prev, brand: val }))}
-                    onCreateOption={handleCreateBrand}
-                    placeholder="Select or add brand"
-                  />
-                </div>
+            <div className="col-span-3 grid grid-cols-2 gap-6">
+              <input
+                type="text"
+                name="manufacturer"
+                value={formData.manufacturer}
+                onChange={handleInputChange}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                placeholder="Enter manufacturer"
+              />
+              <div>
+                <label className="text-sm font-medium text-gray-700 block mb-2">Brand</label>
+                <input
+                  type="text"
+                  name="brand"
+                  value={formData.brand}
+                  onChange={handleInputChange}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  placeholder="Enter brand"
+                />
               </div>
             </div>
           </div>
@@ -692,24 +613,26 @@ const NewItemForm = () => {
 
                 {formData.purchasable && (
                   <div className="space-y-4">
-                    {/* Cost Price */}
-                    <div>
-                      <label className="text-sm font-medium text-red-500 block mb-2">
-                        Cost Price<span>*</span>
-                      </label>
-                      <div className="flex items-center gap-2">
-                        <span className="text-gray-600">INR</span>
-                        <input
-                          type="number"
-                          name="costPrice"
-                          value={formData.costPrice}
-                          onChange={handleInputChange}
-                          className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                          placeholder="0.00"
-                          step="0.01"
-                        />
+                    {/* Cost Price - Only visible to admin and super_admin */}
+                    {canViewPurchasePrice && (
+                      <div>
+                        <label className="text-sm font-medium text-red-500 block mb-2">
+                          Cost Price<span>*</span>
+                        </label>
+                        <div className="flex items-center gap-2">
+                          <span className="text-gray-600">INR</span>
+                          <input
+                            type="number"
+                            name="costPrice"
+                            value={formData.costPrice}
+                            onChange={handleInputChange}
+                            className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            placeholder="0.00"
+                            step="0.01"
+                          />
+                        </div>
                       </div>
-                    </div>
+                    )}
 
                     {/* Account */}
                     <div>
@@ -937,12 +860,6 @@ const NewItemForm = () => {
 
         </form>
       </div>
-      {showUploadModal && (
-        <BrandManufacturerUploadModal
-          onClose={() => setShowUploadModal(false)}
-          onUpload={handleUploadComplete}
-        />
-      )}
     </div>
   );
 };

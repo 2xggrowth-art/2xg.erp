@@ -462,6 +462,17 @@ CREATE TABLE IF NOT EXISTS crm_leads (
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
+-- Bin Locations (Warehouse Management)
+CREATE TABLE IF NOT EXISTS bin_locations (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  bin_code VARCHAR(50) UNIQUE NOT NULL,
+  warehouse VARCHAR(100) NOT NULL,
+  description TEXT,
+  status VARCHAR(20) CHECK (status IN ('active', 'inactive')) DEFAULT 'active',
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
 -- =====================================================
 -- CREATE TRIGGERS (Only if tables exist)
 -- =====================================================
@@ -496,6 +507,12 @@ BEGIN
     CREATE TRIGGER update_vendors_updated_at BEFORE UPDATE ON vendors
       FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
   END IF;
+
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'bin_locations') THEN
+    DROP TRIGGER IF EXISTS update_bin_locations_updated_at ON bin_locations;
+    CREATE TRIGGER update_bin_locations_updated_at BEFORE UPDATE ON bin_locations
+      FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+  END IF;
 END $$;
 
 -- =====================================================
@@ -525,6 +542,9 @@ CREATE INDEX IF NOT EXISTS idx_tickets_org ON service_tickets(organization_id);
 CREATE INDEX IF NOT EXISTS idx_leads_status ON crm_leads(status);
 CREATE INDEX IF NOT EXISTS idx_leads_date ON crm_leads(lead_date DESC);
 CREATE INDEX IF NOT EXISTS idx_leads_org ON crm_leads(organization_id);
+CREATE INDEX IF NOT EXISTS idx_bin_locations_bin_code ON bin_locations(bin_code);
+CREATE INDEX IF NOT EXISTS idx_bin_locations_warehouse ON bin_locations(warehouse);
+CREATE INDEX IF NOT EXISTS idx_bin_locations_status ON bin_locations(status);
 
 -- =====================================================
 -- INSERT DEFAULT DATA

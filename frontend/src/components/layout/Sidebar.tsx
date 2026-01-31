@@ -30,7 +30,8 @@ import {
   FileCheck,
   Clock,
   Calculator, // Added for the POS icon
-  TrendingUp
+  TrendingUp,
+  MapPin
 } from 'lucide-react';
 
 interface SidebarProps {
@@ -131,6 +132,13 @@ const Sidebar = ({ isOpen, onClose }: SidebarProps) => {
                   >
                     <Package size={16} />
                     <span>Stock Count</span>
+                  </Link>
+                  <Link
+                    to="/items/bin-locations"
+                    className="flex items-center gap-3 px-6 py-2 pl-12 hover:bg-slate-700 transition-colors text-sm text-slate-300 hover:text-white"
+                  >
+                    <MapPin size={16} />
+                    <span>Bin Locations</span>
                   </Link>
                   <Link
                     to="/inventory/transfer-orders"

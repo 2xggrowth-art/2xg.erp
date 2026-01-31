@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { ArrowLeft, Save, Send, Plus, Trash2, Upload } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
+import { ArrowLeft, Save, Send, Plus, Trash2, Upload, X } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { purchaseOrdersService, PurchaseOrderItem } from '../../services/purchase-orders.service';
 import { vendorsService, Vendor } from '../../services/vendors.service';
@@ -22,6 +22,8 @@ const NewPurchaseOrderForm = () => {
   const [locations] = useState<Location[]>([
     { id: '1', name: 'Head Office', address: 'Karnataka, Bangalore, Karnataka, India - 560001' }
   ]);
+  const [attachedFiles, setAttachedFiles] = useState<File[]>([]);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [formData, setFormData] = useState({
     vendor_id: '',
@@ -53,7 +55,17 @@ const NewPurchaseOrderForm = () => {
     bill_of_lading_no: '',
     bill_of_lading_date: '',
     motor_vehicle_no: '',
-    terms_and_conditions: '',
+    terms_and_conditions: `Prices are as per this PO and are final.
+
+Delivery must be completed on or before the agreed date.
+
+Goods are subject to quality inspection and approval.
+
+Rejected or damaged items must be replaced by the supplier.
+
+Proper packaging and PO reference are mandatory.
+
+Payment will be made after successful delivery and acceptance.`,
     status: 'draft'
   });
 
@@ -182,6 +194,22 @@ const NewPurchaseOrderForm = () => {
     }
   };
 
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (files) {
+      const newFiles = Array.from(files);
+      setAttachedFiles(prev => [...prev, ...newFiles]);
+    }
+  };
+
+  const handleUploadClick = () => {
+    fileInputRef.current?.click();
+  };
+
+  const removeFile = (index: number) => {
+    setAttachedFiles(prev => prev.filter((_, i) => i !== index));
+  };
+
   const handleItemSearchChange = (index: number, searchQuery: string) => {
     setItemSearchQueries(prev => ({ ...prev, [index]: searchQuery }));
     setShowItemDropdowns(prev => ({ ...prev, [index]: true }));
@@ -306,7 +334,10 @@ const NewPurchaseOrderForm = () => {
           quantity: item.quantity,
           unit_of_measurement: item.unit_of_measurement,
           rate: item.rate
-        }))
+        })),
+        // Include attached file names (for now, just store file names)
+        // In production, you'd upload these to storage first and use URLs
+        attachment_urls: attachedFiles.map(file => file.name)
       };
 
       // Remove location_id if empty or not a valid UUID
@@ -724,19 +755,21 @@ const NewPurchaseOrderForm = () => {
                 </div>
               </div>
 
-              {/* Terms */}
+              {/* Terms & Conditions - Display Only */}
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-2">
                   Terms & Conditions
                 </label>
-                <textarea
-                  name="terms_and_conditions"
-                  value={formData.terms_and_conditions}
-                  onChange={handleInputChange}
-                  rows={3}
-                  placeholder="Enter payment and delivery terms"
-                  className="w-full px-4 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                />
+                <div className="w-full px-4 py-3 border border-slate-200 rounded-lg bg-slate-50 text-sm text-slate-700">
+                  <ul className="space-y-2">
+                    <li>• Prices are as per this PO and are final.</li>
+                    <li>• Delivery must be completed on or before the agreed date.</li>
+                    <li>• Goods are subject to quality inspection and approval.</li>
+                    <li>• Rejected or damaged items must be replaced by the supplier.</li>
+                    <li>• Proper packaging and PO reference are mandatory.</li>
+                    <li>• Payment will be made after successful delivery and acceptance.</li>
+                  </ul>
+                </div>
               </div>
 
               {/* Attachments */}
@@ -744,10 +777,49 @@ const NewPurchaseOrderForm = () => {
                 <label className="block text-sm font-medium text-slate-700 mb-2">
                   Attach File(s) to Purchase Order
                 </label>
-                <button className="flex items-center gap-2 px-4 py-2 border border-slate-300 rounded-lg hover:bg-slate-50">
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  multiple
+                  onChange={handleFileSelect}
+                  className="hidden"
+                  accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png"
+                />
+                <button
+                  type="button"
+                  onClick={handleUploadClick}
+                  className="flex items-center gap-2 px-4 py-2 border border-slate-300 rounded-lg hover:bg-slate-50 transition-colors"
+                >
                   <Upload size={16} />
                   <span className="text-sm">Upload File</span>
                 </button>
+
+                {/* Display attached files */}
+                {attachedFiles.length > 0 && (
+                  <div className="mt-3 space-y-2">
+                    {attachedFiles.map((file, index) => (
+                      <div
+                        key={index}
+                        className="flex items-center justify-between p-2 bg-blue-50 border border-blue-200 rounded-lg"
+                      >
+                        <div className="flex items-center gap-2 flex-1 min-w-0">
+                          <Upload size={14} className="text-blue-600 flex-shrink-0" />
+                          <span className="text-sm text-slate-700 truncate">{file.name}</span>
+                          <span className="text-xs text-slate-500 flex-shrink-0">
+                            ({(file.size / 1024).toFixed(1)} KB)
+                          </span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => removeFile(index)}
+                          className="ml-2 p-1 text-red-600 hover:bg-red-100 rounded transition-colors flex-shrink-0"
+                        >
+                          <X size={16} />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
 

@@ -3,6 +3,15 @@ import { ItemsService } from '../services/items.service';
 
 const itemsService = new ItemsService();
 
+export const generateSku = async (req: Request, res: Response) => {
+  try {
+    const sku = await itemsService.generateSku();
+    res.json({ success: true, data: { sku } });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+};
+
 export const getAllItems = async (req: Request, res: Response) => {
   try {
     const { category, isActive, lowStock } = req.query;

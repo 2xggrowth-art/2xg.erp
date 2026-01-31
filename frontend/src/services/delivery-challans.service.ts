@@ -17,6 +17,16 @@ export interface DeliveryChallan {
   challan_number?: string;
   customer_id?: string;
   customer_name: string;
+  invoice_number?: string;
+  alternate_phone?: string;
+  delivery_location_type?: string;
+  delivery_address?: string;
+  product_name?: string;
+  pincode?: string;
+  free_accessories?: string;
+  salesperson_name?: string;
+  estimated_delivery_day?: string;
+  reverse_pickup?: string;
   reference_number?: string;
   challan_date: string;
   challan_type: string;

@@ -209,7 +209,8 @@ const PaymentMadePage: React.FC = () => {
             className="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
           >
             <option value="all">All Status</option>
-            <option value="completed">Completed</option>
+            <option value="completed">Paid</option>
+            <option value="draft">Draft</option>
             <option value="pending">Pending</option>
             <option value="failed">Failed</option>
             <option value="cancelled">Cancelled</option>

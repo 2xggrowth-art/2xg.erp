@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef } from 'react';
-import { Settings, Users, Plus, Trash2, Edit2, Save, X, Shield, CheckSquare, Square } from 'lucide-react';
+import { Settings, Users, Plus, Trash2, Edit2, Save, X, Shield, CheckSquare, Square, MapPin } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { authService, User } from '../services/auth.service';
+import { binLocationService, BinLocation } from '../services/binLocation.service';
 
 interface Permission {
   module: string;
@@ -65,6 +66,14 @@ const SettingsPage = () => {
   });
 
   const [editRole, setEditRole] = useState<Role | null>(null);
+
+  // Bin Location state
+  const [binLocations, setBinLocations] = useState<BinLocation[]>([]);
+  const [showAddBinModal, setShowAddBinModal] = useState(false);
+  const [editingBinId, setEditingBinId] = useState<string | null>(null);
+  const [editBin, setEditBin] = useState<BinLocation | null>(null);
+  const [newBin, setNewBin] = useState({ bin_code: '', warehouse: '', description: '' });
+  const [binLoading, setBinLoading] = useState(false);
 
   // Load roles from localStorage on mount
   useEffect(() => {
@@ -318,6 +327,91 @@ const SettingsPage = () => {
     }
   };
 
+  // Load bin locations
+  useEffect(() => {
+    const loadBinLocations = async () => {
+      try {
+        setBinLoading(true);
+        const response = await binLocationService.getAllBinLocations();
+        if (response.success && response.data) {
+          setBinLocations(response.data);
+        }
+      } catch (error) {
+        console.error('Error loading bin locations:', error);
+      } finally {
+        setBinLoading(false);
+      }
+    };
+    if (activeTab === 'bins') {
+      loadBinLocations();
+    }
+  }, [activeTab]);
+
+  const handleAddBin = async () => {
+    if (!newBin.bin_code || !newBin.warehouse) {
+      alert('Bin Code and Warehouse are required');
+      return;
+    }
+    try {
+      const response = await binLocationService.createBinLocation(newBin);
+      if (response.success && response.data) {
+        setBinLocations([...binLocations, response.data]);
+        setNewBin({ bin_code: '', warehouse: '', description: '' });
+        setShowAddBinModal(false);
+        alert('Bin location created successfully!');
+      } else {
+        alert(response.error || 'Failed to create bin location');
+      }
+    } catch (error: any) {
+      console.error('Error creating bin location:', error);
+      alert(error.response?.data?.error || 'Failed to create bin location');
+    }
+  };
+
+  const handleEditBin = (bin: BinLocation) => {
+    setEditingBinId(bin.id!);
+    setEditBin({ ...bin });
+  };
+
+  const handleSaveBinEdit = async () => {
+    if (!editBin || !editingBinId) return;
+    try {
+      const response = await binLocationService.updateBinLocation(editingBinId, {
+        bin_code: editBin.bin_code,
+        warehouse: editBin.warehouse,
+        description: editBin.description,
+        status: editBin.status
+      });
+      if (response.success && response.data) {
+        setBinLocations(binLocations.map(b => b.id === editingBinId ? response.data : b));
+        setEditingBinId(null);
+        setEditBin(null);
+        alert('Bin location updated successfully!');
+      } else {
+        alert(response.error || 'Failed to update bin location');
+      }
+    } catch (error: any) {
+      console.error('Error updating bin location:', error);
+      alert(error.response?.data?.error || 'Failed to update bin location');
+    }
+  };
+
+  const handleDeleteBin = async (binId: string) => {
+    if (!window.confirm('Are you sure you want to delete this bin location?')) return;
+    try {
+      const response = await binLocationService.deleteBinLocation(binId);
+      if (response.success) {
+        setBinLocations(binLocations.filter(b => b.id !== binId));
+        alert('Bin location deleted successfully!');
+      } else {
+        alert(response.error || 'Failed to delete bin location');
+      }
+    } catch (error: any) {
+      console.error('Error deleting bin location:', error);
+      alert(error.response?.data?.error || 'Failed to delete bin location');
+    }
+  };
+
   const togglePermission = (moduleIndex: number, permissionType: 'create' | 'read' | 'update' | 'delete') => {
     setNewRole({
       ...newRole,
@@ -374,6 +468,18 @@ const SettingsPage = () => {
             <div className="flex items-center gap-2">
               <Users size={18} />
               User Management
+            </div>
+          </button>
+          <button
+            onClick={() => setActiveTab('bins')}
+            className={`py-3 px-1 font-medium text-sm border-b-2 transition ${activeTab === 'bins'
+                ? 'border-blue-600 text-blue-600'
+                : 'border-transparent text-gray-500 hover:text-gray-700'
+              }`}
+          >
+            <div className="flex items-center gap-2">
+              <MapPin size={18} />
+              Bin Locations
             </div>
           </button>
         </div>
@@ -531,6 +637,137 @@ const SettingsPage = () => {
                   ))}
                 </tbody>
               </table>
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'bins' && (
+          <div className="bg-white rounded-lg shadow-sm border border-gray-200">
+            {/* Bin Location Management Header */}
+            <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
+              <div>
+                <h2 className="text-lg font-semibold text-gray-800">Bin Locations</h2>
+                <p className="text-sm text-gray-500">Manage warehouse bin locations for inventory tracking</p>
+              </div>
+              {isAdmin && (
+                <button
+                  onClick={() => setShowAddBinModal(true)}
+                  className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
+                >
+                  <Plus size={18} />
+                  Add Bin Location
+                </button>
+              )}
+            </div>
+
+            {/* Bin Locations Table */}
+            <div className="overflow-x-auto">
+              {binLoading ? (
+                <div className="p-8 text-center text-gray-500">Loading bin locations...</div>
+              ) : binLocations.length === 0 ? (
+                <div className="p-8 text-center text-gray-500">
+                  <MapPin size={48} className="mx-auto mb-3 text-gray-300" />
+                  <p>No bin locations found. Create your first bin location to start tracking inventory by location.</p>
+                </div>
+              ) : (
+                <table className="w-full">
+                  <thead className="bg-gray-50 border-b border-gray-200">
+                    <tr>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Bin Code</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Warehouse</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Description</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                      <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-200">
+                    {binLocations.map((bin) => (
+                      <tr key={bin.id} className="hover:bg-gray-50">
+                        {editingBinId === bin.id ? (
+                          <>
+                            <td className="px-6 py-4">
+                              <input
+                                type="text"
+                                value={editBin?.bin_code || ''}
+                                onChange={(e) => setEditBin(editBin ? { ...editBin, bin_code: e.target.value } : null)}
+                                className="w-full px-2 py-1 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500"
+                              />
+                            </td>
+                            <td className="px-6 py-4">
+                              <input
+                                type="text"
+                                value={editBin?.warehouse || ''}
+                                onChange={(e) => setEditBin(editBin ? { ...editBin, warehouse: e.target.value } : null)}
+                                className="w-full px-2 py-1 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500"
+                              />
+                            </td>
+                            <td className="px-6 py-4">
+                              <input
+                                type="text"
+                                value={editBin?.description || ''}
+                                onChange={(e) => setEditBin(editBin ? { ...editBin, description: e.target.value } : null)}
+                                className="w-full px-2 py-1 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500"
+                              />
+                            </td>
+                            <td className="px-6 py-4">
+                              <select
+                                value={editBin?.status || 'active'}
+                                onChange={(e) => setEditBin(editBin ? { ...editBin, status: e.target.value } : null)}
+                                className="px-2 py-1 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500"
+                              >
+                                <option value="active">Active</option>
+                                <option value="inactive">Inactive</option>
+                              </select>
+                            </td>
+                            <td className="px-6 py-4 text-right">
+                              <div className="flex items-center justify-end gap-2">
+                                <button onClick={handleSaveBinEdit} className="p-1 text-green-600 hover:bg-green-50 rounded" title="Save">
+                                  <Save size={18} />
+                                </button>
+                                <button onClick={() => { setEditingBinId(null); setEditBin(null); }} className="p-1 text-gray-600 hover:bg-gray-100 rounded" title="Cancel">
+                                  <X size={18} />
+                                </button>
+                              </div>
+                            </td>
+                          </>
+                        ) : (
+                          <>
+                            <td className="px-6 py-4">
+                              <div className="flex items-center gap-2">
+                                <MapPin size={16} className="text-blue-600" />
+                                <span className="text-sm font-medium text-gray-900">{bin.bin_code}</span>
+                              </div>
+                            </td>
+                            <td className="px-6 py-4 text-sm text-gray-600">{bin.warehouse}</td>
+                            <td className="px-6 py-4 text-sm text-gray-600">{bin.description || '-'}</td>
+                            <td className="px-6 py-4">
+                              <span className={`px-2 py-1 text-xs font-medium rounded-full ${
+                                bin.status === 'active' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-700'
+                              }`}>
+                                {bin.status === 'active' ? 'Active' : 'Inactive'}
+                              </span>
+                            </td>
+                            <td className="px-6 py-4 text-right">
+                              {isAdmin ? (
+                                <div className="flex items-center justify-end gap-2">
+                                  <button onClick={() => handleEditBin(bin)} className="p-1 text-blue-600 hover:bg-blue-50 rounded" title="Edit">
+                                    <Edit2 size={18} />
+                                  </button>
+                                  <button onClick={() => handleDeleteBin(bin.id!)} className="p-1 text-red-600 hover:bg-red-50 rounded" title="Delete">
+                                    <Trash2 size={18} />
+                                  </button>
+                                </div>
+                              ) : (
+                                <span className="text-xs text-gray-400">View Only</span>
+                              )}
+                            </td>
+                          </>
+                        )}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
             </div>
           </div>
         )}
@@ -788,6 +1025,64 @@ const SettingsPage = () => {
                 className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
               >
                 Add User
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Add Bin Location Modal */}
+      {showAddBinModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg shadow-xl w-full max-w-md mx-4">
+            <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
+              <h3 className="text-lg font-semibold text-gray-800">Add Bin Location</h3>
+              <button onClick={() => setShowAddBinModal(false)} className="p-1 hover:bg-gray-100 rounded">
+                <X size={20} className="text-gray-500" />
+              </button>
+            </div>
+            <div className="p-6 space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Bin Code <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={newBin.bin_code}
+                  onChange={(e) => setNewBin({ ...newBin, bin_code: e.target.value })}
+                  placeholder="e.g., A-01-01, RACK-1-SHELF-2"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Warehouse <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={newBin.warehouse}
+                  onChange={(e) => setNewBin({ ...newBin, warehouse: e.target.value })}
+                  placeholder="e.g., Main Warehouse, Storage Unit B"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
+                <textarea
+                  value={newBin.description}
+                  onChange={(e) => setNewBin({ ...newBin, description: e.target.value })}
+                  placeholder="Optional description of this bin location"
+                  rows={2}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+              </div>
+            </div>
+            <div className="px-6 py-4 border-t border-gray-200 flex justify-end gap-3">
+              <button onClick={() => setShowAddBinModal(false)} className="px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition">
+                Cancel
+              </button>
+              <button onClick={handleAddBin} className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition">
+                Add Bin Location
               </button>
             </div>
           </div>

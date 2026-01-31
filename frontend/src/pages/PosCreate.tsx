@@ -1,20 +1,12 @@
 import React, { useState, ChangeEvent, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Search, User, X, Plus, Edit2, ShoppingCart, Package, Trash2, Check, Printer, Clock, DollarSign, TrendingUp, MapPin } from 'lucide-react';
+import { Search, User, X, Plus, Edit2, ShoppingCart, Package, Trash2, Check, Printer, Clock, DollarSign, TrendingUp } from 'lucide-react';
 import { customersService, Customer, CreateCustomerData } from '../services/customers.service';
 import { itemsService, Item } from '../services/items.service';
 import { salespersonService, Salesperson } from '../services/salesperson.service';
 import { invoicesService } from '../services/invoices.service';
+import { posSessionsService, PosSession } from '../services/pos-sessions.service';
 import SplitPaymentModal from '../components/pos/SplitPaymentModal';
-import SelectBinsModal from '../components/invoices/SelectBinsModal';
-
-// Bin allocation interface
-interface BinAllocation {
-  bin_location_id: string;
-  bin_code: string;
-  warehouse: string;
-  quantity: number;
-}
 
 // Define the shape of a Cart Item
 interface CartItem {
@@ -26,7 +18,6 @@ interface CartItem {
   qty: number;
   rate: number;
   cost_price: number;
-  bin_allocations?: BinAllocation[];
 }
 
 interface HeldCart {
@@ -34,21 +25,6 @@ interface HeldCart {
   items: CartItem[];
   customer: Customer | null;
   timestamp: Date;
-}
-
-interface PosSession {
-  id: string;
-  session_number: string;
-  register: string;
-  opened_by: string;
-  opened_at: string;
-  closed_at?: string;
-  status: 'In-Progress' | 'Closed';
-  opening_balance: number;
-  closing_balance?: number;
-  cash_in: number;
-  cash_out: number;
-  total_sales: number;
 }
 
 type TabType = 'newsale' | 'sessions';
@@ -77,6 +53,20 @@ const PosCreate: React.FC = () => {
   const [newSalesperson, setNewSalesperson] = useState({ name: '', email: '' });
   const [activeHeldCartId, setActiveHeldCartId] = useState<string | null>(null);
   const [sessions, setSessions] = useState<PosSession[]>([]);
+  const [activeSession, setActiveSession] = useState<PosSession | null>(null);
+  const [showStartSessionModal, setShowStartSessionModal] = useState(false);
+  const [showCloseSessionModal, setShowCloseSessionModal] = useState(false);
+  const [sessionLoading, setSessionLoading] = useState(false);
+  const [startSessionData, setStartSessionData] = useState({
+    register: 'billing desk',
+    opened_by: '',
+    opening_balance: 0,
+  });
+  const [closeSessionData, setCloseSessionData] = useState({
+    closing_balance: 0,
+    cash_in: 0,
+    cash_out: 0,
+  });
 
   // Payment states
   const [showPaymentModal, setShowPaymentModal] = useState(false);
@@ -87,10 +77,6 @@ const PosCreate: React.FC = () => {
   const [processingPayment, setProcessingPayment] = useState(false);
   const [showBillSuccess, setShowBillSuccess] = useState(false);
   const [generatedInvoice, setGeneratedInvoice] = useState<any>(null);
-
-  // Bin location states
-  const [binModalOpen, setBinModalOpen] = useState(false);
-  const [selectedCartIndex, setSelectedCartIndex] = useState<number | null>(null);
 
   const [newCustomer, setNewCustomer] = useState<CreateCustomerData>({
     display_name: '',
@@ -126,6 +112,7 @@ const PosCreate: React.FC = () => {
     fetchItems();
     fetchSalespersons();
     fetchSessions();
+    fetchActiveSession();
   }, []);
 
   const fetchSalespersons = () => {
@@ -139,39 +126,72 @@ const PosCreate: React.FC = () => {
 
   const fetchSessions = async () => {
     try {
-      // TODO: Implement actual API call for sessions
-      // For now, using mock data
-      const mockSessions: PosSession[] = [
-        {
-          id: '1',
-          session_number: 'SE1-556',
-          register: 'billing desk',
-          opened_by: 'Admin User',
-          opened_at: '2026-01-19T10:24:00',
-          status: 'In-Progress',
-          opening_balance: 0,
-          cash_in: 0,
-          cash_out: 0,
-          total_sales: 0
-        },
-        {
-          id: '2',
-          session_number: 'SE1-555',
-          register: 'billing desk',
-          opened_by: 'Admin User',
-          opened_at: '2026-01-18T08:32:00',
-          closed_at: '2026-01-18T21:36:00',
-          status: 'Closed',
-          opening_balance: 0,
-          closing_balance: 0,
-          cash_in: 0,
-          cash_out: 0,
-          total_sales: 0
-        }
-      ];
-      setSessions(mockSessions);
+      const response = await posSessionsService.getAllSessions();
+      if (response.success) {
+        setSessions(response.data);
+      }
     } catch (err: any) {
       console.error('Error fetching sessions:', err);
+    }
+  };
+
+  const fetchActiveSession = async () => {
+    try {
+      const response = await posSessionsService.getActiveSession();
+      if (response.success) {
+        setActiveSession(response.data);
+      }
+    } catch (err: any) {
+      console.error('Error fetching active session:', err);
+    }
+  };
+
+  const handleStartSession = async () => {
+    if (!startSessionData.opened_by.trim()) {
+      alert('Please enter who is opening the session');
+      return;
+    }
+
+    try {
+      setSessionLoading(true);
+      const response = await posSessionsService.startSession(startSessionData);
+      if (response.success) {
+        setActiveSession(response.data);
+        setShowStartSessionModal(false);
+        setStartSessionData({ register: 'billing desk', opened_by: '', opening_balance: 0 });
+        fetchSessions();
+        alert('Session started successfully!');
+      }
+    } catch (error: any) {
+      console.error('Error starting session:', error);
+      alert(error.response?.data?.error || 'Failed to start session');
+    } finally {
+      setSessionLoading(false);
+    }
+  };
+
+  const handleCloseSession = async () => {
+    if (!activeSession) return;
+
+    try {
+      setSessionLoading(true);
+      const response = await posSessionsService.closeSession(activeSession.id, {
+        closing_balance: closeSessionData.closing_balance,
+        cash_in: activeSession.cash_in,
+        cash_out: activeSession.cash_out,
+      });
+      if (response.success) {
+        setActiveSession(null);
+        setShowCloseSessionModal(false);
+        setCloseSessionData({ closing_balance: 0, cash_in: 0, cash_out: 0 });
+        fetchSessions();
+        alert('Session closed successfully!');
+      }
+    } catch (error: any) {
+      console.error('Error closing session:', error);
+      alert(error.response?.data?.error || 'Failed to close session');
+    } finally {
+      setSessionLoading(false);
     }
   };
 
@@ -316,25 +336,6 @@ const PosCreate: React.FC = () => {
     }
   };
 
-  // Bin location handlers
-  const openBinModal = (index: number) => {
-    setSelectedCartIndex(index);
-    setBinModalOpen(true);
-  };
-
-  const handleBinAllocationSave = (allocations: BinAllocation[]) => {
-    if (selectedCartIndex !== null) {
-      const updatedCart = [...cart];
-      updatedCart[selectedCartIndex] = {
-        ...updatedCart[selectedCartIndex],
-        bin_allocations: allocations
-      };
-      setCart(updatedCart);
-    }
-    setBinModalOpen(false);
-    setSelectedCartIndex(null);
-  };
-
   const filteredCustomers = customers.filter(customer =>
     customer.customer_name?.toLowerCase().includes(customerSearch.toLowerCase()) ||
     customer.mobile?.includes(customerSearch) ||
@@ -384,6 +385,12 @@ const PosCreate: React.FC = () => {
   };
 
   const handlePaymentClick = (mode: 'CASH' | 'HDFC BANK' | 'ICICI BANK' | 'BAJAJ/ICICI' | 'CREDIT SALE' | 'D/B CREDIT CARD') => {
+    if (!activeSession) {
+      alert('Please start a session before making sales');
+      setShowStartSessionModal(true);
+      return;
+    }
+
     if (cart.length === 0) {
       alert('Please add items to the cart first');
       return;
@@ -467,8 +474,7 @@ const PosCreate: React.FC = () => {
           unit_of_measurement: 'pcs',
           rate: item.rate,
           amount: item.qty * item.rate,
-          stock_on_hand: 0,
-          bin_allocations: item.bin_allocations || []
+          stock_on_hand: 0
         }))
       };
 
@@ -496,6 +502,17 @@ const PosCreate: React.FC = () => {
         setShowBillSuccess(true);
         setReferenceNumber('');
         setPaidAmount(0);
+
+        // Update session sales
+        if (activeSession) {
+          try {
+            await posSessionsService.updateSessionSales(activeSession.id, total);
+            // Update local active session state
+            setActiveSession(prev => prev ? { ...prev, total_sales: prev.total_sales + total } : null);
+          } catch (err) {
+            console.error('Error updating session sales:', err);
+          }
+        }
 
         // Refresh items to update stock levels
         fetchItems();
@@ -576,8 +593,7 @@ const PosCreate: React.FC = () => {
           unit_of_measurement: 'pcs',
           rate: item.rate,
           amount: item.qty * item.rate,
-          stock_on_hand: 0,
-          bin_allocations: item.bin_allocations || []
+          stock_on_hand: 0
         }))
       };
 
@@ -604,6 +620,17 @@ const PosCreate: React.FC = () => {
         });
         setShowSplitPaymentModal(false);
         setShowBillSuccess(true);
+
+        // Update session sales
+        if (activeSession) {
+          try {
+            await posSessionsService.updateSessionSales(activeSession.id, total);
+            // Update local active session state
+            setActiveSession(prev => prev ? { ...prev, total_sales: prev.total_sales + total } : null);
+          } catch (err) {
+            console.error('Error updating session sales:', err);
+          }
+        }
 
         // Refresh items to update stock levels
         fetchItems();
@@ -814,6 +841,35 @@ const PosCreate: React.FC = () => {
               <Clock size={12} className="text-gray-500" />
               <span className="font-medium">Sessions</span>
             </div>
+
+            {/* Session Status Indicator */}
+            <div className="ml-auto flex items-center gap-2 px-4">
+              {activeSession ? (
+                <div className="flex items-center gap-2">
+                  <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
+                  <span className="text-xs text-green-700 font-medium">
+                    Session: {activeSession.session_number}
+                  </span>
+                  <button
+                    onClick={() => setShowCloseSessionModal(true)}
+                    className="ml-2 px-3 py-1 text-xs font-medium text-red-700 bg-red-50 border border-red-200 rounded hover:bg-red-100 transition-colors"
+                  >
+                    End Session
+                  </button>
+                </div>
+              ) : (
+                <div className="flex items-center gap-2">
+                  <span className="w-2 h-2 bg-red-500 rounded-full"></span>
+                  <span className="text-xs text-red-700 font-medium">No Active Session</span>
+                  <button
+                    onClick={() => setShowStartSessionModal(true)}
+                    className="ml-2 px-3 py-1 text-xs font-medium text-green-700 bg-green-50 border border-green-200 rounded hover:bg-green-100 transition-colors"
+                  >
+                    Start Session
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
 
           {activeTab === 'newsale' ? (
@@ -909,22 +965,6 @@ const PosCreate: React.FC = () => {
                             onChange={(e: ChangeEvent<HTMLInputElement>) => handleQtyChange(item.id, e.target.value)}
                             className="w-16 bg-gray-50 border border-gray-300 rounded px-2 py-1 text-center text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                           />
-                          {item.qty > 0 && item.item_id && (
-                            <button
-                              onClick={() => openBinModal(index)}
-                              className={`mt-1 px-2 py-0.5 text-[10px] rounded flex items-center gap-1 mx-auto transition-colors ${
-                                item.bin_allocations && item.bin_allocations.length > 0
-                                  ? 'bg-green-100 text-green-700 hover:bg-green-200 border border-green-300'
-                                  : 'bg-amber-100 text-amber-700 hover:bg-amber-200 border border-amber-300'
-                              }`}
-                              title="Select bin locations for this item"
-                            >
-                              <MapPin size={10} />
-                              {item.bin_allocations && item.bin_allocations.length > 0
-                                ? `${item.bin_allocations.length} bin(s)`
-                                : '⚠ Select Bins'}
-                            </button>
-                          )}
                         </div>
                         <div className="col-span-2 text-right">
                           <div className="flex items-center justify-end bg-gray-50 rounded border border-gray-300 focus-within:border-blue-500 focus-within:ring-2 focus-within:ring-blue-500/20 transition-all px-2">
@@ -975,6 +1015,23 @@ const PosCreate: React.FC = () => {
           ) : (
             /* Sessions View */
             <div className="flex-1 overflow-auto p-6">
+              {/* Sessions Header */}
+              <div className="flex justify-between items-center mb-4">
+                <div>
+                  <h2 className="text-xl font-bold text-gray-800">POS Sessions</h2>
+                  <p className="text-sm text-gray-500 mt-1">Manage your point of sale sessions</p>
+                </div>
+                {!activeSession && (
+                  <button
+                    onClick={() => setShowStartSessionModal(true)}
+                    className="px-4 py-2 bg-green-600 text-white rounded-lg text-sm font-medium hover:bg-green-700 transition-colors flex items-center gap-2"
+                  >
+                    <Plus size={16} />
+                    Start New Session
+                  </button>
+                )}
+              </div>
+
               <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
                 <table className="w-full">
                   <thead className="bg-gray-50 border-b border-gray-200">
@@ -1013,6 +1070,12 @@ const PosCreate: React.FC = () => {
                             <Clock className="w-12 h-12 mb-3" />
                             <p className="text-lg font-medium">No sessions found</p>
                             <p className="text-sm mt-1">Start a new session to begin</p>
+                            <button
+                              onClick={() => setShowStartSessionModal(true)}
+                              className="mt-4 px-6 py-2.5 bg-green-600 text-white rounded-lg text-sm font-medium hover:bg-green-700 transition-colors"
+                            >
+                              Start Session
+                            </button>
                           </div>
                         </td>
                       </tr>
@@ -1069,6 +1132,11 @@ const PosCreate: React.FC = () => {
                             {session.status === 'In-Progress' ? (
                               <div className="flex items-center justify-center gap-2">
                                 <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    // TODO: Implement cash in/out modal
+                                    alert('Cash In/Out feature coming soon');
+                                  }}
                                   className="px-3 py-1.5 text-xs font-medium text-blue-700 bg-blue-50 border border-blue-200 rounded-md hover:bg-blue-100 transition-colors flex items-center gap-1"
                                   title="Cash In/Out"
                                 >
@@ -1076,6 +1144,11 @@ const PosCreate: React.FC = () => {
                                   Cash In/Out
                                 </button>
                                 <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setActiveSession(session);
+                                    setShowCloseSessionModal(true);
+                                  }}
                                   className="px-3 py-1.5 text-xs font-medium text-red-700 bg-red-50 border border-red-200 rounded-md hover:bg-red-100 transition-colors"
                                   title="Close Session"
                                 >
@@ -1084,6 +1157,10 @@ const PosCreate: React.FC = () => {
                               </div>
                             ) : (
                               <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  navigate(`/sales/pos/sessions/${session.id}`);
+                                }}
                                 className="px-3 py-1.5 text-xs font-medium text-gray-700 bg-gray-50 border border-gray-200 rounded-md hover:bg-gray-100 transition-colors"
                                 title="View Details"
                               >
@@ -1926,21 +2003,171 @@ const PosCreate: React.FC = () => {
           onComplete={handleSplitPaymentComplete}
         />
 
-        {/* Bin Selection Modal */}
-        {binModalOpen && selectedCartIndex !== null && (
-          <SelectBinsModal
-            isOpen={binModalOpen}
-            onClose={() => {
-              setBinModalOpen(false);
-              setSelectedCartIndex(null);
-            }}
-            itemName={cart[selectedCartIndex].name}
-            itemSku={cart[selectedCartIndex].sku}
-            totalQuantity={cart[selectedCartIndex].qty}
-            unitOfMeasurement="pcs"
-            currentAllocations={cart[selectedCartIndex].bin_allocations || []}
-            onSave={handleBinAllocationSave}
-          />
+        {/* Start Session Modal */}
+        {showStartSessionModal && (
+          <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+            <div className="bg-white rounded-xl w-[450px] shadow-2xl">
+              <div className="flex justify-between items-center p-5 border-b border-gray-200">
+                <h2 className="text-xl font-bold text-gray-800">Start New Session</h2>
+                <button onClick={() => setShowStartSessionModal(false)}>
+                  <X size={22} className="text-gray-400 hover:text-gray-600 cursor-pointer transition-colors" />
+                </button>
+              </div>
+              <div className="p-6 space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Register Name
+                  </label>
+                  <input
+                    type="text"
+                    value={startSessionData.register}
+                    onChange={(e) => setStartSessionData({ ...startSessionData, register: e.target.value })}
+                    className="w-full bg-gray-50 border border-gray-300 rounded-lg px-4 py-2.5 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    placeholder="billing desk"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Opened By <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={startSessionData.opened_by}
+                    onChange={(e) => setStartSessionData({ ...startSessionData, opened_by: e.target.value })}
+                    className="w-full bg-gray-50 border border-gray-300 rounded-lg px-4 py-2.5 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    placeholder="Enter your name"
+                    autoFocus
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Opening Cash Balance
+                  </label>
+                  <div className="flex items-center bg-gray-50 rounded-lg border border-gray-300 focus-within:ring-2 focus-within:ring-blue-500 focus-within:border-transparent px-4">
+                    <span className="text-gray-500">₹</span>
+                    <input
+                      type="number"
+                      value={startSessionData.opening_balance}
+                      onChange={(e) => setStartSessionData({ ...startSessionData, opening_balance: parseFloat(e.target.value) || 0 })}
+                      className="w-full bg-transparent border-none px-2 py-2.5 text-sm text-gray-800 focus:outline-none focus:ring-0"
+                      placeholder="0.00"
+                    />
+                  </div>
+                </div>
+              </div>
+              <div className="p-5 border-t border-gray-200 flex gap-3">
+                <button
+                  onClick={() => setShowStartSessionModal(false)}
+                  disabled={sessionLoading}
+                  className="flex-1 py-2.5 border border-gray-300 text-gray-700 rounded-lg text-sm font-medium hover:bg-gray-100 transition-colors disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleStartSession}
+                  disabled={sessionLoading || !startSessionData.opened_by.trim()}
+                  className="flex-1 py-2.5 bg-green-600 text-white rounded-lg text-sm font-medium hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {sessionLoading ? 'Starting...' : 'Start Session'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Close Session Modal */}
+        {showCloseSessionModal && activeSession && (
+          <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+            <div className="bg-white rounded-xl w-[500px] shadow-2xl">
+              <div className="flex justify-between items-center p-5 border-b border-gray-200">
+                <h2 className="text-xl font-bold text-gray-800">Close Session</h2>
+                <button onClick={() => setShowCloseSessionModal(false)}>
+                  <X size={22} className="text-gray-400 hover:text-gray-600 cursor-pointer transition-colors" />
+                </button>
+              </div>
+              <div className="p-6 space-y-4">
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                  <div className="grid grid-cols-2 gap-4 text-sm">
+                    <div>
+                      <span className="text-gray-600">Session:</span>
+                      <span className="ml-2 font-semibold text-gray-800">{activeSession.session_number}</span>
+                    </div>
+                    <div>
+                      <span className="text-gray-600">Register:</span>
+                      <span className="ml-2 font-semibold text-gray-800">{activeSession.register}</span>
+                    </div>
+                    <div>
+                      <span className="text-gray-600">Opened By:</span>
+                      <span className="ml-2 font-semibold text-gray-800">{activeSession.opened_by}</span>
+                    </div>
+                    <div>
+                      <span className="text-gray-600">Total Sales:</span>
+                      <span className="ml-2 font-semibold text-green-600">{formatCurrency(activeSession.total_sales)}</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Opening Balance
+                    </label>
+                    <div className="flex items-center bg-gray-100 rounded-lg px-4 py-2.5">
+                      <span className="text-gray-500">₹</span>
+                      <span className="ml-2 text-gray-700">{activeSession.opening_balance.toFixed(2)}</span>
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Cash In
+                    </label>
+                    <div className="flex items-center bg-gray-100 rounded-lg px-4 py-2.5">
+                      <span className="text-gray-500">₹</span>
+                      <span className="ml-2 text-gray-700">{activeSession.cash_in.toFixed(2)}</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Closing Cash Balance
+                  </label>
+                  <div className="flex items-center bg-gray-50 rounded-lg border border-gray-300 focus-within:ring-2 focus-within:ring-blue-500 focus-within:border-transparent px-4">
+                    <span className="text-gray-500">₹</span>
+                    <input
+                      type="number"
+                      value={closeSessionData.closing_balance}
+                      onChange={(e) => setCloseSessionData({ ...closeSessionData, closing_balance: parseFloat(e.target.value) || 0 })}
+                      className="w-full bg-transparent border-none px-2 py-2.5 text-sm text-gray-800 focus:outline-none focus:ring-0"
+                      placeholder="0.00"
+                    />
+                  </div>
+                </div>
+
+                <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
+                  <p className="text-sm text-yellow-800">
+                    <strong>Note:</strong> Once closed, this session cannot be reopened. All sales have been recorded.
+                  </p>
+                </div>
+              </div>
+              <div className="p-5 border-t border-gray-200 flex gap-3">
+                <button
+                  onClick={() => setShowCloseSessionModal(false)}
+                  disabled={sessionLoading}
+                  className="flex-1 py-2.5 border border-gray-300 text-gray-700 rounded-lg text-sm font-medium hover:bg-gray-100 transition-colors disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleCloseSession}
+                  disabled={sessionLoading}
+                  className="flex-1 py-2.5 bg-red-600 text-white rounded-lg text-sm font-medium hover:bg-red-700 transition-colors disabled:opacity-50"
+                >
+                  {sessionLoading ? 'Closing...' : 'Close Session'}
+                </button>
+              </div>
+            </div>
+          </div>
         )}
       </div>
     </>

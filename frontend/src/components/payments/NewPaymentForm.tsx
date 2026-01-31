@@ -192,30 +192,31 @@ const NewPaymentForm = () => {
     return formData.amount;
   };
 
-  const validateForm = (): boolean => {
+  const validateForm = (saveType: 'draft' | 'paid'): boolean => {
     const newErrors: Record<string, string> = {};
 
     if (!formData.vendor_id) {
       newErrors.vendor = 'Please select a vendor';
     }
 
-    if (!formData.payment_mode) {
-      newErrors.payment_mode = 'Please select a payment mode';
-    }
+    // Relaxed validation for drafts
+    if (saveType === 'paid') {
+      if (!formData.payment_mode) {
+        newErrors.payment_mode = 'Please select a payment mode';
+      }
 
-    if (!formData.payment_account) {
-      newErrors.payment_account = 'Please select payment account';
-    }
+      if (!formData.payment_account) {
+        newErrors.payment_account = 'Please select payment account';
+      }
 
-    const totalAmount = calculateTotalAmount();
-    if (totalAmount <= 0) {
-      newErrors.amount = "Amount entered doesn't seem right.";
-    }
+      const totalAmount = calculateTotalAmount();
+      if (totalAmount <= 0) {
+        newErrors.amount = "Amount entered doesn't seem right.";
+      }
 
-    if (activeTab === 'bill' && selectedBills.length === 0 && !isEditMode) {
-      // In edit mode, we might not have bills selected explicitly if API doesn't return them in a way we can easily map back yet
-      // So we act leniently or strictly depending on requirements. For now strict only on create.
-      newErrors.bills = 'Please select at least one bill to pay';
+      if (activeTab === 'bill' && selectedBills.length === 0 && !isEditMode) {
+        newErrors.bills = 'Please select at least one bill to pay';
+      }
     }
 
     setErrors(newErrors);
@@ -223,7 +224,7 @@ const NewPaymentForm = () => {
   };
 
   const handleSubmit = async (_saveType: 'draft' | 'paid') => {
-    if (!validateForm()) {
+    if (!validateForm(_saveType)) {
       return;
     }
 
@@ -253,6 +254,7 @@ const NewPaymentForm = () => {
           bill_number: bill.bill_number,
           amount_allocated: bill.amount_allocated,
         })) : undefined,
+        status: _saveType === 'paid' ? 'completed' : 'draft'
       };
 
       if (isEditMode) {

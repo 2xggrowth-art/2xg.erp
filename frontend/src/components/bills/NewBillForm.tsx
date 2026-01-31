@@ -5,7 +5,7 @@ import ItemSelector from '../shared/ItemSelector';
 import { billsService, BillItem, BinAllocation } from '../../services/bills.service';
 import { vendorsService, Vendor } from '../../services/vendors.service';
 import { itemsService, Item } from '../../services/items.service';
-import SelectBinsModal from '../invoices/SelectBinsModal';
+import SelectBinsModal from './SelectBinsModal';
 
 interface Location {
   id: string;

@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { Item } from '../../services/items.service';
+import { useAuth } from '../../contexts/AuthContext';
 
 interface ItemSelectorProps {
     items: Item[];
@@ -21,6 +22,12 @@ const ItemSelector: React.FC<ItemSelectorProps> = ({
     placeholder = 'Type or click to select an item.',
     className = ''
 }) => {
+    const { user } = useAuth();
+
+    // Check if user is admin or super_admin to show purchase price (case-insensitive)
+    const userRole = user?.role?.toLowerCase() || '';
+    const canViewPurchasePrice = userRole === 'admin' || userRole === 'super_admin' || userRole === 'super admin';
+
     const [isOpen, setIsOpen] = useState(false);
     const [searchTerm, setSearchTerm] = useState(inputValue || '');
     const [dropdownPosition, setDropdownPosition] = useState({ top: 0, left: 0, width: 0 });
@@ -108,7 +115,7 @@ const ItemSelector: React.FC<ItemSelectorProps> = ({
                             <div className="font-medium text-gray-800">{item.item_name}</div>
                             <div className="text-xs text-gray-500 flex justify-between mt-1">
                                 <span>SKU: {item.sku || 'N/A'}</span>
-                                <span>₹{item.cost_price || item.unit_price || 0}</span>
+                                {canViewPurchasePrice && <span>₹{item.cost_price || item.unit_price || 0}</span>}
                             </div>
                             <div className="text-xs text-gray-400 mt-0.5">
                                 Stock: {item.current_stock} {item.unit_of_measurement}
