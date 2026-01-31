@@ -151,6 +151,7 @@ export class ExpensesService {
       expense_item: expenseData.expense_item,
       description: expenseData.description || null,
       amount: expenseData.amount,
+      total_amount: expenseData.amount, // Required field - set to amount since no tax
       payment_mode: expenseData.payment_mode,
       payment_voucher_number: expenseData.payment_voucher_number || null,
       voucher_file_url: expenseData.voucher_file_url || null,
