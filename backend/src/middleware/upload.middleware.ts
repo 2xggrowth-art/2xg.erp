@@ -1,6 +1,8 @@
 import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
+import sharp from 'sharp';
+import { Request, Response, NextFunction } from 'express';
 
 // Ensure uploads directory exists
 const uploadDir = path.join(__dirname, '../../uploads/expenses');
@@ -8,19 +10,8 @@ if (!fs.existsSync(uploadDir)) {
   fs.mkdirSync(uploadDir, { recursive: true });
 }
 
-// Configure storage
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    cb(null, uploadDir);
-  },
-  filename: (req, file, cb) => {
-    // Generate unique filename: timestamp-randomstring-originalname
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-    const ext = path.extname(file.originalname);
-    const nameWithoutExt = path.basename(file.originalname, ext);
-    cb(null, `${nameWithoutExt}-${uniqueSuffix}${ext}`);
-  }
-});
+// Use memory storage to process images before saving
+const memoryStorage = multer.memoryStorage();
 
 // File filter to accept only images and PDFs
 const fileFilter = (req: any, file: Express.Multer.File, cb: multer.FileFilterCallback) => {
@@ -40,11 +31,81 @@ const fileFilter = (req: any, file: Express.Multer.File, cb: multer.FileFilterCa
   }
 };
 
-// Configure multer
-export const uploadExpenseVoucher = multer({
-  storage: storage,
+// Multer upload instance
+const upload = multer({
+  storage: memoryStorage,
   fileFilter: fileFilter,
   limits: {
     fileSize: 5 * 1024 * 1024 // 5MB limit
   }
 });
+
+// Compression middleware - processes image after multer upload
+const compressImage = async (req: Request, res: Response, next: NextFunction) => {
+  if (!req.file) {
+    return next();
+  }
+
+  try {
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+    const originalExt = path.extname(req.file.originalname);
+    const nameWithoutExt = path.basename(req.file.originalname, originalExt);
+
+    // Check if it's an image (not PDF)
+    const isImage = req.file.mimetype.startsWith('image/');
+
+    if (isImage) {
+      // Compress image using sharp
+      // Convert to JPEG for best compression, resize if too large
+      const compressedFilename = `${nameWithoutExt}-${uniqueSuffix}.jpg`;
+      const outputPath = path.join(uploadDir, compressedFilename);
+
+      await sharp(req.file.buffer)
+        .resize(1920, 1920, {
+          fit: 'inside',
+          withoutEnlargement: true
+        })
+        .jpeg({
+          quality: 75,
+          progressive: true
+        })
+        .toFile(outputPath);
+
+      // Get compressed file stats
+      const stats = fs.statSync(outputPath);
+
+      // Update req.file with compressed file info
+      req.file.filename = compressedFilename;
+      req.file.path = outputPath;
+      req.file.size = stats.size;
+
+      console.log(`Image compressed: ${req.file.originalname} (${(req.file.buffer.length / 1024).toFixed(2)}KB) -> ${compressedFilename} (${(stats.size / 1024).toFixed(2)}KB)`);
+    } else {
+      // PDF - save as-is without compression
+      const pdfFilename = `${nameWithoutExt}-${uniqueSuffix}${originalExt}`;
+      const outputPath = path.join(uploadDir, pdfFilename);
+
+      fs.writeFileSync(outputPath, req.file.buffer);
+
+      req.file.filename = pdfFilename;
+      req.file.path = outputPath;
+
+      console.log(`PDF saved: ${pdfFilename} (${(req.file.buffer.length / 1024).toFixed(2)}KB)`);
+    }
+
+    next();
+  } catch (error) {
+    console.error('Error processing file:', error);
+    next(error);
+  }
+};
+
+// Combined middleware: upload + compress
+export const uploadExpenseVoucher = {
+  single: (fieldName: string) => {
+    return [
+      upload.single(fieldName),
+      compressImage
+    ];
+  }
+};
