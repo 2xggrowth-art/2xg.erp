@@ -144,24 +144,19 @@ export class ExpensesService {
     const expenseNumber = `EXP-${String(nextNumber).padStart(5, '0')}`;
 
     // Prepare expense data with defaults
+    // Map frontend fields to database schema (COMPLETE_SCHEMA_FIXED.sql)
     const expense = {
-      organization_id: 'c749c5f6-aee0-4191-8869-0e98db3c09ec',
       expense_number: expenseNumber,
       category_id: expenseData.category_id,
-      expense_item: expenseData.expense_item,
-      description: expenseData.description || null,
-      amount: expenseData.amount,
-      total_amount: expenseData.amount, // Required field - set to amount since no tax
-      payment_mode: expenseData.payment_mode,
-      payment_voucher_number: expenseData.payment_voucher_number || null,
-      voucher_file_url: expenseData.voucher_file_url || null,
-      voucher_file_name: expenseData.voucher_file_name || null,
-      approval_status: 'Pending',
-      remarks: expenseData.remarks || null,
       expense_date: expenseData.expense_date,
-      paid_by_id: expenseData.paid_by_id,
-      paid_by_name: expenseData.paid_by_name,
-      branch: expenseData.branch || null
+      amount: expenseData.amount,
+      tax_amount: 0, // No tax in current implementation
+      total_amount: expenseData.amount, // Required field - set to amount since no tax
+      payment_method: expenseData.payment_mode || null, // Map payment_mode → payment_method
+      reference_number: expenseData.payment_voucher_number || null, // Map payment_voucher_number → reference_number
+      notes: [expenseData.description, expenseData.remarks].filter(Boolean).join('\n\n') || null, // Combine description + remarks → notes
+      receipt_url: expenseData.voucher_file_url || null,
+      status: 'pending' // Map approval_status → status (lowercase)
     };
 
     const { data, error } = await supabaseAdmin
