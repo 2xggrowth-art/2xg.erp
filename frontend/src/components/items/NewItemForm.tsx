@@ -69,6 +69,29 @@ const NewItemForm = () => {
     }
   }, [id, isEditMode]);
 
+  // Auto-populate brand when manufacturer is selected
+  useEffect(() => {
+    if (formData.manufacturer && brands.length > 0) {
+      // Find the selected manufacturer's ID
+      const selectedManufacturer = manufacturers.find(
+        m => m.name === formData.manufacturer
+      );
+
+      if (selectedManufacturer) {
+        // Filter brands that belong to this manufacturer
+        const relatedBrands = brands.filter(
+          b => b.manufacturer_id === selectedManufacturer.id
+        );
+
+        // If there's exactly one brand for this manufacturer, auto-select it
+        if (relatedBrands.length === 1) {
+          setFormData(prev => ({ ...prev, brand: relatedBrands[0].name }));
+        }
+        // If there are multiple brands or no brands, don't auto-select
+      }
+    }
+  }, [formData.manufacturer, brands, manufacturers]);
+
   const fetchItems = async () => {
     try {
       const response = await itemsService.getAllItems();
@@ -153,20 +176,39 @@ const NewItemForm = () => {
     try {
       let brandsCreated = 0;
       let manufacturersCreated = 0;
+      const manufacturerMap = new Map<string, string>(); // name -> id
 
-      if (data.brands && data.brands.length > 0) {
-        const response = await brandsService.bulkCreateBrands(data.brands);
-        if (response.data.success) {
-          fetchBrands();
-          brandsCreated = data.brands.length;
+      // Step 1: Create manufacturers first
+      if (data.manufacturers && data.manufacturers.length > 0) {
+        const response = await manufacturersService.bulkCreateManufacturers(data.manufacturers);
+        if (response.data.success && response.data.data) {
+          manufacturersCreated = data.manufacturers.length;
+          // Build map of manufacturer names to IDs
+          response.data.data.forEach((mfr: any) => {
+            manufacturerMap.set(mfr.name.toLowerCase(), mfr.id);
+          });
+          fetchManufacturers();
         }
       }
 
-      if (data.manufacturers && data.manufacturers.length > 0) {
-        const response = await manufacturersService.bulkCreateManufacturers(data.manufacturers);
+      // Step 2: Create brands with manufacturer_id links
+      if (data.brands && data.brands.length > 0) {
+        // Map brands to include manufacturer_id
+        const brandsWithManufacturer = data.brands.map((brand: any) => {
+          const brandData: any = { name: brand.name };
+          if (brand.manufacturerName) {
+            const manufacturerId = manufacturerMap.get(brand.manufacturerName.toLowerCase());
+            if (manufacturerId) {
+              brandData.manufacturer_id = manufacturerId;
+            }
+          }
+          return brandData;
+        });
+
+        const response = await brandsService.bulkCreateBrands(brandsWithManufacturer);
         if (response.data.success) {
-          fetchManufacturers();
-          manufacturersCreated = data.manufacturers.length;
+          fetchBrands();
+          brandsCreated = data.brands.length;
         }
       }
 
