@@ -44,18 +44,39 @@ const NewItemForm = () => {
     quantity: '0' // Added quantity field
   });
 
-  // Fetch items for SKU validation and last SKU
+  // Fetch items for SKU validation
   const [items, setItems] = useState<any[]>([]);
-  const [lastSku, setLastSku] = useState<string>('');
   const [duplicateSkuError, setDuplicateSkuError] = useState<boolean>(false);
 
   useEffect(() => {
     fetchVendors();
-    fetchItems(); // Fetch items for SKU validation and last SKU
+    fetchItems(); // Fetch items for SKU validation
     if (isEditMode && id) {
       fetchItemDetails(id);
+    } else {
+      // Auto-generate SKU for new items
+      generateNewSku();
     }
   }, [id, isEditMode]);
+
+  const generateNewSku = async () => {
+    try {
+      const response = await itemsService.generateSku();
+      if (response.data.success && response.data.data) {
+        setFormData(prev => ({
+          ...prev,
+          sku: response.data.data.sku
+        }));
+      }
+    } catch (error) {
+      console.error('Error generating SKU:', error);
+      // Fallback SKU
+      setFormData(prev => ({
+        ...prev,
+        sku: `SKU-${Date.now().toString().slice(-6)}`
+      }));
+    }
+  };
 
   const fetchItems = async () => {
     try {
@@ -63,14 +84,6 @@ const NewItemForm = () => {
       if (response.data.success && response.data.data) {
         const fetchedItems = response.data.data;
         setItems(fetchedItems);
-        // Find last SKU (assuming simple string sort or creation date if available in sort)
-        // Ideally backend should provide this, but client-side approximation:
-        if (fetchedItems.length > 0) {
-          // Sort by created_at desc if possible, or just look at list
-          // Assuming default list might not be sorted, let's sort by created_at
-          const sorted = [...fetchedItems].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
-          setLastSku(sorted[0].sku);
-        }
       }
     } catch (error) {
       console.error('Error fetching items:', error);
@@ -360,16 +373,19 @@ const NewItemForm = () => {
                 type="text"
                 name="sku"
                 value={formData.sku}
-                onChange={handleInputChange}
-                className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent ${duplicateSkuError ? 'border-red-500' : 'border-blue-400'}`}
-                placeholder="Enter SKU"
+                onChange={isEditMode ? handleInputChange : undefined}
+                readOnly={!isEditMode}
+                className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                  duplicateSkuError ? 'border-red-500' : !isEditMode ? 'border-gray-300 bg-gray-50' : 'border-blue-400'
+                }`}
+                placeholder={isEditMode ? "Enter SKU" : "Auto-generating..."}
                 required
               />
               {duplicateSkuError && (
                 <p className="text-xs text-red-500 mt-1">SKU already exists. Please choose a unique SKU.</p>
               )}
-              {lastSku && !isEditMode && (
-                <p className="text-xs text-gray-500 mt-1">Last used SKU: <span className="font-semibold">{lastSku}</span></p>
+              {!isEditMode && formData.sku && (
+                <p className="text-xs text-green-600 mt-1">SKU auto-generated: <span className="font-semibold">{formData.sku}</span></p>
               )}
             </div>
           </div>
