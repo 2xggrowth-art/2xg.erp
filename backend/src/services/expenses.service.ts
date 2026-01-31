@@ -143,30 +143,29 @@ export class ExpensesService {
 
     const expenseNumber = `EXP-${String(nextNumber).padStart(5, '0')}`;
 
-    // Prepare expense data with defaults
-    // Map frontend fields to database schema (COMPLETE_SCHEMA_FIXED.sql)
+    // Prepare expense data - insert fields directly as frontend sends them
     const expense = {
       expense_number: expenseNumber,
       category_id: expenseData.category_id,
-      expense_item: expenseData.expense_item || 'General Expense', // REQUIRED FIELD
+      expense_item: expenseData.expense_item || 'General Expense',
+      description: expenseData.description || null,
       expense_date: expenseData.expense_date,
       amount: expenseData.amount,
-      tax_amount: 0, // No tax in current implementation
-      total_amount: expenseData.amount, // Required field - set to amount since no tax
-      payment_method: expenseData.payment_mode || null, // Map payment_mode → payment_method
-      reference_number: expenseData.payment_voucher_number || null, // Map payment_voucher_number → reference_number
-      notes: [expenseData.description, expenseData.remarks].filter(Boolean).join('\n\n') || null, // Combine description + remarks → notes
-      receipt_url: expenseData.voucher_file_url || null,
-      status: 'pending' // Map approval_status → status (lowercase)
+      payment_mode: expenseData.payment_mode || 'Cash',
+      payment_voucher_number: expenseData.payment_voucher_number || null,
+      voucher_file_url: expenseData.voucher_file_url || null,
+      voucher_file_name: expenseData.voucher_file_name || null,
+      approval_status: 'Pending',
+      remarks: expenseData.remarks || null,
+      paid_by_id: expenseData.paid_by_id,
+      paid_by_name: expenseData.paid_by_name,
+      branch: expenseData.branch || null
     };
 
     const { data, error } = await supabaseAdmin
       .from('expenses')
       .insert(expense)
-      .select(`
-        *,
-        expense_categories!fk_category (category_name)
-      `)
+      .select('*')
       .single();
 
     if (error) throw error;
