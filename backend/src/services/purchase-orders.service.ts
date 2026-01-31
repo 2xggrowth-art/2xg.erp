@@ -115,11 +115,19 @@ export class PurchaseOrdersService {
 
     const afterDiscount = subtotal - discountAmount;
 
-    let taxAmount = 0;
+    // Calculate GST
+    const cgstAmount = (afterDiscount * (poData.cgst_rate || 0)) / 100;
+    const sgstAmount = (afterDiscount * (poData.sgst_rate || 0)) / 100;
+    const igstAmount = (afterDiscount * (poData.igst_rate || 0)) / 100;
+    const gstTotal = cgstAmount + sgstAmount + igstAmount;
+
+    // Calculate TDS/TCS
+    let tdsTcsAmount = 0;
     if (poData.tds_tcs_type && poData.tds_tcs_rate) {
-      taxAmount = (afterDiscount * poData.tds_tcs_rate) / 100;
+      tdsTcsAmount = (afterDiscount * poData.tds_tcs_rate) / 100;
     }
 
+    const taxAmount = gstTotal + tdsTcsAmount;
     const adjustment = parseFloat(poData.adjustment) || 0;
     const totalAmount = afterDiscount + taxAmount + adjustment;
 
@@ -140,10 +148,16 @@ export class PurchaseOrdersService {
       subtotal,
       discount_type: poData.discount_type || 'percentage',
       discount_value: poData.discount_value || 0,
+      cgst_rate: poData.cgst_rate || 0,
+      cgst_amount: cgstAmount,
+      sgst_rate: poData.sgst_rate || 0,
+      sgst_amount: sgstAmount,
+      igst_rate: poData.igst_rate || 0,
+      igst_amount: igstAmount,
       tax_amount: taxAmount,
       tds_tcs_type: poData.tds_tcs_type || null,
       tds_tcs_rate: poData.tds_tcs_rate || 0,
-      tds_tcs_amount: taxAmount,
+      tds_tcs_amount: tdsTcsAmount,
       adjustment,
       total_amount: totalAmount,
       // Order Details
