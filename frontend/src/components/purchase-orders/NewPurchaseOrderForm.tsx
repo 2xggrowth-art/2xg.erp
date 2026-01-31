@@ -36,6 +36,9 @@ const NewPurchaseOrderForm = () => {
     delivery_address: '',
     discount_type: 'percentage' as 'percentage' | 'amount',
     discount_value: 0,
+    cgst_rate: 0,
+    sgst_rate: 0,
+    igst_rate: 0,
     tds_tcs_type: '',
     tds_tcs_rate: 0,
     adjustment: 0,
@@ -264,10 +267,20 @@ const NewPurchaseOrderForm = () => {
 
   const calculateTax = () => {
     const afterDiscount = calculateSubtotal() - calculateDiscount();
+
+    // Calculate GST
+    const cgst = (afterDiscount * (formData.cgst_rate || 0)) / 100;
+    const sgst = (afterDiscount * (formData.sgst_rate || 0)) / 100;
+    const igst = (afterDiscount * (formData.igst_rate || 0)) / 100;
+    const gstTotal = cgst + sgst + igst;
+
+    // Calculate TDS/TCS
+    let tdsTcs = 0;
     if (formData.tds_tcs_type && formData.tds_tcs_rate) {
-      return (afterDiscount * formData.tds_tcs_rate) / 100;
+      tdsTcs = (afterDiscount * formData.tds_tcs_rate) / 100;
     }
-    return 0;
+
+    return gstTotal + tdsTcs;
   };
 
   const calculateTotal = () => {
@@ -766,6 +779,63 @@ const NewPurchaseOrderForm = () => {
                   />
                 </div>
                 <span className="font-medium">-₹{calculateDiscount().toFixed(2)}</span>
+              </div>
+
+              <div className="flex justify-between items-center py-2">
+                <div className="flex items-center gap-2">
+                  <span className="text-sm text-slate-700 w-12">CGST</span>
+                  <select
+                    value={formData.cgst_rate}
+                    onChange={(e) => setFormData({ ...formData, cgst_rate: parseFloat(e.target.value) || 0 })}
+                    className="px-2 py-1 border border-slate-300 rounded text-sm bg-white w-20"
+                  >
+                    <option value={0}>0%</option>
+                    <option value={2.5}>2.5%</option>
+                    <option value={6}>6%</option>
+                    <option value={9}>9%</option>
+                  </select>
+                </div>
+                <span className="font-medium text-slate-900">
+                  ₹{((calculateSubtotal() - calculateDiscount()) * (formData.cgst_rate || 0) / 100).toFixed(2)}
+                </span>
+              </div>
+
+              <div className="flex justify-between items-center py-2">
+                <div className="flex items-center gap-2">
+                  <span className="text-sm text-slate-700 w-12">SGST</span>
+                  <select
+                    value={formData.sgst_rate}
+                    onChange={(e) => setFormData({ ...formData, sgst_rate: parseFloat(e.target.value) || 0 })}
+                    className="px-2 py-1 border border-slate-300 rounded text-sm bg-white w-20"
+                  >
+                    <option value={0}>0%</option>
+                    <option value={2.5}>2.5%</option>
+                    <option value={6}>6%</option>
+                    <option value={9}>9%</option>
+                  </select>
+                </div>
+                <span className="font-medium text-slate-900">
+                  ₹{((calculateSubtotal() - calculateDiscount()) * (formData.sgst_rate || 0) / 100).toFixed(2)}
+                </span>
+              </div>
+
+              <div className="flex justify-between items-center py-2">
+                <div className="flex items-center gap-2">
+                  <span className="text-sm text-slate-700 w-12">IGST</span>
+                  <select
+                    value={formData.igst_rate}
+                    onChange={(e) => setFormData({ ...formData, igst_rate: parseFloat(e.target.value) || 0 })}
+                    className="px-2 py-1 border border-slate-300 rounded text-sm bg-white w-20"
+                  >
+                    <option value={0}>0%</option>
+                    <option value={5}>5%</option>
+                    <option value={12}>12%</option>
+                    <option value={18}>18%</option>
+                  </select>
+                </div>
+                <span className="font-medium text-slate-900">
+                  ₹{((calculateSubtotal() - calculateDiscount()) * (formData.igst_rate || 0) / 100).toFixed(2)}
+                </span>
               </div>
 
               <div className="flex justify-between items-center gap-4 py-2">
