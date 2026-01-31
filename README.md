@@ -208,7 +208,7 @@ Before you begin, ensure you have the following installed:
 ### 🎯 New to Supabase? Start Here!
 
 **For a step-by-step guide to connect your project to Supabase in under 10 minutes:**
-📖 **[Read the Quick Start Guide →](./QUICK_START.md)**
+📖 **[Read the Quick Start Guide →](./QUICKSTART.md)**
 
 Or for comprehensive documentation:
 📚 **[Read the Full Supabase Setup Guide →](./SUPABASE_SETUP_GUIDE.md)**

@@ -10,7 +10,6 @@ Monorepo for the 2XG ERP system. **Active code is at root level** (not inside `2
 /backend/              → Express + TypeScript + Supabase (DEPLOYED by Coolify)
 /frontend/             → React 18 + Vite + TypeScript + Tailwind CSS (DEPLOYED by Coolify)
 /2xg-dashboard/        → LEGACY copy — DO NOT EDIT or deploy from here
-/api/                  → Legacy Vercel serverless entry — not used
 ```
 
 ## Deployment — Self-Hosted Coolify (NOT Vercel)
@@ -152,9 +151,8 @@ Configured in `backend/src/server.ts`. Allowed origins:
 
 ## Database Schema — Actual Column Names (Verified Jan 2026)
 
-> **CRITICAL**: The schema file `COMPLETE_SCHEMA_FIXED.sql` is OUTDATED. The actual deployed
-> database has extra columns added via migrations. Always verify against PostgREST before
-> adding new queries. Never trust the .sql file alone.
+> **CRITICAL**: The actual deployed database has extra columns added via migrations beyond what's
+> in the base schema files. Always verify against PostgREST before adding new queries.
 
 ### `items` table
 | Column | Type | Notes |
@@ -357,7 +355,7 @@ cd backend && npm run test-connection                                 # Supabase
 | `backend/src/server.ts` | Express entry, CORS, route registration |
 | `backend/src/config/supabase.ts` | Supabase admin client |
 | `backend/src/routes/auth.routes.ts` | All auth endpoints |
-| `backend/COMPLETE_SCHEMA_FIXED.sql` | Full DB schema for fresh setup |
+| `backend/src/utils/database-schema.sql` | Base DB schema |
 | `frontend/.env.production` | API URL (overridden by Coolify env) |
 | `frontend/src/services/api.client.ts` | Axios base config |
 | `frontend/src/App.tsx` | All frontend routes |
