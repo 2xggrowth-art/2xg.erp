@@ -7,10 +7,7 @@ export class ExpensesService {
   async getAllExpenses(startDate?: string, endDate?: string) {
     let query = supabaseAdmin
       .from('expenses')
-      .select(`
-        *,
-        expense_categories!fk_category (category_name)
-      `)
+      .select('*')
       .order('expense_date', { ascending: false });
 
     if (startDate) {
@@ -22,6 +19,28 @@ export class ExpensesService {
 
     const { data, error } = await query;
     if (error) throw error;
+
+    // Fetch categories for all expenses that have category_id
+    if (data && data.length > 0) {
+      const categoryIds = [...new Set(data.filter(e => e.category_id).map(e => e.category_id))];
+
+      if (categoryIds.length > 0) {
+        const { data: categories } = await supabaseAdmin
+          .from('expense_categories')
+          .select('id, category_name, name')
+          .in('id', categoryIds);
+
+        if (categories) {
+          const categoryMap = new Map(categories.map(c => [c.id, c.category_name || c.name]));
+          data.forEach(expense => {
+            if (expense.category_id && categoryMap.has(expense.category_id)) {
+              expense.category_name = categoryMap.get(expense.category_id);
+            }
+          });
+        }
+      }
+    }
+
     return data;
   }
 
@@ -31,14 +50,25 @@ export class ExpensesService {
   async getExpenseById(id: string) {
     const { data, error } = await supabaseAdmin
       .from('expenses')
-      .select(`
-        *,
-        expense_categories!fk_category (category_name)
-      `)
+      .select('*')
       .eq('id', id)
       .single();
 
     if (error) throw error;
+
+    // If expense has category_id, fetch category separately
+    if (data && data.category_id) {
+      const { data: category } = await supabaseAdmin
+        .from('expense_categories')
+        .select('category_name, name')
+        .eq('id', data.category_id)
+        .single();
+
+      if (category) {
+        data.category_name = category.category_name || category.name;
+      }
+    }
+
     return data;
   }
 
