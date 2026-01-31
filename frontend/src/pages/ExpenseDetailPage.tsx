@@ -17,6 +17,13 @@ import {
 } from 'lucide-react';
 import { expensesService, Expense } from '../services/expenses.service';
 
+// Get API base URL (without /api suffix) for attachment URLs
+const getAttachmentUrl = (path: string) => {
+  const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5002/api';
+  const baseUrl = apiUrl.replace(/\/api$/, '');
+  return `${baseUrl}${path}`;
+};
+
 const ExpenseDetailPage = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -167,7 +174,7 @@ const ExpenseDetailPage = () => {
                   <FileText size={16} />
                   Category
                 </label>
-                <p className="text-gray-900 font-medium">{expense.category_name || 'N/A'}</p>
+                <p className="text-gray-900 font-medium">{(expense as any).expense_categories?.category_name || expense.category_name || 'N/A'}</p>
               </div>
 
               <div>
@@ -246,7 +253,7 @@ const ExpenseDetailPage = () => {
                   </label>
                   {expense.voucher_file_url ? (
                     <a
-                      href={expense.voucher_file_url}
+                      href={getAttachmentUrl(expense.voucher_file_url)}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="text-blue-600 hover:text-blue-800 underline font-medium"
