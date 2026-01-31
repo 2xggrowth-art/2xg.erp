@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { X, Upload, CheckCircle2, AlertCircle, FileSpreadsheet } from 'lucide-react';
-import * as XLSX from 'xlsx';
+import readXlsxFile from 'read-excel-file';
 
 interface BrandManufacturerUploadModalProps {
     onClose: () => void;
@@ -32,70 +32,61 @@ const BrandManufacturerUploadModal: React.FC<BrandManufacturerUploadModalProps> 
         try {
             setStatus('validating');
 
-            const reader = new FileReader();
-            reader.onload = async (e) => {
-                try {
-                    const data = e.target?.result;
-                    const workbook = XLSX.read(data, { type: 'binary' });
-                    const sheetName = workbook.SheetNames[0];
-                    const sheet = workbook.Sheets[sheetName];
-                    const jsonData: any[] = XLSX.utils.sheet_to_json(sheet);
+            const rows = await readXlsxFile(file);
 
-                    if (jsonData.length === 0) {
-                        setError('No data found in the file.');
-                        setStatus('error');
-                        return;
+            if (rows.length < 2) {
+                setError('No data found in the file.');
+                setStatus('error');
+                return;
+            }
+
+            // First row is headers
+            const headers = rows[0].map(h => String(h || '').trim());
+            const dataRows = rows.slice(1);
+
+            // Find column indices (case-insensitive)
+            const brandCol = headers.findIndex(h => /^brand$/i.test(h));
+            const mfrCol = headers.findIndex(h => /^manufactur(es?|er)$/i.test(h));
+
+            const brands: any[] = [];
+            const manufacturers: any[] = [];
+            const seenBrands = new Set();
+            const seenManufacturers = new Set();
+
+            dataRows.forEach(row => {
+                // Parse BRAND column
+                if (brandCol !== -1) {
+                    const brandName = row[brandCol] ? String(row[brandCol]).trim() : '';
+                    if (brandName && !seenBrands.has(brandName.toLowerCase())) {
+                        brands.push({ name: brandName });
+                        seenBrands.add(brandName.toLowerCase());
                     }
-
-                    const brands: any[] = [];
-                    const manufacturers: any[] = [];
-                    const seenBrands = new Set();
-                    const seenManufacturers = new Set();
-
-                    jsonData.forEach(row => {
-                        // Parse BRAND column
-                        const brandName = row['BRAND'] || row['Brand'] || row['brand'];
-                        if (brandName && typeof brandName === 'string' && brandName.trim() !== '') {
-                            const trimmed = brandName.trim();
-                            if (!seenBrands.has(trimmed.toLowerCase())) {
-                                brands.push({ name: trimmed });
-                                seenBrands.add(trimmed.toLowerCase());
-                            }
-                        }
-
-                        // Parse MANUFACTURES column
-                        const mfrName = row['MANUFACTURES'] || row['Manufactures'] || row['manufactures'] || row['MANUFACTURER'] || row['Manufacturer'];
-                        if (mfrName && typeof mfrName === 'string' && mfrName.trim() !== '') {
-                            const trimmed = mfrName.trim();
-                            if (!seenManufacturers.has(trimmed.toLowerCase())) {
-                                manufacturers.push({ name: trimmed });
-                                seenManufacturers.add(trimmed.toLowerCase());
-                            }
-                        }
-                    });
-
-                    if (brands.length === 0 && manufacturers.length === 0) {
-                        setError('No valid "BRAND" or "MANUFACTURES" columns found.');
-                        setStatus('error');
-                        return;
-                    }
-
-                    setStatus('uploading');
-                    const response = await onUpload({ brands, manufacturers });
-                    setResult(response);
-                    setStatus('complete');
-
-                } catch (err: any) {
-                    console.error('Parsing error:', err);
-                    setError('Failed to parse file. Please ensure it is a valid Excel file.');
-                    setStatus('error');
                 }
-            };
-            reader.readAsBinaryString(file);
+
+                // Parse MANUFACTURES column
+                if (mfrCol !== -1) {
+                    const mfrName = row[mfrCol] ? String(row[mfrCol]).trim() : '';
+                    if (mfrName && !seenManufacturers.has(mfrName.toLowerCase())) {
+                        manufacturers.push({ name: mfrName });
+                        seenManufacturers.add(mfrName.toLowerCase());
+                    }
+                }
+            });
+
+            if (brands.length === 0 && manufacturers.length === 0) {
+                setError('No valid "BRAND" or "MANUFACTURES" columns found.');
+                setStatus('error');
+                return;
+            }
+
+            setStatus('uploading');
+            const response = await onUpload({ brands, manufacturers });
+            setResult(response);
+            setStatus('complete');
 
         } catch (err: any) {
             console.error('Upload failed:', err);
-            setError(err.message || 'Upload failed');
+            setError(err.message || 'Failed to parse file. Please ensure it is a valid Excel file.');
             setStatus('error');
         }
     };
