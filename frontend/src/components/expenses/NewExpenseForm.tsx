@@ -192,10 +192,11 @@ const NewExpenseForm = () => {
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               >
                 <option value="Cash">Cash</option>
-                <option value="HDFC (Hub)">HDFC (Hub)</option>
-                <option value="ICICI">ICICI</option>
-                <option value="Dhanalakhmi">Dhanalakhmi</option>
-                <option value="HDFC (Center)">HDFC (Center)</option>
+                <option value="UPI">UPI</option>
+                <option value="Debit Card">Debit Card</option>
+                <option value="Credit Card">Credit Card</option>
+                <option value="Bank Transfer">Bank Transfer</option>
+                <option value="Admin User">Admin User</option>
               </select>
             </div>
 

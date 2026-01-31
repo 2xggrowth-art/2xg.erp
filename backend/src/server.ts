@@ -31,6 +31,8 @@ import salesOrdersRoutes from './routes/sales-orders.routes';
 import paymentsReceivedRoutes from './routes/payments-received.routes';
 import deliveryChallansRoutes from './routes/delivery-challans.routes';
 import binLocationsRoutes from './routes/binLocations.routes';
+import brandsRoutes from './routes/brands.routes';
+import manufacturersRoutes from './routes/manufacturers.routes';
 
 // Load environment variables
 dotenv.config();
@@ -113,6 +115,8 @@ app.use('/api/sales-orders', salesOrdersRoutes);
 app.use('/api/payments-received', paymentsReceivedRoutes);
 app.use('/api/delivery-challans', deliveryChallansRoutes);
 app.use('/api/bin-locations', binLocationsRoutes);
+app.use('/api/brands', brandsRoutes);
+app.use('/api/manufacturers', manufacturersRoutes);
 
 // Health check endpoint for deployment platforms
 app.get('/health', (_req: Request, res: Response) => {
