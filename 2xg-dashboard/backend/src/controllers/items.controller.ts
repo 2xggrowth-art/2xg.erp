@@ -96,6 +96,15 @@ export const deleteItem = async (req: Request, res: Response) => {
   }
 };
 
+export const generateSku = async (req: Request, res: Response) => {
+  try {
+    const sku = await itemsService.generateSku();
+    res.json({ success: true, data: { sku } });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+};
+
 export const importItems = async (req: Request, res: Response) => {
   try {
     const { items, mode } = req.body;

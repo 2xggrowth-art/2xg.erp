@@ -3,11 +3,17 @@ import { ArrowLeft, Package, Save } from 'lucide-react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { itemsService } from '../../services/items.service';
 import { vendorsService, Vendor } from '../../services/vendors.service';
+import { useAuth } from '../../contexts/AuthContext';
 
 const NewItemForm = () => {
   const navigate = useNavigate();
   const { id } = useParams<{ id: string }>();
   const isEditMode = !!id;
+  const { user } = useAuth();
+
+  // Check if user is admin or super_admin to show purchase price (case-insensitive)
+  const userRole = user?.role?.toLowerCase() || '';
+  const canViewPurchasePrice = userRole === 'admin' || userRole === 'super_admin' || userRole === 'super admin';
   const [loading, setLoading] = useState(false);
   const [fetching, setFetching] = useState(false);
   const [vendors, setVendors] = useState<Vendor[]>([]);
@@ -362,7 +368,7 @@ const NewItemForm = () => {
             </div>
           </div>
 
-          {/* SKU */}
+          {/* SKU - Auto-generated for new items */}
           <div className="grid grid-cols-4 gap-4 items-center">
             <label className="text-sm font-medium text-gray-700 flex items-center gap-1">
               SKU<span className="text-red-500">*</span>
@@ -380,6 +386,7 @@ const NewItemForm = () => {
                 }`}
                 placeholder={isEditMode ? "Enter SKU" : "Auto-generating..."}
                 required
+                readOnly={!isEditMode}
               />
               {duplicateSkuError && (
                 <p className="text-xs text-red-500 mt-1">SKU already exists. Please choose a unique SKU.</p>
@@ -607,24 +614,26 @@ const NewItemForm = () => {
 
                 {formData.purchasable && (
                   <div className="space-y-4">
-                    {/* Cost Price */}
-                    <div>
-                      <label className="text-sm font-medium text-red-500 block mb-2">
-                        Cost Price<span>*</span>
-                      </label>
-                      <div className="flex items-center gap-2">
-                        <span className="text-gray-600">INR</span>
-                        <input
-                          type="number"
-                          name="costPrice"
-                          value={formData.costPrice}
-                          onChange={handleInputChange}
-                          className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                          placeholder="0.00"
-                          step="0.01"
-                        />
+                    {/* Cost Price - Only visible to admin and super_admin */}
+                    {canViewPurchasePrice && (
+                      <div>
+                        <label className="text-sm font-medium text-red-500 block mb-2">
+                          Cost Price<span>*</span>
+                        </label>
+                        <div className="flex items-center gap-2">
+                          <span className="text-gray-600">INR</span>
+                          <input
+                            type="number"
+                            name="costPrice"
+                            value={formData.costPrice}
+                            onChange={handleInputChange}
+                            className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            placeholder="0.00"
+                            step="0.01"
+                          />
+                        </div>
                       </div>
-                    </div>
+                    )}
 
                     {/* Account */}
                     <div>

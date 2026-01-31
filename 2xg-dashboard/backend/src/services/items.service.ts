@@ -382,4 +382,37 @@ export class ItemsService {
     if (error) throw error;
     return data;
   }
+
+  /**
+   * Generate next SKU automatically
+   * Format: SKU-0001, SKU-0002, etc.
+   */
+  async generateSku(): Promise<string> {
+    // Get all SKUs that match our format (SKU-XXXX)
+    const { data, error } = await supabaseAdmin
+      .from('items')
+      .select('sku')
+      .like('sku', 'SKU-%')
+      .order('sku', { ascending: false });
+
+    if (error) throw error;
+
+    let nextNumber = 1;
+
+    if (data && data.length > 0) {
+      // Find the highest SKU number
+      for (const item of data) {
+        const match = item.sku?.match(/^SKU-(\d+)$/);
+        if (match) {
+          const num = parseInt(match[1], 10);
+          if (num >= nextNumber) {
+            nextNumber = num + 1;
+          }
+        }
+      }
+    }
+
+    // Format with leading zeros (4 digits)
+    return `SKU-${nextNumber.toString().padStart(4, '0')}`;
+  }
 }

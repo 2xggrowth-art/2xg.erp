@@ -1,5 +1,6 @@
 import React from 'react';
 import { Plus, X } from 'lucide-react';
+import { useAuth } from '../../contexts/AuthContext';
 
 /**
  * DYNAMIC ITEM TABLE COMPONENT
@@ -61,6 +62,12 @@ const DynamicItemTable: React.FC<DynamicItemTableProps> = ({
   onItemsChange,
   availableItems
 }) => {
+  const { user } = useAuth();
+
+  // Check if user is admin or super_admin to show purchase price (case-insensitive)
+  const userRole = user?.role?.toLowerCase() || '';
+  const canViewPurchasePrice = userRole === 'admin' || userRole === 'super_admin' || userRole === 'super admin';
+
   /**
    * AUTOMATIC ITEM SELECTION LOGIC
    * When user selects an item from dropdown:
@@ -232,7 +239,7 @@ const DynamicItemTable: React.FC<DynamicItemTableProps> = ({
                         <option value="">Select from items</option>
                         {availableItems.map(availItem => (
                           <option key={availItem.id} value={availItem.id}>
-                            {availItem.item_name} (₹{availItem.cost_price})
+                            {availItem.item_name}{canViewPurchasePrice ? ` (₹${availItem.cost_price})` : ''}
                           </option>
                         ))}
                       </select>
