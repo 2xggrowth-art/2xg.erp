@@ -148,6 +148,7 @@ export class ExpensesService {
     const expense = {
       expense_number: expenseNumber,
       category_id: expenseData.category_id,
+      expense_item: expenseData.expense_item || 'General Expense', // REQUIRED FIELD
       expense_date: expenseData.expense_date,
       amount: expenseData.amount,
       tax_amount: 0, // No tax in current implementation
