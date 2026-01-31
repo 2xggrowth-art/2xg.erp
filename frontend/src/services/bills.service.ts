@@ -33,6 +33,13 @@ export interface Bill {
   updated_at: string;
 }
 
+export interface BinAllocation {
+  bin_location_id: string;
+  bin_code: string;
+  warehouse: string;
+  quantity: number;
+}
+
 export interface BillItem {
   id: string;
   bill_id: string;
@@ -47,6 +54,7 @@ export interface BillItem {
   total: number;
   account?: string;
   serial_numbers?: string[];
+  bin_allocations?: BinAllocation[];
   created_at: string;
 }
 

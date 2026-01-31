@@ -1,5 +1,12 @@
 import { supabaseAdmin as supabase } from '../config/supabase';
 
+export interface BinAllocation {
+  bin_location_id: string;
+  bin_code: string;
+  warehouse: string;
+  quantity: number;
+}
+
 export interface BillItem {
   item_id?: string;
   item_name: string;
@@ -11,6 +18,7 @@ export interface BillItem {
   discount: number;
   total: number;
   account?: string;
+  bin_allocations?: BinAllocation[];
 }
 
 export interface CreateBillData {
@@ -118,6 +126,7 @@ export class BillsService {
       }
 
       // Create bill items
+      const binAllocationWarnings: string[] = [];
       if (data.items && data.items.length > 0) {
         const billItems = data.items.map((item) => ({
           bill_id: bill.id,
@@ -133,14 +142,47 @@ export class BillsService {
           account: item.account || null,
         }));
 
-        const { error: itemsError } = await supabase
+        const { data: insertedItems, error: itemsError } = await supabase
           .from('bill_items')
-          .insert(billItems);
+          .insert(billItems)
+          .select();
 
         if (itemsError) {
           // Rollback: delete the bill
           await supabase.from('bills').delete().eq('id', bill.id);
           throw itemsError;
+        }
+
+        // Insert bin allocations if provided
+        if (insertedItems && insertedItems.length > 0) {
+          for (const item of data.items) {
+            if (item.bin_allocations && item.bin_allocations.length > 0) {
+              // Match inserted item by item_name to avoid index correlation issues
+              const matchedItem = insertedItems.find(
+                (inserted: any) => inserted.item_name === item.item_name && inserted.item_id === (item.item_id || null)
+              );
+
+              if (!matchedItem) {
+                binAllocationWarnings.push(`Could not match inserted item for "${item.item_name}" — bin allocations skipped`);
+                continue;
+              }
+
+              const binAllocations = item.bin_allocations.map((allocation) => ({
+                bill_item_id: matchedItem.id,
+                bin_location_id: allocation.bin_location_id,
+                quantity: allocation.quantity,
+              }));
+
+              const { error: binError } = await supabase
+                .from('bill_item_bin_allocations')
+                .insert(binAllocations);
+
+              if (binError) {
+                console.error('Error inserting bin allocations:', binError);
+                binAllocationWarnings.push(`Bin allocation failed for "${item.item_name}": ${binError.message}`);
+              }
+            }
+          }
         }
 
         // Update item stock
@@ -164,6 +206,9 @@ export class BillsService {
         }
       }
 
+      if (binAllocationWarnings.length > 0) {
+        return { ...bill, _warnings: binAllocationWarnings };
+      }
       return bill;
     } catch (error) {
       console.error('Error creating bill:', error);

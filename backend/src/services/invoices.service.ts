@@ -1,5 +1,12 @@
 import { supabaseAdmin as supabase } from '../config/supabase';
 
+export interface BinAllocation {
+  bin_location_id: string;
+  bin_code: string;
+  warehouse: string;
+  quantity: number;
+}
+
 export interface InvoiceItem {
   item_id?: string;
   item_name: string;
@@ -9,6 +16,7 @@ export interface InvoiceItem {
   unit_of_measurement: string;
   rate: number;
   amount: number;
+  bin_allocations?: BinAllocation[];
 }
 
 export interface CreateInvoiceData {
@@ -171,6 +179,7 @@ export class InvoicesService {
       console.log('InvoicesService: Invoice created successfully:', invoice.id);
 
       // Insert invoice items
+      const binAllocationWarnings: string[] = [];
       if (items && items.length > 0) {
         const itemsToInsert = items.map(item => {
           // Validate item_id is a proper UUID
@@ -191,9 +200,10 @@ export class InvoicesService {
 
         console.log('InvoicesService: Inserting invoice items:', JSON.stringify(itemsToInsert, null, 2));
 
-        const { error: itemsError } = await supabase
+        const { data: insertedItems, error: itemsError } = await supabase
           .from('invoice_items')
-          .insert(itemsToInsert);
+          .insert(itemsToInsert)
+          .select();
 
         if (itemsError) {
           console.error('InvoicesService: Error inserting items:', itemsError);
@@ -203,6 +213,38 @@ export class InvoicesService {
         }
 
         console.log('InvoicesService: Invoice items created successfully');
+
+        // Insert bin allocations if provided (for sales/invoices - tracking which bins stock is sold from)
+        if (insertedItems && insertedItems.length > 0) {
+          for (const item of items) {
+            if (item.bin_allocations && item.bin_allocations.length > 0) {
+              // Match inserted item by item_name to avoid index correlation issues
+              const matchedItem = insertedItems.find(
+                (inserted: any) => inserted.item_name === item.item_name && inserted.item_id === (item.item_id || null)
+              );
+
+              if (!matchedItem) {
+                binAllocationWarnings.push(`Could not match inserted item for "${item.item_name}" — bin allocations skipped`);
+                continue;
+              }
+
+              const binAllocations = item.bin_allocations.map((allocation) => ({
+                invoice_item_id: matchedItem.id,
+                bin_location_id: allocation.bin_location_id,
+                quantity: allocation.quantity,
+              }));
+
+              const { error: binError } = await supabase
+                .from('invoice_item_bin_allocations')
+                .insert(binAllocations);
+
+              if (binError) {
+                console.error('Error inserting invoice bin allocations:', binError);
+                binAllocationWarnings.push(`Bin allocation failed for "${item.item_name}": ${binError.message}`);
+              }
+            }
+          }
+        }
 
         // Update stock for each item
         for (const item of items) {
@@ -247,6 +289,9 @@ export class InvoicesService {
       // Fetch the complete invoice with items
       const completeInvoice = await this.getInvoiceById(invoice.id);
       console.log('InvoicesService: Complete invoice fetched:', completeInvoice.id);
+      if (binAllocationWarnings.length > 0) {
+        return { ...completeInvoice, _warnings: binAllocationWarnings };
+      }
       return completeInvoice;
     } catch (error: any) {
       console.error('InvoicesService: Error creating invoice:', error);

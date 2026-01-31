@@ -1,10 +1,11 @@
 import { useState, useEffect } from 'react';
-import { X, Plus, Upload, Search } from 'lucide-react';
+import { X, Plus, Upload, Search, MapPin } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import ItemSelector from '../shared/ItemSelector';
-import { billsService, BillItem } from '../../services/bills.service';
+import { billsService, BillItem, BinAllocation } from '../../services/bills.service';
 import { vendorsService, Vendor } from '../../services/vendors.service';
 import { itemsService, Item } from '../../services/items.service';
+import SelectBinsModal from '../invoices/SelectBinsModal';
 
 interface Location {
   id: string;
@@ -63,6 +64,10 @@ const NewBillForm = () => {
   const [locations] = useState<Location[]>([
     { id: '1', name: 'Head Office', address: 'Karnataka, Bangalore, Karnataka, India - 560001' }
   ]);
+
+  // Bin allocation modal state
+  const [binModalOpen, setBinModalOpen] = useState(false);
+  const [selectedItemIndex, setSelectedItemIndex] = useState<number | null>(null);
 
 
   const [formData, setFormData] = useState({
@@ -239,6 +244,24 @@ const NewBillForm = () => {
     }
   };
 
+  const openBinModal = (index: number) => {
+    const item = billItems[index];
+    if (!item.item_id || item.quantity <= 0) {
+      alert('Please select an item and enter a quantity first');
+      return;
+    }
+    setSelectedItemIndex(index);
+    setBinModalOpen(true);
+  };
+
+  const handleBinAllocationSave = (allocations: BinAllocation[]) => {
+    if (selectedItemIndex !== null) {
+      const updatedItems = [...billItems];
+      updatedItems[selectedItemIndex].bin_allocations = allocations;
+      setBillItems(updatedItems);
+    }
+  };
+
   const calculateSubtotal = () => {
     return billItems.reduce((sum, item) => sum + (item.quantity * item.unit_price), 0);
   };
@@ -301,7 +324,8 @@ const NewBillForm = () => {
           unit_price: item.unit_price,
           tax_rate: item.tax_rate,
           discount: item.discount,
-          total: item.total
+          total: item.total,
+          bin_allocations: item.bin_allocations || []
         }))
       };
 
@@ -573,6 +597,23 @@ const NewBillForm = () => {
                           className="w-20 px-2 py-1.5 border border-gray-300 rounded text-sm text-center"
                           placeholder="Qty"
                         />
+                        {/* Select Bins Button */}
+                        {item.quantity > 0 && item.item_id && (
+                          <button
+                            type="button"
+                            onClick={() => openBinModal(index)}
+                            className="mt-2 flex items-center gap-1 text-xs text-blue-600 hover:text-blue-700 hover:underline mx-auto"
+                          >
+                            <MapPin size={12} />
+                            {item.bin_allocations && item.bin_allocations.length > 0 ? (
+                              <span className="font-medium">
+                                {item.bin_allocations.length} bin{item.bin_allocations.length > 1 ? 's' : ''} selected
+                              </span>
+                            ) : (
+                              <span>⚠ Select Bins</span>
+                            )}
+                          </button>
+                        )}
                         {item.serial_numbers && item.serial_numbers.length > 0 && (
                           <div className="mt-2 flex flex-wrap gap-1 max-w-[200px] justify-center">
                             {item.serial_numbers.map((sn, i) => (
@@ -582,7 +623,7 @@ const NewBillForm = () => {
                             ))}
                           </div>
                         )}
-                        {item.quantity > 0 && (!item.serial_numbers || item.serial_numbers.length === 0) && (
+                        {item.quantity > 0 && (!item.serial_numbers || item.serial_numbers.length === 0) && !item.item_id && (
                           <div className="mt-1 text-[10px] text-orange-500 text-center">
                             Select item with SKU
                           </div>
@@ -823,6 +864,22 @@ const NewBillForm = () => {
         </div>
       </div>
 
+      {/* Bin Selection Modal */}
+      {selectedItemIndex !== null && (
+        <SelectBinsModal
+          isOpen={binModalOpen}
+          onClose={() => {
+            setBinModalOpen(false);
+            setSelectedItemIndex(null);
+          }}
+          itemName={billItems[selectedItemIndex].item_name}
+          itemSku={items.find(i => i.id === billItems[selectedItemIndex].item_id)?.sku}
+          totalQuantity={billItems[selectedItemIndex].quantity}
+          unitOfMeasurement={billItems[selectedItemIndex].unit_of_measurement || 'pcs'}
+          currentAllocations={billItems[selectedItemIndex].bin_allocations || []}
+          onSave={handleBinAllocationSave}
+        />
+      )}
     </div>
   );
 };
