@@ -126,22 +126,26 @@ export class ExpensesService {
    * Create a new expense
    */
   async createExpense(expenseData: any) {
-    // Generate expense number - get all expense numbers to find the max
+    // Generate expense number - get all expense numbers to find the actual max
     const { data: expenses } = await supabaseAdmin
       .from('expenses')
-      .select('expense_number')
-      .order('expense_number', { ascending: false })
-      .limit(1);
+      .select('expense_number');
 
-    let nextNumber = 1;
-    if (expenses && expenses.length > 0 && expenses[0]?.expense_number) {
-      const match = expenses[0].expense_number.match(/EXP-(\d+)/);
-      if (match) {
-        nextNumber = parseInt(match[1]) + 1;
-      }
+    let maxNumber = 0;
+    if (expenses && expenses.length > 0) {
+      expenses.forEach((exp: any) => {
+        if (exp.expense_number) {
+          const match = exp.expense_number.match(/EXP-0*(\d+)/);
+          if (match) {
+            const num = parseInt(match[1]);
+            if (num > maxNumber) maxNumber = num;
+          }
+        }
+      });
     }
 
-    const expenseNumber = `EXP-${String(nextNumber).padStart(5, '0')}`;
+    const nextNumber = maxNumber + 1;
+    const expenseNumber = `EXP-${String(nextNumber).padStart(4, '0')}`;
 
     // Prepare expense data with defaults - mapped to actual DB columns
     const expense = {
