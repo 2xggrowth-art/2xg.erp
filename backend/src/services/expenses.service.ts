@@ -143,14 +143,15 @@ export class ExpensesService {
 
     const expenseNumber = `EXP-${String(nextNumber).padStart(5, '0')}`;
 
-    // Prepare expense data with defaults
+    // Prepare expense data with defaults - mapped to actual DB columns
     const expense = {
       organization_id: 'c749c5f6-aee0-4191-8869-0e98db3c09ec',
       expense_number: expenseNumber,
       category_id: expenseData.category_id,
       expense_item: expenseData.expense_item,
-      description: expenseData.description || null,
+      notes: expenseData.description || expenseData.notes || null,
       amount: expenseData.amount,
+      total_amount: expenseData.total_amount || expenseData.amount,
       payment_mode: expenseData.payment_mode,
       payment_voucher_number: expenseData.payment_voucher_number || null,
       voucher_file_url: expenseData.voucher_file_url || null,
