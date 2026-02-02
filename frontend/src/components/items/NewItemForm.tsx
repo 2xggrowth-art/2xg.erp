@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { ArrowLeft, Package, Save } from 'lucide-react';
+import { useState, useEffect, useMemo } from 'react';
+import { ArrowLeft, Package, Save, Upload } from 'lucide-react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { itemsService } from '../../services/items.service';
 import { vendorsService, Vendor } from '../../services/vendors.service';
@@ -71,6 +71,28 @@ const NewItemForm = () => {
     }
   }, [id, isEditMode]);
 
+  // Filter brands based on selected manufacturer
+  const filteredBrands = useMemo(() => {
+    if (!formData.manufacturer || brands.length === 0) {
+      return brands; // Show all brands if no manufacturer selected
+    }
+
+    const selectedManufacturer = manufacturers.find(
+      m => m.name === formData.manufacturer
+    );
+
+    if (!selectedManufacturer) {
+      return brands;
+    }
+
+    // Filter brands that belong to this manufacturer
+    const relatedBrands = brands.filter(
+      b => b.manufacturer_id === selectedManufacturer.id
+    );
+
+    return relatedBrands.length > 0 ? relatedBrands : brands;
+  }, [formData.manufacturer, brands, manufacturers]);
+
   // Auto-populate brand when manufacturer is selected
   useEffect(() => {
     if (formData.manufacturer && brands.length > 0) {
@@ -88,8 +110,11 @@ const NewItemForm = () => {
         // If there's exactly one brand for this manufacturer, auto-select it
         if (relatedBrands.length === 1) {
           setFormData(prev => ({ ...prev, brand: relatedBrands[0].name }));
+        } else if (relatedBrands.length === 0) {
+          // Clear brand if manufacturer has no brands
+          setFormData(prev => ({ ...prev, brand: '' }));
         }
-        // If there are multiple brands or no brands, don't auto-select
+        // If there are multiple brands, don't auto-select
       }
     }
   }, [formData.manufacturer, brands, manufacturers]);
@@ -622,25 +647,38 @@ const NewItemForm = () => {
             <label className="text-sm font-medium text-gray-700">
               Manufacturer
             </label>
-            <div className="col-span-3 grid grid-cols-2 gap-6">
-              <input
-                type="text"
-                name="manufacturer"
-                value={formData.manufacturer}
-                onChange={handleInputChange}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                placeholder="Enter manufacturer"
-              />
-              <div>
-                <label className="text-sm font-medium text-gray-700 block mb-2">Brand</label>
-                <input
-                  type="text"
-                  name="brand"
-                  value={formData.brand}
-                  onChange={handleInputChange}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  placeholder="Enter brand"
-                />
+            <div className="col-span-3">
+              <div className="flex justify-end mb-2">
+                <button
+                  type="button"
+                  onClick={() => setShowUploadModal(true)}
+                  className="text-sm text-blue-600 hover:text-blue-800 flex items-center gap-1"
+                >
+                  <Upload className="w-4 h-4" />
+                  Import from Excel
+                </button>
+              </div>
+              <div className="grid grid-cols-2 gap-6">
+                <div>
+                  <CreatableSelect
+                    options={manufacturers.map(m => ({ id: m.id, name: m.name }))}
+                    value={formData.manufacturer}
+                    onChange={(val) => setFormData(prev => ({ ...prev, manufacturer: val }))}
+                    onCreateOption={handleCreateManufacturer}
+                    placeholder="Select or add manufacturer"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-sm font-medium text-gray-700 block mb-2">Brand</label>
+                  <CreatableSelect
+                    options={filteredBrands.map(b => ({ id: b.id, name: m.name }))}
+                    value={formData.brand}
+                    onChange={(val) => setFormData(prev => ({ ...prev, brand: val }))}
+                    onCreateOption={handleCreateBrand}
+                    placeholder={formData.manufacturer && filteredBrands.length === 0 ? "No brands for this manufacturer - add new" : "Select or add brand"}
+                  />
+                </div>
               </div>
             </div>
           </div>

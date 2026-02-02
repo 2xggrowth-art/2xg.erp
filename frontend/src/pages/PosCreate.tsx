@@ -115,6 +115,13 @@ const PosCreate: React.FC = () => {
     fetchActiveSession();
   }, []);
 
+  // Check for active session when on newsale tab
+  useEffect(() => {
+    if (activeTab === 'newsale' && !activeSession && !showStartSessionModal) {
+      setShowStartSessionModal(true);
+    }
+  }, [activeTab, activeSession]);
+
   const fetchSalespersons = () => {
     try {
       const allSalespersons = salespersonService.getAllSalespersons();

@@ -63,6 +63,7 @@ import SessionDetailPage from './pages/SessionDetailPage';
 import ComingSoonPage from './pages/ComingSoonPage';
 import TransferOrderDetailPage from './pages/TransferOrderDetailPage';
 import BinLocationsPage from './pages/BinLocationsPage';
+import BrandManufacturerManagementPage from './pages/BrandManufacturerManagementPage';
 
 function App() {
   return (
@@ -83,6 +84,7 @@ function App() {
             {/* Items Routes */}
             <Route path="/items" element={<ProtectedRoute><DashboardLayout><ItemsPage /></DashboardLayout></ProtectedRoute>} />
             <Route path="/items/new" element={<ProtectedRoute><DashboardLayout><NewItemForm /></DashboardLayout></ProtectedRoute>} />
+            <Route path="/brands-manufacturers" element={<ProtectedRoute><DashboardLayout><BrandManufacturerManagementPage /></DashboardLayout></ProtectedRoute>} />
             <Route path="/items/:id" element={<ProtectedRoute><DashboardLayout><ItemDetailPage /></DashboardLayout></ProtectedRoute>} />
             <Route path="/items/:id/edit" element={<ProtectedRoute><DashboardLayout><NewItemForm /></DashboardLayout></ProtectedRoute>} />
             <Route path="/items/new-category" element={<ProtectedRoute><DashboardLayout><ComingSoonPage /></DashboardLayout></ProtectedRoute>} />
