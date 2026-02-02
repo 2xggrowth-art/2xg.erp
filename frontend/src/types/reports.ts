@@ -7,7 +7,7 @@ export interface ReportColumn {
   sortable?: boolean;
   aggregation?: 'sum' | 'count' | 'average';
   width?: string;
-  formatter?: (value: any, row: any) => string | React.ReactNode;
+  formatter?: (value: any, row: any) => string | JSX.Element | null;
 }
 
 // Report Filter Definition

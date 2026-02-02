@@ -18,6 +18,7 @@ export const formatCurrency = (value: number): string => {
 export const formatDate = (dateString: string): string => {
   if (!dateString) return '-';
   const date = new Date(dateString);
+  if (isNaN(date.getTime())) return '-';
   return date.toLocaleDateString('en-IN', {
     day: '2-digit',
     month: '2-digit',

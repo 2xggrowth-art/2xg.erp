@@ -51,16 +51,19 @@ const ReportViewerPage = () => {
     }
   }, [config, dateRange, filters]);
 
-  // Initial data fetch
+  // Fetch data when config, filters, or date range change
   useEffect(() => {
     if (config) {
       fetchData();
-      // Record visit
-      if (reportId) {
-        reportsService.recordVisit(reportId);
-      }
     }
-  }, [config, reportId]);
+  }, [config, fetchData]);
+
+  // Record visit on report change
+  useEffect(() => {
+    if (reportId) {
+      reportsService.recordVisit(reportId);
+    }
+  }, [reportId]);
 
   // Handle filter change
   const handleFilterChange = (key: string, value: any) => {
@@ -119,9 +122,16 @@ const ReportViewerPage = () => {
       })
     );
 
-    const csvContent = [headers.join(','), ...rows.map((r) => r.map((v) => `"${v}"`).join(','))].join(
-      '\n'
-    );
+    const escapeCSV = (val: any): string => {
+      let s = String(val ?? '').replace(/"/g, '""');
+      if (/^[=+\-@\t\r]/.test(s)) s = "'" + s;
+      return `"${s}"`;
+    };
+
+    const csvContent = [
+      headers.map(escapeCSV).join(','),
+      ...rows.map((r) => r.map(escapeCSV).join(','))
+    ].join('\n');
 
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const url = window.URL.createObjectURL(blob);

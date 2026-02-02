@@ -157,29 +157,35 @@ export class ExpensesService {
    * Create a new expense
    */
   async createExpense(expenseData: any) {
-    // Generate expense number - get all expense numbers to find the actual max
-    const { data: expenses } = await supabaseAdmin
+    // Generate expense number - use ORDER BY DESC + LIMIT 1 instead of fetching all rows
+    const { data: latestExpense } = await supabaseAdmin
       .from('expenses')
-      .select('expense_number');
+      .select('expense_number')
+      .order('expense_number', { ascending: false })
+      .limit(1)
+      .maybeSingle();
 
     let maxNumber = 0;
-    if (expenses && expenses.length > 0) {
-      expenses.forEach((exp: any) => {
-        if (exp.expense_number) {
-          const match = exp.expense_number.match(/EXP-0*(\d+)/);
-          if (match) {
-            const num = parseInt(match[1]);
-            if (num > maxNumber) maxNumber = num;
-          }
-        }
-      });
+    if (latestExpense?.expense_number) {
+      const match = latestExpense.expense_number.match(/EXP-0*(\d+)/);
+      if (match) {
+        maxNumber = parseInt(match[1]);
+      }
     }
 
     const nextNumber = maxNumber + 1;
     const expenseNumber = `EXP-${String(nextNumber).padStart(4, '0')}`;
 
+    // Get organization_id (default to first organization)
+    const { data: org } = await supabaseAdmin
+      .from('organizations')
+      .select('id')
+      .limit(1)
+      .single();
+
     // Prepare expense data with defaults - mapped to actual DB columns
     const expense = {
+      organization_id: expenseData.organization_id || org?.id,
       expense_number: expenseNumber,
       category_id: expenseData.category_id,
       expense_item: expenseData.expense_item,
@@ -192,6 +198,7 @@ export class ExpensesService {
       voucher_file_name: expenseData.voucher_file_name || null,
       approval_status: 'Pending',
       remarks: expenseData.remarks || null,
+      expense_date: expenseData.expense_date,
       paid_by_id: expenseData.paid_by_id,
       paid_by_name: expenseData.paid_by_name,
       branch: expenseData.branch || null
