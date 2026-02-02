@@ -66,7 +66,7 @@
       "Bash(python3:*)",
       "Bash(KONG=\"http://supabasekong-joo0o40k84kw8wk0skc0o0g8.51.195.46.40.sslip.io/rest/v1\":*)",
       "Bash(KEY=\"eyJhbGciOiAiSFMyNTYiLCAidHlwIjogIkpXVCJ9.eyJyb2xlIjogInNlcnZpY2Vfcm9sZSIsICJpc3MiOiAic3VwYWJhc2UiLCAiaWF0IjogMTczNzkzNjAwMCwgImV4cCI6IDQ4OTM2MDk2MDB9.VoTw8BTjXn86Cnag9baFL6XobExzQSTD8tGkC12jy9U\")",
-      "Bash(git ls-tree:*)"
+      "Bash(coderabbit review:*)"
     ]
   }
 }
