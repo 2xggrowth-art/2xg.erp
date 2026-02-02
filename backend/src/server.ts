@@ -34,6 +34,7 @@ import binLocationsRoutes from './routes/binLocations.routes';
 import brandsRoutes from './routes/brands.routes';
 import manufacturersRoutes from './routes/manufacturers.routes';
 import posSessionsRoutes from './routes/pos-sessions.routes';
+import { readOnlyGuard } from './middleware/readOnly.middleware';
 
 // Load environment variables
 dotenv.config();
@@ -77,6 +78,9 @@ app.use(cors({
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(morgan('dev'));
+
+// Read-only mode guard — blocks write operations when READ_ONLY_MODE=true
+app.use(readOnlyGuard);
 
 // Serve uploaded files statically
 app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
