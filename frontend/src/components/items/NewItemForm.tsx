@@ -6,6 +6,8 @@ import { vendorsService, Vendor } from '../../services/vendors.service';
 import { brandsService, Brand } from '../../services/brands.service';
 import { manufacturersService, Manufacturer } from '../../services/manufacturers.service';
 import { useAuth } from '../../contexts/AuthContext';
+import CreatableSelect from '../shared/CreatableSelect';
+import BrandManufacturerUploadModal from './BrandManufacturerUploadModal';
 
 const NewItemForm = () => {
   const navigate = useNavigate();
@@ -18,6 +20,7 @@ const NewItemForm = () => {
   const canViewPurchasePrice = userRole === 'admin' || userRole === 'super_admin' || userRole === 'super admin';
   const [loading, setLoading] = useState(false);
   const [fetching, setFetching] = useState(false);
+  const [showUploadModal, setShowUploadModal] = useState(false);
   const [vendors, setVendors] = useState<Vendor[]>([]);
   const [brands, setBrands] = useState<Brand[]>([]);
   const [manufacturers, setManufacturers] = useState<Manufacturer[]>([]);
@@ -672,7 +675,7 @@ const NewItemForm = () => {
                 <div>
                   <label className="text-sm font-medium text-gray-700 block mb-2">Brand</label>
                   <CreatableSelect
-                    options={filteredBrands.map(b => ({ id: b.id, name: m.name }))}
+                    options={filteredBrands.map(b => ({ id: b.id, name: b.name }))}
                     value={formData.brand}
                     onChange={(val) => setFormData(prev => ({ ...prev, brand: val }))}
                     onCreateOption={handleCreateBrand}
@@ -1022,6 +1025,14 @@ const NewItemForm = () => {
 
         </form>
       </div>
+
+      {/* Brand & Manufacturer Upload Modal */}
+      {showUploadModal && (
+        <BrandManufacturerUploadModal
+          onClose={() => setShowUploadModal(false)}
+          onUpload={handleUploadComplete}
+        />
+      )}
     </div>
   );
 };
