@@ -27,11 +27,12 @@ export class ExpensesService {
       if (categoryIds.length > 0) {
         const { data: categories } = await supabaseAdmin
           .from('expense_categories')
-          .select('id, category_name, name')
+          .select('id, category_name')
           .in('id', categoryIds);
 
-        if (categories) {
-          const categoryMap = new Map(categories.map(c => [c.id, c.category_name || c.name]));
+        if (categories && categories.length > 0) {
+          const categoryMap = new Map(categories.map(c => [c.id, c.category_name]));
+
           data.forEach(expense => {
             if (expense.category_id && categoryMap.has(expense.category_id)) {
               expense.category_name = categoryMap.get(expense.category_id);
@@ -60,12 +61,12 @@ export class ExpensesService {
     if (data && data.category_id) {
       const { data: category } = await supabaseAdmin
         .from('expense_categories')
-        .select('category_name, name')
+        .select('category_name')
         .eq('id', data.category_id)
         .single();
 
       if (category) {
-        data.category_name = category.category_name || category.name;
+        data.category_name = category.category_name;
       }
     }
 
@@ -202,3 +203,4 @@ export class ExpensesService {
     return data;
   }
 }
+
