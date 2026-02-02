@@ -12,6 +12,16 @@ export const getAllBrands = async (req: Request, res: Response) => {
     }
 };
 
+export const getBrandsByManufacturer = async (req: Request, res: Response) => {
+    try {
+        const { manufacturerId } = req.params;
+        const brands = await brandsService.getBrandsByManufacturer(manufacturerId);
+        res.json({ success: true, data: brands });
+    } catch (error: any) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+};
+
 export const createBrand = async (req: Request, res: Response) => {
     try {
         const brand = await brandsService.createBrand(req.body);

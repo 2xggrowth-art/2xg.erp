@@ -157,32 +157,36 @@ export class ExpensesService {
    * Create a new expense
    */
   async createExpense(expenseData: any) {
-    // Generate expense number - get all expense numbers to find the max
+    // Generate expense number - get all expense numbers to find the actual max
     const { data: expenses } = await supabaseAdmin
       .from('expenses')
-      .select('expense_number')
-      .order('expense_number', { ascending: false })
-      .limit(1);
+      .select('expense_number');
 
-    let nextNumber = 1;
-    if (expenses && expenses.length > 0 && expenses[0]?.expense_number) {
-      const match = expenses[0].expense_number.match(/EXP-(\d+)/);
-      if (match) {
-        nextNumber = parseInt(match[1]) + 1;
-      }
+    let maxNumber = 0;
+    if (expenses && expenses.length > 0) {
+      expenses.forEach((exp: any) => {
+        if (exp.expense_number) {
+          const match = exp.expense_number.match(/EXP-0*(\d+)/);
+          if (match) {
+            const num = parseInt(match[1]);
+            if (num > maxNumber) maxNumber = num;
+          }
+        }
+      });
     }
 
-    const expenseNumber = `EXP-${String(nextNumber).padStart(5, '0')}`;
+    const nextNumber = maxNumber + 1;
+    const expenseNumber = `EXP-${String(nextNumber).padStart(4, '0')}`;
 
-    // Prepare expense data - insert fields directly as frontend sends them
+    // Prepare expense data with defaults - mapped to actual DB columns
     const expense = {
       expense_number: expenseNumber,
       category_id: expenseData.category_id,
-      expense_item: expenseData.expense_item || 'General Expense',
-      description: expenseData.description || null,
-      expense_date: expenseData.expense_date,
+      expense_item: expenseData.expense_item,
+      notes: expenseData.description || expenseData.notes || null,
       amount: expenseData.amount,
-      payment_mode: expenseData.payment_mode || 'Cash',
+      total_amount: expenseData.total_amount || expenseData.amount,
+      payment_mode: expenseData.payment_mode,
       payment_voucher_number: expenseData.payment_voucher_number || null,
       voucher_file_url: expenseData.voucher_file_url || null,
       voucher_file_name: expenseData.voucher_file_name || null,
@@ -203,4 +207,3 @@ export class ExpensesService {
     return data;
   }
 }
-

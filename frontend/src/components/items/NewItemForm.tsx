@@ -3,6 +3,8 @@ import { ArrowLeft, Package, Save } from 'lucide-react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { itemsService } from '../../services/items.service';
 import { vendorsService, Vendor } from '../../services/vendors.service';
+import { brandsService, Brand } from '../../services/brands.service';
+import { manufacturersService, Manufacturer } from '../../services/manufacturers.service';
 import { useAuth } from '../../contexts/AuthContext';
 
 const NewItemForm = () => {
@@ -17,6 +19,8 @@ const NewItemForm = () => {
   const [loading, setLoading] = useState(false);
   const [fetching, setFetching] = useState(false);
   const [vendors, setVendors] = useState<Vendor[]>([]);
+  const [brands, setBrands] = useState<Brand[]>([]);
+  const [manufacturers, setManufacturers] = useState<Manufacturer[]>([]);
   const [formData, setFormData] = useState({
     type: 'goods',
     name: '',
@@ -57,6 +61,8 @@ const NewItemForm = () => {
   useEffect(() => {
     fetchVendors();
     fetchItems(); // Fetch items for SKU validation
+    fetchBrands();
+    fetchManufacturers();
     if (isEditMode && id) {
       fetchItemDetails(id);
     } else {
@@ -64,6 +70,29 @@ const NewItemForm = () => {
       generateNewSku();
     }
   }, [id, isEditMode]);
+
+  // Auto-populate brand when manufacturer is selected
+  useEffect(() => {
+    if (formData.manufacturer && brands.length > 0) {
+      // Find the selected manufacturer's ID
+      const selectedManufacturer = manufacturers.find(
+        m => m.name === formData.manufacturer
+      );
+
+      if (selectedManufacturer) {
+        // Filter brands that belong to this manufacturer
+        const relatedBrands = brands.filter(
+          b => b.manufacturer_id === selectedManufacturer.id
+        );
+
+        // If there's exactly one brand for this manufacturer, auto-select it
+        if (relatedBrands.length === 1) {
+          setFormData(prev => ({ ...prev, brand: relatedBrands[0].name }));
+        }
+        // If there are multiple brands or no brands, don't auto-select
+      }
+    }
+  }, [formData.manufacturer, brands, manufacturers]);
 
   const generateNewSku = async () => {
     try {
@@ -105,6 +134,101 @@ const NewItemForm = () => {
       }
     } catch (error) {
       console.error('Error fetching vendors:', error);
+    }
+  };
+
+  const fetchBrands = async () => {
+    try {
+      const response = await brandsService.getAllBrands();
+      if (response.data.success) {
+        setBrands(response.data.data);
+      }
+    } catch (error) {
+      console.error('Error fetching brands:', error);
+    }
+  };
+
+  const fetchManufacturers = async () => {
+    try {
+      const response = await manufacturersService.getAllManufacturers();
+      if (response.data.success) {
+        setManufacturers(response.data.data);
+      }
+    } catch (error) {
+      console.error('Error fetching manufacturers:', error);
+    }
+  };
+
+  const handleCreateBrand = async (name: string) => {
+    try {
+      const response = await brandsService.createBrand({ name });
+      if (response.data.success) {
+        setBrands([...brands, response.data.data]);
+        setFormData(prev => ({ ...prev, brand: name }));
+      }
+    } catch (error) {
+      console.error('Error creating brand:', error);
+      alert('Failed to create brand');
+    }
+  };
+
+  const handleCreateManufacturer = async (name: string) => {
+    try {
+      const response = await manufacturersService.createManufacturer({ name });
+      if (response.data.success) {
+        setManufacturers([...manufacturers, response.data.data]);
+        setFormData(prev => ({ ...prev, manufacturer: name }));
+      }
+    } catch (error) {
+      console.error('Error creating manufacturer:', error);
+      alert('Failed to create manufacturer');
+    }
+  };
+
+  const handleUploadComplete = async (data: { brands: any[], manufacturers: any[] }) => {
+    try {
+      let brandsCreated = 0;
+      let manufacturersCreated = 0;
+      const manufacturerMap = new Map<string, string>(); // name -> id
+
+      // Step 1: Create manufacturers first
+      if (data.manufacturers && data.manufacturers.length > 0) {
+        const response = await manufacturersService.bulkCreateManufacturers(data.manufacturers);
+        if (response.data.success && response.data.data) {
+          manufacturersCreated = data.manufacturers.length;
+          // Build map of manufacturer names to IDs
+          response.data.data.forEach((mfr: any) => {
+            manufacturerMap.set(mfr.name.toLowerCase(), mfr.id);
+          });
+          fetchManufacturers();
+        }
+      }
+
+      // Step 2: Create brands with manufacturer_id links
+      if (data.brands && data.brands.length > 0) {
+        // Map brands to include manufacturer_id
+        const brandsWithManufacturer = data.brands.map((brand: any) => {
+          const brandData: any = { name: brand.name };
+          if (brand.manufacturerName) {
+            const manufacturerId = manufacturerMap.get(brand.manufacturerName.toLowerCase());
+            if (manufacturerId) {
+              brandData.manufacturer_id = manufacturerId;
+            }
+          }
+          return brandData;
+        });
+
+        const response = await brandsService.bulkCreateBrands(brandsWithManufacturer);
+        if (response.data.success) {
+          fetchBrands();
+          brandsCreated = data.brands.length;
+        }
+      }
+
+      return { brands: brandsCreated, manufacturers: manufacturersCreated };
+    } catch (error) {
+      console.error('Bulk create failed', error);
+      throw error;
     }
   };
 

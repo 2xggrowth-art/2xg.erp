@@ -324,7 +324,7 @@ const ExpensesPage = () => {
                     </td>
                     <td className="hidden md:table-cell px-6 py-4 whitespace-nowrap">
                       <span className="text-sm text-gray-900">
-                        {expense.category_name || 'N/A'}
+                        {(expense as any).expense_categories?.category_name || expense.category_name || 'N/A'}
                       </span>
                     </td>
                     <td className="hidden md:table-cell px-6 py-4">

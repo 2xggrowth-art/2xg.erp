@@ -52,23 +52,27 @@ const BrandManufacturerUploadModal: React.FC<BrandManufacturerUploadModalProps> 
             const manufacturers: any[] = [];
             const seenBrands = new Set();
             const seenManufacturers = new Set();
+            const brandManufacturerMap: Map<string, string> = new Map(); // brand name -> manufacturer name
 
             dataRows.forEach(row => {
-                // Parse BRAND column
-                if (brandCol !== -1) {
-                    const brandName = row[brandCol] ? String(row[brandCol]).trim() : '';
-                    if (brandName && !seenBrands.has(brandName.toLowerCase())) {
-                        brands.push({ name: brandName });
-                        seenBrands.add(brandName.toLowerCase());
-                    }
-                }
+                const brandName = brandCol !== -1 && row[brandCol] ? String(row[brandCol]).trim() : '';
+                const mfrName = mfrCol !== -1 && row[mfrCol] ? String(row[mfrCol]).trim() : '';
 
                 // Parse MANUFACTURES column
-                if (mfrCol !== -1) {
-                    const mfrName = row[mfrCol] ? String(row[mfrCol]).trim() : '';
-                    if (mfrName && !seenManufacturers.has(mfrName.toLowerCase())) {
-                        manufacturers.push({ name: mfrName });
-                        seenManufacturers.add(mfrName.toLowerCase());
+                if (mfrName && !seenManufacturers.has(mfrName.toLowerCase())) {
+                    manufacturers.push({ name: mfrName });
+                    seenManufacturers.add(mfrName.toLowerCase());
+                }
+
+                // Parse BRAND column and link to manufacturer
+                if (brandName && !seenBrands.has(brandName.toLowerCase())) {
+                    brands.push({
+                        name: brandName,
+                        manufacturerName: mfrName || null // Store manufacturer name temporarily
+                    });
+                    seenBrands.add(brandName.toLowerCase());
+                    if (mfrName) {
+                        brandManufacturerMap.set(brandName.toLowerCase(), mfrName);
                     }
                 }
             });
