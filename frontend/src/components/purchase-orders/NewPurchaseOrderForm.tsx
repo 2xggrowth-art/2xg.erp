@@ -855,11 +855,12 @@ Payment will be made after successful delivery and acceptance.`,
 
               <div className="flex justify-between items-center py-2">
                 <div className="flex items-center gap-2">
-                  <span className="text-sm text-slate-700 w-12">CGST</span>
+                  <span className={`text-sm w-12 ${formData.igst_rate ? 'text-slate-400' : 'text-slate-700'}`}>CGST</span>
                   <select
                     value={formData.cgst_rate}
-                    onChange={(e) => setFormData({ ...formData, cgst_rate: parseFloat(e.target.value) || 0 })}
-                    className="px-2 py-1 border border-slate-300 rounded text-sm bg-white w-20"
+                    onChange={(e) => setFormData({ ...formData, cgst_rate: parseFloat(e.target.value) || 0, igst_rate: 0 })}
+                    disabled={!!formData.igst_rate}
+                    className={`px-2 py-1 border border-slate-300 rounded text-sm w-20 ${formData.igst_rate ? 'bg-slate-100 text-slate-400 cursor-not-allowed' : 'bg-white'}`}
                   >
                     <option value={0}>0%</option>
                     <option value={2.5}>2.5%</option>
@@ -874,11 +875,12 @@ Payment will be made after successful delivery and acceptance.`,
 
               <div className="flex justify-between items-center py-2">
                 <div className="flex items-center gap-2">
-                  <span className="text-sm text-slate-700 w-12">SGST</span>
+                  <span className={`text-sm w-12 ${formData.igst_rate ? 'text-slate-400' : 'text-slate-700'}`}>SGST</span>
                   <select
                     value={formData.sgst_rate}
-                    onChange={(e) => setFormData({ ...formData, sgst_rate: parseFloat(e.target.value) || 0 })}
-                    className="px-2 py-1 border border-slate-300 rounded text-sm bg-white w-20"
+                    onChange={(e) => setFormData({ ...formData, sgst_rate: parseFloat(e.target.value) || 0, igst_rate: 0 })}
+                    disabled={!!formData.igst_rate}
+                    className={`px-2 py-1 border border-slate-300 rounded text-sm w-20 ${formData.igst_rate ? 'bg-slate-100 text-slate-400 cursor-not-allowed' : 'bg-white'}`}
                   >
                     <option value={0}>0%</option>
                     <option value={2.5}>2.5%</option>
@@ -893,11 +895,12 @@ Payment will be made after successful delivery and acceptance.`,
 
               <div className="flex justify-between items-center py-2">
                 <div className="flex items-center gap-2">
-                  <span className="text-sm text-slate-700 w-12">IGST</span>
+                  <span className={`text-sm w-12 ${(formData.cgst_rate || formData.sgst_rate) ? 'text-slate-400' : 'text-slate-700'}`}>IGST</span>
                   <select
                     value={formData.igst_rate}
-                    onChange={(e) => setFormData({ ...formData, igst_rate: parseFloat(e.target.value) || 0 })}
-                    className="px-2 py-1 border border-slate-300 rounded text-sm bg-white w-20"
+                    onChange={(e) => setFormData({ ...formData, igst_rate: parseFloat(e.target.value) || 0, cgst_rate: 0, sgst_rate: 0 })}
+                    disabled={!!(formData.cgst_rate || formData.sgst_rate)}
+                    className={`px-2 py-1 border border-slate-300 rounded text-sm w-20 ${(formData.cgst_rate || formData.sgst_rate) ? 'bg-slate-100 text-slate-400 cursor-not-allowed' : 'bg-white'}`}
                   >
                     <option value={0}>0%</option>
                     <option value={5}>5%</option>
