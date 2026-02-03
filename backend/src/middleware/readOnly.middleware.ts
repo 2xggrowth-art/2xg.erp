@@ -17,8 +17,8 @@ export function readOnlyGuard(req: Request, res: Response, next: NextFunction) {
     return next();
   }
 
-  // Allow auth endpoints so dev can log in
-  const authPaths = ['/api/auth/login', '/api/auth/verify'];
+  // Allow auth endpoints so dev can log in (including mobile auth)
+  const authPaths = ['/api/auth/login', '/api/auth/verify', '/api/mobile-auth/login', '/api/mobile-auth/verify'];
   if (authPaths.some(p => req.path === p)) {
     return next();
   }

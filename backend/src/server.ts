@@ -34,7 +34,9 @@ import binLocationsRoutes from './routes/binLocations.routes';
 import brandsRoutes from './routes/brands.routes';
 import manufacturersRoutes from './routes/manufacturers.routes';
 import posSessionsRoutes from './routes/pos-sessions.routes';
+import mobileAuthRoutes from './routes/mobile-auth.routes';
 import { readOnlyGuard } from './middleware/readOnly.middleware';
+import { authMiddleware } from './middleware/auth.middleware';
 
 // Load environment variables
 dotenv.config();
@@ -94,8 +96,16 @@ app.get('/api/health', (req: Request, res: Response) => {
   });
 });
 
-// API Routes
+// Auth routes are public (login, verify handled internally)
 app.use('/api/auth', authRoutes);
+
+// Mobile auth routes are public (phone + PIN login for mobile app)
+app.use('/api/mobile-auth', mobileAuthRoutes);
+
+// Apply auth middleware to all other API routes
+app.use('/api', authMiddleware);
+
+// Protected API Routes
 app.use('/api/erp', erpRoutes);
 app.use('/api/logistics', logisticsRoutes);
 app.use('/api/care', careRoutes);
