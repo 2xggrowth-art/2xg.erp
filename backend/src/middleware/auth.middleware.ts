@@ -9,11 +9,15 @@ export interface AuthenticatedRequest extends Request {
     userId: string;
     email: string;
     role: string;
+    isMobile?: boolean;
+    employeeName?: string;
+    branch?: string;
   };
 }
 
 /**
  * Authentication middleware - validates JWT token from Authorization header.
+ * Supports both web (users table) and mobile (mobile_users table) tokens.
  * Attaches decoded user to req.user for downstream handlers.
  */
 export const authMiddleware = async (
@@ -33,14 +37,45 @@ export const authMiddleware = async (
 
     const token = authHeader.substring(7);
 
-    // Verify JWT token
-    const decoded = jwt.verify(token, JWT_SECRET) as {
-      userId: string;
-      email: string;
-      role: string;
-    };
+    // Verify JWT token (decode first to check type)
+    const decoded = jwt.verify(token, JWT_SECRET) as any;
 
-    // Verify user still exists and is active
+    // Check if this is a mobile token
+    if (decoded.type === 'mobile') {
+      // Mobile user - verify against mobile_users table
+      const { data: mobileUser, error } = await supabaseAdmin
+        .from('mobile_users')
+        .select('id, phone_number, employee_name, branch, is_active')
+        .eq('id', decoded.id)
+        .single();
+
+      if (error || !mobileUser) {
+        return res.status(401).json({
+          success: false,
+          error: 'Invalid token. User not found.'
+        });
+      }
+
+      if (!mobileUser.is_active) {
+        return res.status(403).json({
+          success: false,
+          error: 'Account deactivated. Contact administrator.'
+        });
+      }
+
+      // Attach mobile user info to request (map to compatible format)
+      req.user = {
+        userId: mobileUser.id,
+        email: mobileUser.phone_number, // Use phone as identifier
+        role: 'mobile_user',
+        isMobile: true,
+        employeeName: mobileUser.employee_name,
+        branch: mobileUser.branch
+      };
+      return next();
+    }
+
+    // Web user - verify against users table
     const { data: user, error } = await supabaseAdmin
       .from('users')
       .select('id, status')
