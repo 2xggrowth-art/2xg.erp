@@ -21,40 +21,50 @@ export default function CaptureScreen({ navigation }: Props) {
   const takePhoto = async () => {
     Vibration.vibrate(10);
 
-    const { status } = await ImagePicker.requestCameraPermissionsAsync();
-    if (status !== 'granted') {
-      Alert.alert('Permission Required', 'Camera access is needed to capture receipts');
-      return;
-    }
+    try {
+      const { status } = await ImagePicker.requestCameraPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Permission Required', 'Camera access is needed to capture receipts');
+        return;
+      }
 
-    const result = await ImagePicker.launchCameraAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      allowsEditing: true,
-      quality: 0.7,
-    });
+      const result = await ImagePicker.launchCameraAsync({
+        mediaTypes: ['images'],
+        allowsEditing: true,
+        quality: 0.7,
+      });
 
-    if (!result.canceled && result.assets[0]) {
-      navigation.navigate('Amount', { imageUri: result.assets[0].uri });
+      if (!result.canceled && result.assets[0]) {
+        navigation.navigate('Amount', { imageUri: result.assets[0].uri });
+      }
+    } catch (error) {
+      console.error('Camera error:', error);
+      Alert.alert('Error', 'Failed to open camera. Please try again.');
     }
   };
 
   const pickFromGallery = async () => {
     Vibration.vibrate(10);
 
-    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (status !== 'granted') {
-      Alert.alert('Permission Required', 'Gallery access is needed to select receipts');
-      return;
-    }
+    try {
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Permission Required', 'Gallery access is needed to select receipts');
+        return;
+      }
 
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      allowsEditing: true,
-      quality: 0.7,
-    });
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        allowsEditing: true,
+        quality: 0.7,
+      });
 
-    if (!result.canceled && result.assets[0]) {
-      navigation.navigate('Amount', { imageUri: result.assets[0].uri });
+      if (!result.canceled && result.assets[0]) {
+        navigation.navigate('Amount', { imageUri: result.assets[0].uri });
+      }
+    } catch (error) {
+      console.error('Gallery error:', error);
+      Alert.alert('Error', 'Failed to open gallery. Please try again.');
     }
   };
 
