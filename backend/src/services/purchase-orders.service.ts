@@ -115,6 +115,11 @@ export class PurchaseOrdersService {
 
     const afterDiscount = subtotal - discountAmount;
 
+    // Validate GST mutual exclusivity: CGST/SGST and IGST cannot be used together
+    if ((poData.cgst_rate || poData.sgst_rate) && poData.igst_rate) {
+      throw new Error('CGST/SGST and IGST cannot be applied together. Use either CGST+SGST or IGST.');
+    }
+
     // Calculate GST
     const cgstAmount = (afterDiscount * (poData.cgst_rate || 0)) / 100;
     const sgstAmount = (afterDiscount * (poData.sgst_rate || 0)) / 100;
@@ -135,9 +140,12 @@ export class PurchaseOrdersService {
     const newPO = {
       organization_id: org?.id,
       po_number: poData.po_number,
+      purchase_order_number: poData.po_number,
       auto_po_number: poData.auto_po_number !== false,
+      vendor_id: poData.vendor_id || null,
+      vendor_name: poData.vendor_name || null,
       supplier_id: poData.vendor_id || null,
-      supplier_name: poData.vendor_name,
+      supplier_name: poData.vendor_name || null,
       supplier_email: poData.vendor_email || null,
       location_id: poData.location_id || null,
       delivery_address_type: poData.delivery_address_type || 'location',
@@ -216,6 +224,11 @@ export class PurchaseOrdersService {
    * Update purchase order
    */
   async updatePurchaseOrder(id: string, poData: any) {
+    // Validate GST mutual exclusivity: CGST/SGST and IGST cannot be used together
+    if ((poData.cgst_rate || poData.sgst_rate) && poData.igst_rate) {
+      throw new Error('CGST/SGST and IGST cannot be applied together. Use either CGST+SGST or IGST.');
+    }
+
     const { data, error } = await supabaseAdmin
       .from('purchase_orders')
       .update(poData)
