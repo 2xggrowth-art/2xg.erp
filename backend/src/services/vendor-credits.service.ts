@@ -27,8 +27,15 @@ export interface VendorCredit {
   subject?: string;
   status?: string;
   subtotal: number;
+  discount_type?: string;
+  discount_value?: number;
   discount_amount?: number;
-  tax_type?: string;
+  cgst_rate?: number;
+  cgst_amount?: number;
+  sgst_rate?: number;
+  sgst_amount?: number;
+  igst_rate?: number;
+  igst_amount?: number;
   tax_amount?: number;
   adjustment?: number;
   total_amount: number;
