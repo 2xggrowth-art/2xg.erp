@@ -17,6 +17,7 @@ import VendorManagementPage from './pages/VendorManagementPage';
 import NewVendorForm from './components/vendors/NewVendorForm';
 import CustomerManagementPage from './pages/CustomerManagementPage';
 import NewCustomerForm from './components/customers/NewCustomerForm';
+import EditCustomerForm from './components/customers/EditCustomerForm';
 import PurchaseOrderPage from './pages/PurchaseOrderPage';
 import NewPurchaseOrderForm from './components/purchase-orders/NewPurchaseOrderForm';
 import BillsPage from './pages/BillsPage';
@@ -129,6 +130,7 @@ function App() {
             <Route path="/sales/customers" element={<ProtectedRoute><DashboardLayout><CustomerManagementPage /></DashboardLayout></ProtectedRoute>} />
             <Route path="/sales/customers/new" element={<ProtectedRoute><DashboardLayout><NewCustomerForm /></DashboardLayout></ProtectedRoute>} />
             <Route path="/sales/customers/:id" element={<ProtectedRoute><DashboardLayout><CustomerDetailPage /></DashboardLayout></ProtectedRoute>} />
+            <Route path="/sales/customers/:id/edit" element={<ProtectedRoute><DashboardLayout><EditCustomerForm /></DashboardLayout></ProtectedRoute>} />
 
             {/* Purchase Order Routes */}
             <Route path="/purchase-orders" element={<ProtectedRoute><DashboardLayout><PurchaseOrderPage /></DashboardLayout></ProtectedRoute>} />
