@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Plus, Filter, Download, Printer, MoreVertical, Edit, Trash2, Eye } from 'lucide-react';
+import { Filter, Download, Printer, MoreVertical, Edit, Trash2, Eye, FileDown } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { deliveryChallansService, DeliveryChallan } from '../services/delivery-challans.service';
 
@@ -98,6 +98,64 @@ const DeliveryChallansPage = () => {
     }).format(amount);
   };
 
+  const handleDownloadChallan = (challan: DeliveryChallan, e: React.MouseEvent) => {
+    e.stopPropagation();
+
+    // Generate challan details as text content
+    const challanContent = `
+DELIVERY CHALLAN
+================
+
+Challan Number: ${challan.challan_number || '-'}
+Date: ${formatDate(challan.challan_date)}
+Status: ${challan.status || 'Draft'}
+
+CUSTOMER DETAILS
+----------------
+Customer Name: ${challan.customer_name || '-'}
+Invoice Number: ${challan.invoice_number || '-'}
+Reference Number: ${challan.reference_number || '-'}
+Alternate Phone: ${challan.alternate_phone || '-'}
+
+DELIVERY DETAILS
+----------------
+Challan Type: ${challan.challan_type || '-'}
+Product Name: ${challan.product_name || '-'}
+Delivery Location Type: ${challan.delivery_location_type || '-'}
+Delivery Address: ${challan.delivery_address || '-'}
+Pincode: ${challan.pincode || '-'}
+Estimated Delivery: ${challan.estimated_delivery_day || '-'}
+
+SALESPERSON
+-----------
+Salesperson: ${challan.salesperson_name || '-'}
+
+ADDITIONAL INFO
+---------------
+Free Accessories: ${challan.free_accessories || '-'}
+Reverse Pickup: ${challan.reverse_pickup ? 'Yes' : 'No'}
+Notes: ${challan.notes || '-'}
+
+AMOUNT
+------
+Total Amount: ${formatCurrency(challan.total_amount)}
+
+================
+Generated on: ${new Date().toLocaleString('en-IN')}
+    `.trim();
+
+    // Create and download the file
+    const blob = new Blob([challanContent], { type: 'text/plain' });
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `${challan.challan_number || 'challan'}.txt`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    window.URL.revokeObjectURL(url);
+  };
+
   if (loading) {
     return (
       <div className="max-w-7xl mx-auto w-full p-6">
@@ -120,29 +178,16 @@ const DeliveryChallansPage = () => {
                 Create and manage delivery challans for goods movement.
               </p>
             </div>
-            <button
-              onClick={() => navigate('/logistics/create-delivery-challan')}
-              className="flex items-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors shadow-md"
-            >
-              <Plus size={20} />
-              <span className="font-medium">New Delivery Challan</span>
-            </button>
           </div>
 
           {/* Empty State */}
           <div className="bg-white rounded-lg shadow-md p-12 text-center">
             <h2 className="text-xl font-semibold text-slate-800 mb-4">
-              Start Creating Delivery Challans
+              No Delivery Challans Found
             </h2>
-            <p className="text-slate-600 mb-6">
-              Track goods movement with delivery challans for supply, job work, and more.
+            <p className="text-slate-600">
+              Delivery challans will appear here once created from invoices.
             </p>
-            <button
-              onClick={() => navigate('/logistics/create-delivery-challan')}
-              className="px-8 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium shadow-md"
-            >
-              NEW DELIVERY CHALLAN
-            </button>
           </div>
         </div>
       </div>
@@ -160,13 +205,6 @@ const DeliveryChallansPage = () => {
               {challans.length} delivery challan{challans.length !== 1 ? 's' : ''} found
             </p>
           </div>
-          <button
-            onClick={() => navigate('/logistics/create-delivery-challan')}
-            className="flex items-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors shadow-md"
-          >
-            <Plus size={20} />
-            <span className="font-medium">New</span>
-          </button>
         </div>
 
         {/* Filters and Actions */}
@@ -219,6 +257,7 @@ const DeliveryChallansPage = () => {
                   <th className="px-4 py-3 text-left text-sm font-semibold text-slate-700">TYPE</th>
                   <th className="px-4 py-3 text-left text-sm font-semibold text-slate-700">STATUS</th>
                   <th className="px-4 py-3 text-right text-sm font-semibold text-slate-700">AMOUNT</th>
+                  <th className="px-4 py-3 text-center text-sm font-semibold text-slate-700">DOWNLOAD</th>
                   <th className="px-4 py-3 w-12"></th>
                 </tr>
               </thead>
@@ -259,6 +298,16 @@ const DeliveryChallansPage = () => {
                     </td>
                     <td className="px-4 py-4 text-sm text-slate-800 text-right font-medium">
                       {formatCurrency(challan.total_amount)}
+                    </td>
+                    <td className="px-4 py-4 text-center" onClick={(e) => e.stopPropagation()}>
+                      <button
+                        onClick={(e) => handleDownloadChallan(challan, e)}
+                        className="inline-flex items-center gap-1 px-3 py-1.5 text-sm text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                        title="Download Challan"
+                      >
+                        <FileDown size={16} />
+                        Download
+                      </button>
                     </td>
                     <td className="px-4 py-4 relative" onClick={(e) => e.stopPropagation()}>
                       <button
