@@ -16,7 +16,7 @@ type Props = {
   route: RouteProp<RootStackParamList, 'Amount'>;
 };
 
-const AUTO_APPROVAL_THRESHOLD = 2000;
+const AUTO_APPROVAL_THRESHOLD = 200;
 
 export default function AmountScreen({ navigation, route }: Props) {
   const { imageUri } = route.params;

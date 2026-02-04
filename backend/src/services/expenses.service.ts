@@ -1,5 +1,8 @@
 import { supabaseAdmin } from '../config/supabase';
 
+// Auto-approval threshold in INR
+const AUTO_APPROVAL_THRESHOLD = 200;
+
 export class ExpensesService {
   /**
    * Get all expenses
@@ -183,8 +186,12 @@ export class ExpensesService {
       .limit(1)
       .single();
 
+    // Check if expense qualifies for auto-approval
+    const amount = parseFloat(expenseData.amount);
+    const isAutoApproved = amount < AUTO_APPROVAL_THRESHOLD;
+
     // Prepare expense data with defaults - mapped to actual DB columns
-    const expense = {
+    const expense: Record<string, any> = {
       organization_id: expenseData.organization_id || org?.id,
       expense_number: expenseNumber,
       category_id: expenseData.category_id,
@@ -196,13 +203,19 @@ export class ExpensesService {
       payment_voucher_number: expenseData.payment_voucher_number || null,
       voucher_file_url: expenseData.voucher_file_url || null,
       voucher_file_name: expenseData.voucher_file_name || null,
-      approval_status: 'Pending',
+      approval_status: isAutoApproved ? 'Approved' : 'Pending',
       remarks: expenseData.remarks || null,
       expense_date: expenseData.expense_date,
       paid_by_id: expenseData.paid_by_id,
       paid_by_name: expenseData.paid_by_name,
       branch: expenseData.branch || null
     };
+
+    // Only add approval fields if auto-approved (these columns may not exist in all DBs)
+    if (isAutoApproved) {
+      expense.approved_by_name = 'System (Auto-approved)';
+      expense.approved_at = new Date().toISOString();
+    }
 
     const { data, error } = await supabaseAdmin
       .from('expenses')
@@ -212,5 +225,188 @@ export class ExpensesService {
 
     if (error) throw error;
     return data;
+  }
+
+  /**
+   * Update an existing expense (only if status is Pending)
+   */
+  async updateExpense(id: string, expenseData: any) {
+    // First check if expense exists and is still pending
+    const { data: existing, error: fetchError } = await supabaseAdmin
+      .from('expenses')
+      .select('approval_status')
+      .eq('id', id)
+      .single();
+
+    if (fetchError) throw fetchError;
+    if (!existing) throw new Error('Expense not found');
+    if (existing.approval_status !== 'Pending') {
+      throw new Error('Cannot update expense that is not in Pending status');
+    }
+
+    // Check if updated amount qualifies for auto-approval
+    const amount = parseFloat(expenseData.amount);
+    const isAutoApproved = amount < AUTO_APPROVAL_THRESHOLD;
+
+    // Prepare update data
+    const updateData: any = {
+      category_id: expenseData.category_id,
+      expense_item: expenseData.expense_item,
+      notes: expenseData.description || expenseData.notes || null,
+      amount: expenseData.amount,
+      total_amount: expenseData.total_amount || expenseData.amount,
+      payment_mode: expenseData.payment_mode,
+      payment_voucher_number: expenseData.payment_voucher_number || null,
+      remarks: expenseData.remarks || null,
+      expense_date: expenseData.expense_date,
+      paid_by_id: expenseData.paid_by_id,
+      paid_by_name: expenseData.paid_by_name,
+      branch: expenseData.branch || null,
+      updated_at: new Date().toISOString()
+    };
+
+    // Handle file upload if new file provided
+    if (expenseData.voucher_file_url) {
+      updateData.voucher_file_url = expenseData.voucher_file_url;
+      updateData.voucher_file_name = expenseData.voucher_file_name;
+    }
+
+    // Apply auto-approval if amount changed and qualifies
+    if (isAutoApproved) {
+      updateData.approval_status = 'Approved';
+      updateData.approved_by_name = 'System (Auto-approved)';
+      updateData.approved_at = new Date().toISOString();
+    }
+
+    const { data, error } = await supabaseAdmin
+      .from('expenses')
+      .update(updateData)
+      .eq('id', id)
+      .select('*')
+      .single();
+
+    if (error) throw error;
+    return data;
+  }
+
+  /**
+   * Delete an expense (only if status is Pending)
+   */
+  async deleteExpense(id: string) {
+    // First check if expense exists and is still pending
+    const { data: existing, error: fetchError } = await supabaseAdmin
+      .from('expenses')
+      .select('approval_status')
+      .eq('id', id)
+      .single();
+
+    if (fetchError) throw fetchError;
+    if (!existing) throw new Error('Expense not found');
+    if (existing.approval_status !== 'Pending') {
+      throw new Error('Cannot delete expense that is not in Pending status');
+    }
+
+    const { error } = await supabaseAdmin
+      .from('expenses')
+      .delete()
+      .eq('id', id);
+
+    if (error) throw error;
+    return { success: true, message: 'Expense deleted successfully' };
+  }
+
+  /**
+   * Approve an expense
+   */
+  async approveExpense(id: string, approverName: string) {
+    // First check if expense exists and is pending
+    const { data: existing, error: fetchError } = await supabaseAdmin
+      .from('expenses')
+      .select('approval_status, expense_number, amount')
+      .eq('id', id)
+      .single();
+
+    if (fetchError) throw fetchError;
+    if (!existing) throw new Error('Expense not found');
+    if (existing.approval_status !== 'Pending') {
+      throw new Error('Expense is not in Pending status');
+    }
+
+    const { data, error } = await supabaseAdmin
+      .from('expenses')
+      .update({
+        approval_status: 'Approved',
+        approved_by_name: approverName,
+        approved_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', id)
+      .select('*')
+      .single();
+
+    if (error) throw error;
+
+    // Log the approval action
+    await this.logApprovalAction(id, 'approved', approverName);
+
+    return data;
+  }
+
+  /**
+   * Reject an expense
+   */
+  async rejectExpense(id: string, approverName: string, reason: string) {
+    // First check if expense exists and is pending
+    const { data: existing, error: fetchError } = await supabaseAdmin
+      .from('expenses')
+      .select('approval_status, expense_number, amount')
+      .eq('id', id)
+      .single();
+
+    if (fetchError) throw fetchError;
+    if (!existing) throw new Error('Expense not found');
+    if (existing.approval_status !== 'Pending') {
+      throw new Error('Expense is not in Pending status');
+    }
+
+    const { data, error } = await supabaseAdmin
+      .from('expenses')
+      .update({
+        approval_status: 'Rejected',
+        approved_by_name: approverName,
+        approved_at: new Date().toISOString(),
+        rejection_reason: reason,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', id)
+      .select('*')
+      .single();
+
+    if (error) throw error;
+
+    // Log the rejection action
+    await this.logApprovalAction(id, 'rejected', approverName, reason);
+
+    return data;
+  }
+
+  /**
+   * Log approval actions to expense_approval_logs table
+   */
+  private async logApprovalAction(expenseId: string, action: string, performedBy: string, reason?: string) {
+    try {
+      await supabaseAdmin
+        .from('expense_approval_logs')
+        .insert({
+          expense_id: expenseId,
+          action: action,
+          performed_by: performedBy,
+          reason: reason || null,
+          created_at: new Date().toISOString()
+        });
+    } catch (error) {
+      // Don't fail the main operation if logging fails
+      console.error('Failed to log approval action:', error);
+    }
   }
 }

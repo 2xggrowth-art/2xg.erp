@@ -24,22 +24,27 @@ export default function CaptureScreen({ navigation }: Props) {
     try {
       const { status } = await ImagePicker.requestCameraPermissionsAsync();
       if (status !== 'granted') {
-        Alert.alert('Permission Required', 'Camera access is needed to capture receipts');
+        Alert.alert(
+          'Permission Required',
+          'Camera access is needed to capture receipts. Please enable it in Settings.',
+          [{ text: 'OK' }]
+        );
         return;
       }
 
       const result = await ImagePicker.launchCameraAsync({
-        mediaTypes: ['images'],
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
         allowsEditing: true,
         quality: 0.7,
+        aspect: [4, 3],
       });
 
-      if (!result.canceled && result.assets[0]) {
+      if (!result.canceled && result.assets && result.assets[0]) {
         navigation.navigate('Amount', { imageUri: result.assets[0].uri });
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Camera error:', error);
-      Alert.alert('Error', 'Failed to open camera. Please try again.');
+      Alert.alert('Error', error.message || 'Failed to open camera. Please try again.');
     }
   };
 
@@ -49,22 +54,27 @@ export default function CaptureScreen({ navigation }: Props) {
     try {
       const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (status !== 'granted') {
-        Alert.alert('Permission Required', 'Gallery access is needed to select receipts');
+        Alert.alert(
+          'Permission Required',
+          'Gallery access is needed to select receipts. Please enable it in Settings.',
+          [{ text: 'OK' }]
+        );
         return;
       }
 
       const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ['images'],
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
         allowsEditing: true,
         quality: 0.7,
+        aspect: [4, 3],
       });
 
-      if (!result.canceled && result.assets[0]) {
+      if (!result.canceled && result.assets && result.assets[0]) {
         navigation.navigate('Amount', { imageUri: result.assets[0].uri });
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Gallery error:', error);
-      Alert.alert('Error', 'Failed to open gallery. Please try again.');
+      Alert.alert('Error', error.message || 'Failed to open gallery. Please try again.');
     }
   };
 
