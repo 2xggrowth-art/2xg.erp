@@ -1,22 +1,47 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { X, Plus } from 'lucide-react';
 import { deliveryChallansService, DeliveryChallan } from '../../services/delivery-challans.service';
+import { invoicesService } from '../../services/invoices.service';
+import { salespersonService, Salesperson } from '../../services/salesperson.service';
+
+interface Invoice {
+  id: string;
+  invoice_number: string;
+  customer_name: string;
+  customer_email?: string;
+  customer_phone?: string;
+  total_amount: number;
+  status: string;
+  items?: any[];
+}
 
 const NewDeliveryChallanForm = () => {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
   const [challanNumber, setChallanNumber] = useState('');
+  const [invoices, setInvoices] = useState<Invoice[]>([]);
+  const [selectedInvoice, setSelectedInvoice] = useState<Invoice | null>(null);
+
+  // Salesperson state
+  const [salespersons, setSalespersons] = useState<Salesperson[]>([]);
+  const [showSalespersonModal, setShowSalespersonModal] = useState(false);
+  const [showAddSalespersonForm, setShowAddSalespersonForm] = useState(false);
+  const [newSalesperson, setNewSalesperson] = useState({ name: '', email: '' });
+  const [salespersonSearch, setSalespersonSearch] = useState('');
 
   // Form Data
   const [formData, setFormData] = useState({
     customer_name: '',
     invoice_number: '',
+    invoice_id: '',
     alternate_phone: '',
-    delivery_location_type: 'delivery in bangalore', // 'delivery in bangalore' or 'outside bangalore'
+    delivery_location_type: 'delivery in bangalore',
     delivery_address: '',
     product_name: '',
     pincode: '',
     free_accessories: '',
+    salesperson_id: '',
     salesperson_name: '',
     estimated_delivery_day: '',
     reverse_pickup: '',
@@ -28,18 +53,66 @@ const NewDeliveryChallanForm = () => {
   });
 
   useEffect(() => {
-    fetchChallanNumber();
+    fetchInitialData();
   }, []);
 
-  const fetchChallanNumber = async () => {
+  const fetchInitialData = async () => {
     try {
-      const response = await deliveryChallansService.generateChallanNumber();
+      // Fetch challan number
+      const challanRes = await deliveryChallansService.generateChallanNumber();
+      if (challanRes.success && challanRes.data) {
+        setChallanNumber(challanRes.data.challan_number);
+      }
+
+      // Fetch invoices
+      const invoicesRes = await invoicesService.getAllInvoices({});
+      if (invoicesRes.success && invoicesRes.data?.invoices) {
+        setInvoices(invoicesRes.data.invoices);
+      }
+
+      // Fetch salespersons
+      const allSalespersons = salespersonService.getAllSalespersons();
+      setSalespersons(allSalespersons);
+    } catch (error) {
+      console.error('Error fetching initial data:', error);
+      setChallanNumber('DC-00001');
+    }
+  };
+
+  const handleInvoiceSelect = async (invoiceId: string) => {
+    if (!invoiceId) {
+      setSelectedInvoice(null);
+      setFormData(prev => ({
+        ...prev,
+        invoice_id: '',
+        invoice_number: '',
+        customer_name: '',
+        product_name: '',
+        alternate_phone: ''
+      }));
+      return;
+    }
+
+    try {
+      const response = await invoicesService.getInvoiceById(invoiceId);
       if (response.success && response.data) {
-        setChallanNumber(response.data.challan_number);
+        const invoice = response.data;
+        setSelectedInvoice(invoice);
+
+        // Get product names from invoice items
+        const productNames = invoice.items?.map((item: any) => item.item_name).join(', ') || '';
+
+        setFormData(prev => ({
+          ...prev,
+          invoice_id: invoice.id,
+          invoice_number: invoice.invoice_number,
+          customer_name: invoice.customer_name || '',
+          product_name: productNames,
+          alternate_phone: invoice.customer_phone || ''
+        }));
       }
     } catch (error) {
-      console.error('Error fetching challan number:', error);
-      setChallanNumber('DC-00001');
+      console.error('Error fetching invoice details:', error);
     }
   };
 
@@ -50,13 +123,45 @@ const NewDeliveryChallanForm = () => {
     }));
   };
 
+  const handleSalespersonSelect = (salespersonId: string) => {
+    const selectedSalesperson = salespersons.find(s => s.id === salespersonId);
+    setFormData(prev => ({
+      ...prev,
+      salesperson_id: salespersonId,
+      salesperson_name: selectedSalesperson?.name || ''
+    }));
+  };
+
+  const handleAddSalesperson = () => {
+    if (newSalesperson.name && newSalesperson.email) {
+      const addedSalesperson = salespersonService.addSalesperson(newSalesperson);
+      setSalespersons([...salespersons, addedSalesperson]);
+
+      // Auto-select the newly added salesperson
+      setFormData(prev => ({
+        ...prev,
+        salesperson_id: addedSalesperson.id,
+        salesperson_name: addedSalesperson.name
+      }));
+
+      setNewSalesperson({ name: '', email: '' });
+      setShowAddSalespersonForm(false);
+      setShowSalespersonModal(false);
+    }
+  };
+
+  const filteredSalespersons = salespersons.filter(person =>
+    person.name.toLowerCase().includes(salespersonSearch.toLowerCase()) ||
+    person.email.toLowerCase().includes(salespersonSearch.toLowerCase())
+  );
+
   const handleSubmit = async (status: 'draft' | 'confirmed') => {
     try {
       setLoading(true);
 
       // Validation
       if (!formData.invoice_number || formData.invoice_number.trim() === '') {
-        alert('Please enter invoice number');
+        alert('Please select an invoice');
         setLoading(false);
         return;
       }
@@ -87,7 +192,7 @@ const NewDeliveryChallanForm = () => {
       }
 
       if (!formData.salesperson_name || formData.salesperson_name.trim() === '') {
-        alert('Please enter sales person name');
+        alert('Please select a sales person');
         setLoading(false);
         return;
       }
@@ -108,9 +213,8 @@ const NewDeliveryChallanForm = () => {
         ...formData,
         challan_number: challanNumber,
         status: status,
-        customer_name: formData.invoice_number, // Using invoice number as customer name for now
-        subtotal: 0,
-        total_amount: 0,
+        subtotal: selectedInvoice?.total_amount || 0,
+        total_amount: selectedInvoice?.total_amount || 0,
         items: []
       };
 
@@ -155,18 +259,29 @@ const NewDeliveryChallanForm = () => {
             <h2 className="text-xl font-semibold text-slate-800">Fill BCH-AFS salesform</h2>
           </div>
 
-          {/* Invoice Number - FIRST FIELD */}
+          {/* Invoice Number - Dropdown */}
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-2">
-              Enter Invoice Number <span className="text-red-500">*</span>
+              Select Invoice <span className="text-red-500">*</span>
             </label>
-            <input
-              type="text"
-              value={formData.invoice_number}
-              onChange={(e) => handleInputChange('invoice_number', e.target.value)}
-              placeholder="Empty"
+            <select
+              value={formData.invoice_id}
+              onChange={(e) => handleInvoiceSelect(e.target.value)}
               className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            />
+            >
+              <option value="">Select an invoice</option>
+              {invoices.map(invoice => (
+                <option key={invoice.id} value={invoice.id}>
+                  {invoice.invoice_number} - {invoice.customer_name} (Rs {invoice.total_amount?.toFixed(2)})
+                </option>
+              ))}
+            </select>
+            {selectedInvoice && (
+              <div className="mt-2 p-3 bg-blue-50 rounded-lg text-sm">
+                <p><strong>Customer:</strong> {selectedInvoice.customer_name}</p>
+                <p><strong>Amount:</strong> Rs {selectedInvoice.total_amount?.toFixed(2)}</p>
+              </div>
+            )}
           </div>
 
           {/* Delivery Location Type */}
@@ -226,14 +341,14 @@ const NewDeliveryChallanForm = () => {
             {/* Product Name */}
             <div className="md:col-span-2">
               <label className="block text-sm font-medium text-slate-700 mb-2">
-                Enter Product Name {formData.delivery_location_type === 'outside bangalore' && <span className="text-red-500">*</span>}
+                Product Name {formData.delivery_location_type === 'outside bangalore' && <span className="text-red-500">*</span>}
               </label>
               <input
                 type="text"
                 value={formData.product_name}
                 onChange={(e) => handleInputChange('product_name', e.target.value)}
-                placeholder="Empty"
-                className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                placeholder="Auto-filled from invoice or enter manually"
+                className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-slate-50"
               />
             </div>
 
@@ -266,18 +381,30 @@ const NewDeliveryChallanForm = () => {
               />
             </div>
 
-            {/* Sales Person Name */}
+            {/* Sales Person Name - Dropdown with Manage */}
             <div className="md:col-span-2">
               <label className="block text-sm font-medium text-slate-700 mb-2">
-                Enter Sales Person Name <span className="text-red-500">*</span>
+                Sales Person <span className="text-red-500">*</span>
               </label>
-              <input
-                type="text"
-                value={formData.salesperson_name}
-                onChange={(e) => handleInputChange('salesperson_name', e.target.value)}
-                placeholder="Empty"
-                className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              />
+              <div className="flex gap-2">
+                <select
+                  value={formData.salesperson_id}
+                  onChange={(e) => handleSalespersonSelect(e.target.value)}
+                  className="flex-1 px-4 py-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                >
+                  <option value="">Select a salesperson</option>
+                  {salespersons.map(sp => (
+                    <option key={sp.id} value={sp.id}>{sp.name}</option>
+                  ))}
+                </select>
+                <button
+                  type="button"
+                  onClick={() => setShowSalespersonModal(true)}
+                  className="px-4 py-2 border border-slate-300 rounded-lg hover:bg-slate-50 transition-colors text-sm whitespace-nowrap"
+                >
+                  Manage
+                </button>
+              </div>
             </div>
 
             {/* Estimated Delivery Day */}
@@ -339,6 +466,107 @@ const NewDeliveryChallanForm = () => {
           </div>
         </div>
       </div>
+
+      {/* Salesperson Management Modal */}
+      {showSalespersonModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 w-full max-w-md max-h-[80vh] overflow-y-auto">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-xl font-bold text-slate-800">Manage Salespersons</h2>
+              <button
+                onClick={() => {
+                  setShowSalespersonModal(false);
+                  setShowAddSalespersonForm(false);
+                  setSalespersonSearch('');
+                }}
+                className="p-2 hover:bg-slate-100 rounded-lg transition-colors"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            {!showAddSalespersonForm ? (
+              <>
+                {/* Search */}
+                <input
+                  type="text"
+                  value={salespersonSearch}
+                  onChange={(e) => setSalespersonSearch(e.target.value)}
+                  placeholder="Search salespersons..."
+                  className="w-full px-4 py-2 border border-slate-300 rounded-lg mb-4"
+                />
+
+                {/* List */}
+                <div className="space-y-2 mb-4 max-h-60 overflow-y-auto">
+                  {filteredSalespersons.map((sp) => (
+                    <div
+                      key={sp.id}
+                      onClick={() => {
+                        handleSalespersonSelect(sp.id);
+                        setShowSalespersonModal(false);
+                      }}
+                      className="flex items-center justify-between p-3 border border-slate-200 rounded-lg hover:bg-slate-50 cursor-pointer"
+                    >
+                      <div>
+                        <div className="font-medium text-slate-800">{sp.name}</div>
+                        <div className="text-sm text-slate-600">{sp.email}</div>
+                      </div>
+                    </div>
+                  ))}
+                  {filteredSalespersons.length === 0 && (
+                    <p className="text-center text-slate-500 py-4">No salespersons found</p>
+                  )}
+                </div>
+
+                <button
+                  onClick={() => setShowAddSalespersonForm(true)}
+                  className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                >
+                  <Plus size={18} />
+                  <span>Add New Salesperson</span>
+                </button>
+              </>
+            ) : (
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-2">Name</label>
+                  <input
+                    type="text"
+                    value={newSalesperson.name}
+                    onChange={(e) => setNewSalesperson({ ...newSalesperson, name: e.target.value })}
+                    placeholder="Enter name"
+                    className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-2">Email</label>
+                  <input
+                    type="email"
+                    value={newSalesperson.email}
+                    onChange={(e) => setNewSalesperson({ ...newSalesperson, email: e.target.value })}
+                    placeholder="Enter email"
+                    className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                </div>
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => setShowAddSalespersonForm(false)}
+                    className="flex-1 px-4 py-2 border border-slate-300 rounded-lg hover:bg-slate-50 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleAddSalesperson}
+                    className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                  >
+                    Add Salesperson
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 };
