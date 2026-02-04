@@ -25,6 +25,19 @@ export interface CreateDeliveryChallanData {
   total_amount: number;
   notes?: string;
   items: DeliveryChallanItem[];
+  // BCH-AFS specific fields
+  invoice_id?: string;
+  invoice_number?: string;
+  alternate_phone?: string;
+  delivery_location_type?: string;
+  delivery_address?: string;
+  product_name?: string;
+  pincode?: string;
+  free_accessories?: string;
+  salesperson_id?: string;
+  salesperson_name?: string;
+  estimated_delivery_day?: string;
+  reverse_pickup?: string;
 }
 
 export class DeliveryChallansService {
@@ -90,6 +103,9 @@ export class DeliveryChallansService {
 
       const customerId = this.isValidUUID(challanData.customer_id) ? challanData.customer_id : null;
 
+      const invoiceId = this.isValidUUID(challanData.invoice_id) ? challanData.invoice_id : null;
+      const salespersonId = this.isValidUUID(challanData.salesperson_id) ? challanData.salesperson_id : null;
+
       const cleanChallanData: any = {
         organization_id: defaultOrgId,
         customer_id: customerId,
@@ -103,7 +119,20 @@ export class DeliveryChallansService {
         subtotal: Number(challanData.subtotal) || 0,
         adjustment: Number(challanData.adjustment) || 0,
         total_amount: Number(challanData.total_amount) || 0,
-        notes: challanData.notes || null
+        notes: challanData.notes || null,
+        // BCH-AFS specific fields
+        invoice_id: invoiceId,
+        invoice_number: challanData.invoice_number || null,
+        alternate_phone: challanData.alternate_phone || null,
+        delivery_location_type: challanData.delivery_location_type || null,
+        delivery_address: challanData.delivery_address || null,
+        product_name: challanData.product_name || null,
+        pincode: challanData.pincode || null,
+        free_accessories: challanData.free_accessories || null,
+        salesperson_id: salespersonId,
+        salesperson_name: challanData.salesperson_name || null,
+        estimated_delivery_day: challanData.estimated_delivery_day || null,
+        reverse_pickup: challanData.reverse_pickup || null
       };
 
       console.log('DeliveryChallansService: Cleaned challan data:', JSON.stringify(cleanChallanData, null, 2));
