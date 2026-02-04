@@ -49,8 +49,17 @@ export const createPurchaseOrder = async (req: Request, res: Response) => {
     res.status(201).json({ success: true, data: po });
   } catch (error: any) {
     console.error('Error creating PO:', error);
-    console.error('Error stack:', error.stack);
-    res.status(500).json({ success: false, error: error.message || 'Failed to create purchase order' });
+    console.error('Error message:', error.message);
+    console.error('Error details:', error.details);
+    console.error('Error hint:', error.hint);
+    console.error('Error code:', error.code);
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to create purchase order',
+      details: error.details,
+      hint: error.hint,
+      code: error.code
+    });
   }
 };
 

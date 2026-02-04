@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useContext } from 'react';
 import {
   View,
   Text,
@@ -7,10 +7,13 @@ import {
   TextInput,
   Vibration,
   ScrollView,
+  Alert,
+  ActivityIndicator,
 } from 'react-native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RouteProp } from '@react-navigation/native';
-import { RootStackParamList } from '../../App';
+import { RootStackParamList, AuthContext } from '../../App';
+import { expenseService } from '../services/api';
 
 type Props = {
   navigation: NativeStackNavigationProp<RootStackParamList, 'Payment'>;
@@ -20,32 +23,58 @@ type Props = {
 const PAYMENT_METHODS = [
   { id: 'Cash', label: 'Cash', icon: '💵', color: '#16A34A', bgColor: '#D1FAE5' },
   { id: 'UPI', label: 'UPI', icon: '📱', color: '#7C3AED', bgColor: '#EDE9FE' },
-  { id: 'Debit Card', label: 'Debit', icon: '💳', color: '#2563EB', bgColor: '#DBEAFE' },
-  { id: 'Credit Card', label: 'Credit', icon: '💳', color: '#EA580C', bgColor: '#FED7AA' },
-  { id: 'Bank Transfer', label: 'Bank', icon: '🏦', color: '#6B7280', bgColor: '#E5E7EB' },
 ];
 
 export default function PaymentScreen({ navigation, route }: Props) {
   const { imageUri, amount, categoryId, categoryName } = route.params;
+  const { user } = useContext(AuthContext);
   const [selectedMethod, setSelectedMethod] = useState('');
   const [notes, setNotes] = useState('');
+  const [loading, setLoading] = useState(false);
 
-  const handleSelect = (methodId: string) => {
+  const handleSelect = async (methodId: string) => {
     Vibration.vibrate(10);
     setSelectedMethod(methodId);
-  };
 
-  const handleContinue = () => {
-    if (!selectedMethod) return;
-    Vibration.vibrate(10);
-    navigation.navigate('Review', {
-      imageUri,
-      amount,
-      categoryId,
-      categoryName,
-      paymentMethod: selectedMethod,
-      notes,
-    });
+    // Submit expense directly after payment method selection
+    setLoading(true);
+    try {
+      const expenseData = {
+        category_id: categoryId,
+        expense_item: notes || categoryName,
+        amount: amount,
+        payment_mode: methodId,
+        expense_date: new Date().toISOString().split('T')[0],
+        paid_by_id: user?.id || 'mobile-user',
+        paid_by_name: user?.employee_name || 'Mobile User',
+        branch: user?.branch || 'Head Office',
+        description: notes || undefined,
+      };
+
+      const response = await expenseService.createExpense(expenseData, imageUri);
+
+      if (response.success) {
+        const expense = response.data;
+        Vibration.vibrate(50);
+        navigation.replace('Success', {
+          expenseNumber: expense.expense_number,
+          amount: amount,
+          isAutoApproved: expense.approval_status === 'Approved',
+        });
+      } else {
+        Alert.alert('Error', response.error || 'Failed to create expense');
+        setSelectedMethod('');
+      }
+    } catch (error: any) {
+      console.error('Error creating expense:', error);
+      Alert.alert(
+        'Error',
+        error.response?.data?.error || error.message || 'Failed to create expense'
+      );
+      setSelectedMethod('');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const formattedAmount = amount.toLocaleString('en-IN');
@@ -54,8 +83,8 @@ export default function PaymentScreen({ navigation, route }: Props) {
     <View style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-          <Text style={styles.backText}>←</Text>
+        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton} disabled={loading}>
+          <Text style={[styles.backText, loading && styles.backTextDisabled]}>←</Text>
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Payment Method</Text>
         <View style={styles.placeholder} />
@@ -76,8 +105,10 @@ export default function PaymentScreen({ navigation, route }: Props) {
               style={[
                 styles.methodCard,
                 selectedMethod === method.id && styles.methodCardSelected,
+                loading && styles.methodCardDisabled,
               ]}
               onPress={() => handleSelect(method.id)}
+              disabled={loading}
             >
               <View style={[styles.methodIcon, { backgroundColor: method.bgColor }]}>
                 <Text style={styles.methodEmoji}>{method.icon}</Text>
@@ -98,26 +129,27 @@ export default function PaymentScreen({ navigation, route }: Props) {
         <View style={styles.notesContainer}>
           <Text style={styles.notesLabel}>Notes (optional)</Text>
           <TextInput
-            style={styles.notesInput}
+            style={[styles.notesInput, loading && styles.notesInputDisabled]}
             value={notes}
             onChangeText={setNotes}
             placeholder="What was this expense for?"
             placeholderTextColor="#9CA3AF"
             multiline
+            editable={!loading}
           />
         </View>
       </ScrollView>
 
-      {/* Continue Button */}
+      {/* Loading indicator or instruction */}
       <View style={styles.footer}>
-        <TouchableOpacity
-          style={[styles.continueButton, !selectedMethod && styles.continueButtonDisabled]}
-          onPress={handleContinue}
-          disabled={!selectedMethod}
-        >
-          <Text style={styles.continueText}>Continue</Text>
-          <Text style={styles.continueArrow}>→</Text>
-        </TouchableOpacity>
+        {loading ? (
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color="#2563EB" />
+            <Text style={styles.loadingText}>Submitting expense...</Text>
+          </View>
+        ) : (
+          <Text style={styles.instructionText}>Tap a payment method to submit</Text>
+        )}
       </View>
     </View>
   );
@@ -144,6 +176,9 @@ const styles = StyleSheet.create({
   backText: {
     fontSize: 24,
     color: '#374151',
+  },
+  backTextDisabled: {
+    color: '#D1D5DB',
   },
   headerTitle: {
     fontSize: 18,
@@ -194,6 +229,9 @@ const styles = StyleSheet.create({
     borderColor: '#2563EB',
     backgroundColor: '#EFF6FF',
   },
+  methodCardDisabled: {
+    opacity: 0.5,
+  },
   methodIcon: {
     width: 56,
     height: 56,
@@ -234,30 +272,31 @@ const styles = StyleSheet.create({
     minHeight: 80,
     textAlignVertical: 'top',
   },
+  notesInputDisabled: {
+    opacity: 0.5,
+  },
   footer: {
     padding: 16,
     borderTopWidth: 1,
     borderTopColor: '#E5E7EB',
+    alignItems: 'center',
   },
-  continueButton: {
-    backgroundColor: '#2563EB',
-    borderRadius: 12,
-    padding: 18,
+  loadingContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
+    padding: 16,
   },
-  continueButtonDisabled: {
-    backgroundColor: '#D1D5DB',
+  loadingText: {
+    marginLeft: 12,
+    fontSize: 16,
+    color: '#6B7280',
+    fontWeight: '500',
   },
-  continueText: {
-    color: '#FFFFFF',
-    fontSize: 18,
-    fontWeight: '600',
-  },
-  continueArrow: {
-    color: '#FFFFFF',
-    fontSize: 18,
-    marginLeft: 8,
+  instructionText: {
+    fontSize: 14,
+    color: '#9CA3AF',
+    textAlign: 'center',
+    paddingVertical: 8,
   },
 });
