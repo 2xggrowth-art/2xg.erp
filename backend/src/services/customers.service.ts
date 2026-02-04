@@ -5,7 +5,6 @@ export class CustomersService {
    * Get all customers with optional filters
    */
   async getAllCustomers(filters?: {
-    isActive?: boolean;
     search?: string;
   }) {
     let query = supabaseAdmin
@@ -13,12 +12,8 @@ export class CustomersService {
       .select('*')
       .order('created_at', { ascending: false });
 
-    if (filters?.isActive !== undefined) {
-      query = query.eq('is_active', filters.isActive);
-    }
-
     if (filters?.search) {
-      query = query.or(`customer_name.ilike.%${filters.search}%,email.ilike.%${filters.search}%`);
+      query = query.or(`customer_name.ilike.%${filters.search}%,email.ilike.%${filters.search}%,company_name.ilike.%${filters.search}%`);
     }
 
     const { data, error } = await query;
@@ -47,13 +42,13 @@ export class CustomersService {
   async getCustomersSummary() {
     const { data, error } = await supabaseAdmin
       .from('customers')
-      .select('current_balance, is_active');
+      .select('opening_balance');
 
     if (error) throw error;
 
     const totalCustomers = data.length;
-    const activeCustomers = data.filter(customer => customer.is_active).length;
-    const totalReceivables = data.reduce((sum, customer) => sum + (customer.current_balance || 0), 0);
+    const activeCustomers = data.length; // All customers are considered active (no is_active column)
+    const totalReceivables = data.reduce((sum, customer) => sum + (customer.opening_balance || 0), 0);
 
     return {
       totalCustomers,
@@ -67,15 +62,8 @@ export class CustomersService {
    * Create a new customer
    */
   async createCustomer(customerData: any) {
-    // Get organization_id (default to first organization)
-    const { data: org } = await supabaseAdmin
-      .from('organizations')
-      .select('id')
-      .limit(1)
-      .single();
-
-    // Build full name for customer_name
-    let customerName = customerData.display_name;
+    // Build customer_name from available fields
+    let customerName = customerData.display_name || customerData.customer_name;
     if (!customerName) {
       if (customerData.company_name) {
         customerName = customerData.company_name;
@@ -84,52 +72,31 @@ export class CustomersService {
       }
     }
 
-    // Build contact_person with all info
-    let contactPerson = '';
-    if (customerData.salutation || customerData.first_name || customerData.last_name) {
-      contactPerson = `${customerData.salutation || ''} ${customerData.first_name || ''} ${customerData.last_name || ''}`.trim();
-    }
-    if (customerData.company_name) {
-      contactPerson = contactPerson ? `${contactPerson} (${customerData.company_name})` : customerData.company_name;
+    if (!customerName) {
+      throw new Error('Customer name is required');
     }
 
-    // Store additional info in notes field
-    let notesText = customerData.notes || '';
-    if (customerData.pan) {
-      notesText += `\nPAN: ${customerData.pan}`;
+    // Build billing address from address fields if provided
+    let billingAddress = customerData.billing_address || customerData.address || '';
+    if (!billingAddress && (customerData.city || customerData.state || customerData.country)) {
+      billingAddress = [customerData.city, customerData.state, customerData.country, customerData.postal_code]
+        .filter(Boolean)
+        .join(', ');
     }
-    if (customerData.currency) {
-      notesText += `\nCurrency: ${customerData.currency}`;
-    }
-    if (customerData.work_phone) {
-      notesText += `\nWork Phone: ${customerData.work_phone}`;
-    }
-    notesText = notesText.trim();
 
-    // Create customer object
-    const newCustomer = {
-      organization_id: org?.id,
+    // Create customer object with only columns that exist in DB
+    const newCustomer: any = {
       customer_name: customerName,
       company_name: customerData.company_name || null,
-      contact_person: contactPerson || null,
       email: customerData.email || null,
-      phone: customerData.mobile || customerData.work_phone || null,
-      mobile: customerData.mobile || null,
-      work_phone: customerData.work_phone || null,
-      address: customerData.address || null,
-      city: customerData.city || null,
-      state: customerData.state || null,
-      country: customerData.country || null,
-      postal_code: customerData.postal_code || null,
+      phone: customerData.phone || customerData.mobile || customerData.work_phone || null,
+      website: customerData.website || null,
+      billing_address: billingAddress || null,
+      shipping_address: customerData.shipping_address || null,
       gstin: customerData.gstin || null,
       pan: customerData.pan || null,
-      tax_id: customerData.pan || null,
-      currency: customerData.currency ? customerData.currency.split('-')[0].trim() : 'INR',
-      payment_terms: customerData.payment_terms || 'Due on Receipt',
-      credit_limit: customerData.credit_limit ? parseFloat(customerData.credit_limit) : null,
-      current_balance: 0,
-      is_active: true,
-      notes: notesText || null
+      payment_terms: customerData.payment_terms || 'Net 30',
+      opening_balance: customerData.opening_balance ? parseFloat(customerData.opening_balance) : 0,
     };
 
     const { data, error } = await supabaseAdmin
@@ -148,26 +115,25 @@ export class CustomersService {
   async updateCustomer(id: string, customerData: any) {
     const updateData: any = {};
 
+    // Map display_name to customer_name
     if (customerData.display_name) updateData.customer_name = customerData.display_name;
+    if (customerData.customer_name) updateData.customer_name = customerData.customer_name;
     if (customerData.company_name !== undefined) updateData.company_name = customerData.company_name;
     if (customerData.email !== undefined) updateData.email = customerData.email;
-    if (customerData.mobile !== undefined) updateData.mobile = customerData.mobile;
-    if (customerData.work_phone !== undefined) updateData.work_phone = customerData.work_phone;
-    if (customerData.mobile !== undefined || customerData.work_phone !== undefined) {
-      updateData.phone = customerData.mobile || customerData.work_phone;
-    }
-    if (customerData.address !== undefined) updateData.address = customerData.address;
-    if (customerData.city !== undefined) updateData.city = customerData.city;
-    if (customerData.state !== undefined) updateData.state = customerData.state;
-    if (customerData.country !== undefined) updateData.country = customerData.country;
-    if (customerData.postal_code !== undefined) updateData.postal_code = customerData.postal_code;
+    if (customerData.phone !== undefined) updateData.phone = customerData.phone;
+    if (customerData.mobile !== undefined) updateData.phone = customerData.mobile;
+    if (customerData.website !== undefined) updateData.website = customerData.website;
+    if (customerData.billing_address !== undefined) updateData.billing_address = customerData.billing_address;
+    if (customerData.address !== undefined) updateData.billing_address = customerData.address;
+    if (customerData.shipping_address !== undefined) updateData.shipping_address = customerData.shipping_address;
     if (customerData.gstin !== undefined) updateData.gstin = customerData.gstin;
-    if (customerData.pan !== undefined) {
-      updateData.pan = customerData.pan;
-      updateData.tax_id = customerData.pan;
-    }
+    if (customerData.pan !== undefined) updateData.pan = customerData.pan;
     if (customerData.payment_terms !== undefined) updateData.payment_terms = customerData.payment_terms;
-    if (customerData.notes !== undefined) updateData.notes = customerData.notes;
+    if (customerData.opening_balance !== undefined) updateData.opening_balance = parseFloat(customerData.opening_balance);
+
+    if (Object.keys(updateData).length === 0) {
+      throw new Error('No valid fields to update');
+    }
 
     const { data, error } = await supabaseAdmin
       .from('customers')
@@ -181,12 +147,12 @@ export class CustomersService {
   }
 
   /**
-   * Delete a customer (soft delete by marking as inactive)
+   * Delete a customer (hard delete since there's no is_active column)
    */
   async deleteCustomer(id: string) {
     const { data, error } = await supabaseAdmin
       .from('customers')
-      .update({ is_active: false })
+      .delete()
       .eq('id', id)
       .select()
       .single();
@@ -195,4 +161,3 @@ export class CustomersService {
     return data;
   }
 }
-

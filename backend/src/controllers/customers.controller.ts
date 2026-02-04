@@ -5,10 +5,9 @@ const customersService = new CustomersService();
 
 export const getAllCustomers = async (req: Request, res: Response) => {
   try {
-    const { isActive, search } = req.query;
+    const { search } = req.query;
 
     const filters = {
-      isActive: isActive === 'true' ? true : isActive === 'false' ? false : undefined,
       search: search as string | undefined
     };
 
