@@ -24,7 +24,7 @@ export interface CreateDeliveryChallanData {
   adjustment?: number;
   total_amount: number;
   notes?: string;
-  items: DeliveryChallanItem[];
+  items?: DeliveryChallanItem[];
   // BCH-AFS specific fields
   invoice_id?: string;
   invoice_number?: string;

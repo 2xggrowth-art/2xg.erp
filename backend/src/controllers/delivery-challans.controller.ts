@@ -47,13 +47,7 @@ export class DeliveryChallansController {
         });
       }
 
-      if (!req.body.items || !Array.isArray(req.body.items) || req.body.items.length === 0) {
-        return res.status(400).json({
-          success: false,
-          error: 'At least one item is required'
-        });
-      }
-
+      // Items are optional for BCH-AFS delivery challans
       const deliveryChallan = await this.deliveryChallansService.createDeliveryChallan(req.body);
       res.status(201).json({
         success: true,
