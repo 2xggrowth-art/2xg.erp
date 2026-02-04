@@ -97,17 +97,19 @@ const NewSalesOrderForm = () => {
 
   const handleItemSelect = (index: number, item: Item) => {
     const updatedItems = [...salesOrderItems];
+    const newQuantity = 1;
+    const newRate = Number(item.unit_price) || 0;
     updatedItems[index] = {
       item_id: item.id,
       item_name: item.item_name || '',
       description: item.description || '',
-      quantity: 1,
+      quantity: newQuantity,
       unit_of_measurement: item.unit_of_measurement || 'pcs',
-      rate: Number(item.unit_price) || 0,
-      amount: updatedItems[index].quantity * (item.unit_price || 0),
+      rate: newRate,
+      amount: newQuantity * newRate,
       stock_on_hand: item.current_stock || 0,
-      serial_numbers: (item.sku && updatedItems[index].quantity > 0)
-        ? Array.from({ length: updatedItems[index].quantity }, (_, i) => `${item.sku}/${i + 1}`)
+      serial_numbers: (item.sku && newQuantity > 0)
+        ? Array.from({ length: newQuantity }, (_, i) => `${item.sku}/${i + 1}`)
         : []
     };
     setSalesOrderItems(updatedItems);
