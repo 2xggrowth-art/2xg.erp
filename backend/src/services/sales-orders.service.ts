@@ -16,7 +16,8 @@ export interface CreateSalesOrderData {
   customer_name: string;
   customer_email?: string;
   sales_order_number?: string;
-  order_date: string;
+  order_date?: string;
+  sales_order_date?: string;  // Alias for backwards compatibility
   expected_shipment_date?: string;
   status?: string;
   subtotal: number;
@@ -96,7 +97,9 @@ export class SalesOrdersService {
         throw new Error('Customer name is required');
       }
 
-      if (!data.order_date) {
+      // Accept both order_date and sales_order_date for backwards compatibility
+      const orderDate = data.order_date || data.sales_order_date;
+      if (!orderDate) {
         throw new Error('Order date is required');
       }
 
@@ -114,7 +117,7 @@ export class SalesOrdersService {
         customer_name: orderData.customer_name.trim(),
         customer_email: orderData.customer_email || null,
         sales_order_number: orderData.sales_order_number,
-        order_date: orderData.order_date,
+        order_date: orderDate,
         expected_shipment_date: orderData.expected_shipment_date || null,
         status: orderData.status || 'draft',
         subtotal: Number(orderData.subtotal) || 0,
