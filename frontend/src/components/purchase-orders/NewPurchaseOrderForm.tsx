@@ -318,7 +318,7 @@ Payment will be made after successful delivery and acceptance.`,
     return subtotal - discount + tax + formData.adjustment;
   };
 
-  const handleSubmit = async (status: 'draft' | 'issued') => {
+  const handleSubmit = async (status: 'draft' | 'sent') => {
     setLoading(true);
 
     try {
@@ -984,7 +984,7 @@ Payment will be made after successful delivery and acceptance.`,
               Save as Draft
             </button>
             <button
-              onClick={() => handleSubmit('issued')}
+              onClick={() => handleSubmit('sent')}
               className="flex items-center gap-2 px-6 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors shadow-md"
               disabled={loading || !formData.vendor_name}
             >
