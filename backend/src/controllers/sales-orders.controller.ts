@@ -40,10 +40,11 @@ export class SalesOrdersController {
         });
       }
 
-      if (!req.body.sales_order_date) {
+      // Accept both order_date and sales_order_date for backwards compatibility
+      if (!req.body.order_date && !req.body.sales_order_date) {
         return res.status(400).json({
           success: false,
-          error: 'Sales order date is required'
+          error: 'Order date is required'
         });
       }
 
