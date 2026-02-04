@@ -281,8 +281,19 @@ const NewVendorCreditForm = () => {
 
       if (shouldGeneratePDF && response.data) {
         // Generate and open PDF in a new tab
+        // Merge response data with credit data to ensure items are included
         try {
-          openVendorCreditPDFInNewTab(response.data);
+          const pdfData = {
+            ...response.data,
+            items: creditData.items,
+            cgst_rate: creditData.cgst_rate,
+            cgst_amount: creditData.cgst_amount,
+            sgst_rate: creditData.sgst_rate,
+            sgst_amount: creditData.sgst_amount,
+            igst_rate: creditData.igst_rate,
+            igst_amount: creditData.igst_amount,
+          };
+          openVendorCreditPDFInNewTab(pdfData);
         } catch (pdfError) {
           console.error('Error generating PDF:', pdfError);
           alert('Vendor credit saved successfully, but there was an error generating the PDF.');

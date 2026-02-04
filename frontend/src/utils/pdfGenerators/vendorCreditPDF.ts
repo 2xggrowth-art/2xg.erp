@@ -42,7 +42,7 @@ export const generateVendorCreditPDF = (credit: VendorCredit) => {
   doc.setFont('helvetica', 'bold');
   doc.text('Credit Note#:', rightColumn, 52);
   doc.setFont('helvetica', 'normal');
-  doc.text(credit.credit_number, rightColumn + 35, 52);
+  doc.text(credit.credit_note_number, rightColumn + 35, 52);
 
   doc.setFont('helvetica', 'bold');
   doc.text('Date:', rightColumn, 58);
@@ -121,23 +121,32 @@ export const generateVendorCreditPDF = (credit: VendorCredit) => {
   doc.text(formatCurrency(credit.subtotal), 185, currentY, { align: 'right' });
 
   currentY += 6;
-  if (credit.discount_amount > 0) {
+  if (credit.discount_amount && credit.discount_amount > 0) {
     doc.text('Discount:', totalsX, currentY);
     doc.text(`-${formatCurrency(credit.discount_amount)}`, 185, currentY, { align: 'right' });
     currentY += 6;
   }
 
-  if (credit.tax_amount > 0) {
-    const taxLabel = credit.tax_type === 'TDS' ? 'TDS (Deducted):' : credit.tax_type === 'TCS' ? 'TCS:' : 'Tax:';
-    doc.text(taxLabel, totalsX, currentY);
-    const taxDisplay = credit.tax_type === 'TDS'
-      ? `-${formatCurrency(credit.tax_amount)}`
-      : formatCurrency(credit.tax_amount);
-    doc.text(taxDisplay, 185, currentY, { align: 'right' });
+  // GST breakdown
+  if (credit.cgst_amount && credit.cgst_amount > 0) {
+    doc.text(`CGST (${credit.cgst_rate || 0}%):`, totalsX, currentY);
+    doc.text(formatCurrency(credit.cgst_amount), 185, currentY, { align: 'right' });
     currentY += 6;
   }
 
-  if (credit.adjustment !== 0) {
+  if (credit.sgst_amount && credit.sgst_amount > 0) {
+    doc.text(`SGST (${credit.sgst_rate || 0}%):`, totalsX, currentY);
+    doc.text(formatCurrency(credit.sgst_amount), 185, currentY, { align: 'right' });
+    currentY += 6;
+  }
+
+  if (credit.igst_amount && credit.igst_amount > 0) {
+    doc.text(`IGST (${credit.igst_rate || 0}%):`, totalsX, currentY);
+    doc.text(formatCurrency(credit.igst_amount), 185, currentY, { align: 'right' });
+    currentY += 6;
+  }
+
+  if (credit.adjustment && credit.adjustment !== 0) {
     doc.text('Adjustment:', totalsX, currentY);
     doc.text(formatCurrency(credit.adjustment), 185, currentY, { align: 'right' });
     currentY += 6;
@@ -216,7 +225,7 @@ const getStatusColor = (status: string): [number, number, number] => {
 
 export const downloadVendorCreditPDF = (credit: VendorCredit) => {
   const doc = generateVendorCreditPDF(credit);
-  const fileName = `Vendor_Credit_${credit.credit_number.replace(/\//g, '_')}.pdf`;
+  const fileName = `Vendor_Credit_${credit.credit_note_number.replace(/\//g, '_')}.pdf`;
   doc.save(fileName);
 };
 
