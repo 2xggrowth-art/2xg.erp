@@ -15,7 +15,7 @@ export interface VendorCreditItem {
 export interface VendorCredit {
   id?: string;
   organization_id?: string;
-  credit_number: string;
+  credit_note_number: string;
   vendor_id?: string;
   vendor_name: string;
   vendor_email?: string;
@@ -56,7 +56,7 @@ export class VendorCreditsService {
     try {
       const { data, error } = await supabaseAdmin
         .from('vendor_credits')
-        .select('credit_number')
+        .select('credit_note_number')
         .order('created_at', { ascending: false })
         .limit(1);
 
@@ -67,7 +67,7 @@ export class VendorCreditsService {
       }
 
       if (data && data.length > 0) {
-        const lastNumber = data[0].credit_number;
+        const lastNumber = data[0].credit_note_number;
         const match = lastNumber.match(/VC-(\d+)/);
         if (match) {
           const nextNumber = parseInt(match[1]) + 1;
@@ -167,7 +167,7 @@ export class VendorCreditsService {
       }
 
       if (filters?.search) {
-        query = query.or(`credit_number.ilike.%${filters.search}%,vendor_name.ilike.%${filters.search}%,reference_number.ilike.%${filters.search}%`);
+        query = query.or(`credit_note_number.ilike.%${filters.search}%,vendor_name.ilike.%${filters.search}%,reference_number.ilike.%${filters.search}%`);
       }
 
       query = query.order('created_at', { ascending: false });

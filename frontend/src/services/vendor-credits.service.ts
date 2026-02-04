@@ -15,7 +15,7 @@ export interface VendorCreditItem {
 export interface VendorCredit {
   id: string;
   organization_id: string;
-  credit_number: string;
+  credit_note_number: string;
   vendor_id?: string;
   vendor_name: string;
   vendor_email?: string;
@@ -53,7 +53,7 @@ export interface CreateVendorCreditData {
   vendor_name: string;
   vendor_email?: string;
   vendor_phone?: string;
-  credit_number?: string;
+  credit_note_number?: string;
   credit_date: string;
   location?: string;
   order_number?: string;
@@ -142,9 +142,9 @@ export const vendorCreditsService = {
   /**
    * Generate a new credit number
    */
-  generateCreditNumber: async (): Promise<APIResponse<{ credit_number: string }>> => {
+  generateCreditNumber: async (): Promise<APIResponse<{ credit_note_number: string }>> => {
     try {
-      const response = await apiClient.get<APIResponse<{ credit_number: string }>>(
+      const response = await apiClient.get<APIResponse<{ credit_note_number: string }>>(
         `/vendor-credits/generate-credit-number`
       );
       return response.data;

@@ -96,7 +96,7 @@ const NewVendorCreditForm = () => {
   const generateCreditNumber = async () => {
     try {
       const response = await vendorCreditsService.generateCreditNumber();
-      setCreditNumber(response.data.credit_number);
+      setCreditNumber(response.data.credit_note_number);
     } catch (error) {
       console.error('Error generating credit number:', error);
     }
@@ -253,7 +253,7 @@ const NewVendorCreditForm = () => {
       const creditData: CreateVendorCreditData = {
         vendor_id: formData.vendor_id,
         vendor_name: formData.vendor_name,
-        credit_number: creditNumber,
+        credit_note_number: creditNumber,
         credit_date: formData.credit_date,
         location: formData.location,
         order_number: formData.order_number,
