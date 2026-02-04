@@ -387,11 +387,14 @@ const NewInvoiceForm = () => {
     if (field === 'item_id' && value) {
       const selectedItem = items.find(item => item.id === value);
       if (selectedItem) {
+        const newRate = selectedItem.unit_price || 0;
+        const currentQuantity = updatedItems[index].quantity || 1;
         updatedItems[index].item_name = selectedItem.item_name || '';
-        updatedItems[index].rate = selectedItem.unit_price || 0;
+        updatedItems[index].rate = newRate;
         updatedItems[index].unit_of_measurement = selectedItem.unit_of_measurement || 'pcs';
         updatedItems[index].description = selectedItem.description || '';
         updatedItems[index].stock_on_hand = selectedItem.current_stock || 0;
+        updatedItems[index].amount = currentQuantity * newRate;
       }
     }
 
