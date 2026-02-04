@@ -15,28 +15,25 @@ export interface CreateSalesOrderData {
   customer_id?: string;
   customer_name: string;
   customer_email?: string;
-  customer_phone?: string;
   sales_order_number?: string;
-  reference_number?: string;
-  sales_order_date: string;
+  order_date: string;
   expected_shipment_date?: string;
-  payment_terms?: string;
-  salesperson_id?: string;
-  salesperson_name?: string;
-  delivery_method?: string;
   status?: string;
   subtotal: number;
   discount_type?: 'percentage' | 'amount';
   discount_value?: number;
   discount_amount?: number;
+  cgst_rate?: number;
+  cgst_amount?: number;
+  sgst_rate?: number;
+  sgst_amount?: number;
+  igst_rate?: number;
+  igst_amount?: number;
   tax_amount?: number;
-  tds_tcs_type?: 'TDS' | 'TCS';
-  tds_tcs_rate?: number;
-  tds_tcs_amount?: number;
   shipping_charges?: number;
   adjustment?: number;
   total_amount: number;
-  customer_notes?: string;
+  notes?: string;
   terms_and_conditions?: string;
   items: SalesOrderItem[];
 }
@@ -99,8 +96,8 @@ export class SalesOrdersService {
         throw new Error('Customer name is required');
       }
 
-      if (!data.sales_order_date) {
-        throw new Error('Sales order date is required');
+      if (!data.order_date) {
+        throw new Error('Order date is required');
       }
 
       if (!data.items || data.items.length === 0) {
@@ -108,38 +105,33 @@ export class SalesOrdersService {
       }
 
       const { items, ...orderData } = data;
-      const defaultOrgId = '00000000-0000-0000-0000-000000000001';
 
       const customerId = this.isValidUUID(orderData.customer_id) ? orderData.customer_id : null;
-      const salespersonId = this.isValidUUID(orderData.salesperson_id) ? orderData.salesperson_id : null;
 
+      // Only include columns that exist in the database
       const cleanOrderData: any = {
-        organization_id: defaultOrgId,
         customer_id: customerId,
         customer_name: orderData.customer_name.trim(),
         customer_email: orderData.customer_email || null,
-        customer_phone: orderData.customer_phone || null,
         sales_order_number: orderData.sales_order_number,
-        reference_number: orderData.reference_number || null,
-        sales_order_date: orderData.sales_order_date,
+        order_date: orderData.order_date,
         expected_shipment_date: orderData.expected_shipment_date || null,
-        payment_terms: orderData.payment_terms || 'due_on_receipt',
-        salesperson_id: salespersonId,
-        salesperson_name: orderData.salesperson_name || null,
-        delivery_method: orderData.delivery_method || null,
         status: orderData.status || 'draft',
         subtotal: Number(orderData.subtotal) || 0,
         discount_type: orderData.discount_type || 'percentage',
         discount_value: Number(orderData.discount_value) || 0,
         discount_amount: Number(orderData.discount_amount) || 0,
+        cgst_rate: Number(orderData.cgst_rate) || 0,
+        cgst_amount: Number(orderData.cgst_amount) || 0,
+        sgst_rate: Number(orderData.sgst_rate) || 0,
+        sgst_amount: Number(orderData.sgst_amount) || 0,
+        igst_rate: Number(orderData.igst_rate) || 0,
+        igst_amount: Number(orderData.igst_amount) || 0,
         tax_amount: Number(orderData.tax_amount) || 0,
-        tds_tcs_type: orderData.tds_tcs_type || null,
-        tds_tcs_rate: orderData.tds_tcs_rate || null,
-        tds_tcs_amount: Number(orderData.tds_tcs_amount) || 0,
         shipping_charges: Number(orderData.shipping_charges) || 0,
         adjustment: Number(orderData.adjustment) || 0,
         total_amount: Number(orderData.total_amount) || 0,
-        customer_notes: orderData.customer_notes || null,
+        notes: orderData.notes || null,
         terms_and_conditions: orderData.terms_and_conditions || null
       };
 
@@ -223,10 +215,10 @@ export class SalesOrdersService {
         query = query.eq('customer_id', filters.customer_id);
       }
       if (filters?.from_date) {
-        query = query.gte('sales_order_date', filters.from_date);
+        query = query.gte('order_date', filters.from_date);
       }
       if (filters?.to_date) {
-        query = query.lte('sales_order_date', filters.to_date);
+        query = query.lte('order_date', filters.to_date);
       }
 
       const page = filters?.page || 1;
@@ -293,9 +285,33 @@ export class SalesOrdersService {
     try {
       const { items, ...orderData } = data;
 
+      // Build update object with only valid columns
+      const updateData: any = {};
+      if (orderData.customer_name !== undefined) updateData.customer_name = orderData.customer_name;
+      if (orderData.customer_email !== undefined) updateData.customer_email = orderData.customer_email;
+      if (orderData.order_date !== undefined) updateData.order_date = orderData.order_date;
+      if (orderData.expected_shipment_date !== undefined) updateData.expected_shipment_date = orderData.expected_shipment_date;
+      if (orderData.status !== undefined) updateData.status = orderData.status;
+      if (orderData.subtotal !== undefined) updateData.subtotal = Number(orderData.subtotal);
+      if (orderData.discount_type !== undefined) updateData.discount_type = orderData.discount_type;
+      if (orderData.discount_value !== undefined) updateData.discount_value = Number(orderData.discount_value);
+      if (orderData.discount_amount !== undefined) updateData.discount_amount = Number(orderData.discount_amount);
+      if (orderData.cgst_rate !== undefined) updateData.cgst_rate = Number(orderData.cgst_rate);
+      if (orderData.cgst_amount !== undefined) updateData.cgst_amount = Number(orderData.cgst_amount);
+      if (orderData.sgst_rate !== undefined) updateData.sgst_rate = Number(orderData.sgst_rate);
+      if (orderData.sgst_amount !== undefined) updateData.sgst_amount = Number(orderData.sgst_amount);
+      if (orderData.igst_rate !== undefined) updateData.igst_rate = Number(orderData.igst_rate);
+      if (orderData.igst_amount !== undefined) updateData.igst_amount = Number(orderData.igst_amount);
+      if (orderData.tax_amount !== undefined) updateData.tax_amount = Number(orderData.tax_amount);
+      if (orderData.shipping_charges !== undefined) updateData.shipping_charges = Number(orderData.shipping_charges);
+      if (orderData.adjustment !== undefined) updateData.adjustment = Number(orderData.adjustment);
+      if (orderData.total_amount !== undefined) updateData.total_amount = Number(orderData.total_amount);
+      if (orderData.notes !== undefined) updateData.notes = orderData.notes;
+      if (orderData.terms_and_conditions !== undefined) updateData.terms_and_conditions = orderData.terms_and_conditions;
+
       const { data: salesOrder, error: orderError } = await supabase
         .from('sales_orders')
-        .update(orderData)
+        .update(updateData)
         .eq('id', id)
         .select()
         .single();
@@ -309,8 +325,15 @@ export class SalesOrdersService {
 
         if (items.length > 0) {
           const itemsToInsert = items.map(item => ({
-            ...item,
-            sales_order_id: id
+            sales_order_id: id,
+            item_id: this.isValidUUID(item.item_id) ? item.item_id : null,
+            item_name: item.item_name || '',
+            description: item.description || null,
+            quantity: Number(item.quantity) || 0,
+            unit_of_measurement: item.unit_of_measurement || 'pcs',
+            rate: Number(item.rate) || 0,
+            amount: Number(item.amount) || 0,
+            stock_on_hand: Number(item.stock_on_hand) || 0
           }));
 
           const { error: itemsError } = await supabase

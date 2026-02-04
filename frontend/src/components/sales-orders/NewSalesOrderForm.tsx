@@ -7,22 +7,6 @@ import { itemsService, Item } from '../../services/items.service';
 import { customersService, Customer } from '../../services/customers.service';
 import { salespersonService, Salesperson } from '../../services/salesperson.service';
 
-interface TDSTax {
-  id: string;
-  name: string;
-  rate: number;
-  section: string;
-  status: 'Active' | 'Inactive';
-}
-
-interface TCSTax {
-  id: string;
-  name: string;
-  rate: number;
-  natureOfCollection: string;
-  status: 'Active' | 'Inactive';
-}
-
 const NewSalesOrderForm = () => {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
@@ -44,49 +28,21 @@ const NewSalesOrderForm = () => {
     'Courier Service'
   ]);
 
-  // TDS/TCS State
-  const [showTDSModal, setShowTDSModal] = useState(false);
-  const [showTCSModal, setShowTCSModal] = useState(false);
-  const [tdsTaxes, _setTdsTaxes] = useState<TDSTax[]>([
-    { id: '1', name: 'Commission or Brokerage [2%]', rate: 2, section: 'Section 194 H', status: 'Active' },
-    { id: '2', name: 'Commission or Brokerage (Reduced) [3.75%]', rate: 3.75, section: 'Section 194 H', status: 'Active' },
-    { id: '3', name: 'Dividend [10%]', rate: 10, section: 'Section 194', status: 'Active' },
-    { id: '4', name: 'Dividend (Reduced) [7.5%]', rate: 7.5, section: 'Section 194', status: 'Active' },
-    { id: '5', name: 'Other Interest than securities [10%]', rate: 10, section: 'Section 194 A', status: 'Active' },
-    { id: '6', name: 'Other Interest than securities (Reduced) [7.5%]', rate: 7.5, section: 'Section 194 A', status: 'Active' },
-    { id: '7', name: 'Payment of contractors for Others [2%]', rate: 2, section: 'Section 194 C', status: 'Active' },
-    { id: '8', name: 'Payment of contractors for Others (Reduced) [1.5%]', rate: 1.5, section: 'Section 194 C', status: 'Active' },
-    { id: '9', name: 'Payment of contractors HUF/Indiv [1%]', rate: 1, section: 'Section 194 C', status: 'Active' },
-    { id: '10', name: 'Payment of contractors HUF/Indiv (Reduced) [0.75%]', rate: 0.75, section: 'Section 194 C', status: 'Active' },
-    { id: '11', name: 'Professional Fees [10%]', rate: 10, section: 'Section 194J', status: 'Active' },
-    { id: '12', name: 'Professional Fees (Reduced) [7.5%]', rate: 7.5, section: 'Section 194J', status: 'Active' },
-    { id: '13', name: 'Rent on land or furniture etc [10%]', rate: 10, section: 'Section 194I', status: 'Active' },
-    { id: '14', name: 'Rent on land or furniture etc (Reduced) [7.5%]', rate: 7.5, section: 'Section 194I', status: 'Active' },
-    { id: '15', name: 'Technical Fees (2%) [2%]', rate: 2, section: 'Section 194J', status: 'Active' },
-  ]);
-  const [tcsTaxes, _setTcsTaxes] = useState<TCSTax[]>([]);
-  const [selectedTDSTax, setSelectedTDSTax] = useState<string>('');
-  const [selectedTCSTax, setSelectedTCSTax] = useState<string>('');
-
   const [formData, setFormData] = useState({
     customer_name: '',
     sales_order_number: '',
     auto_sales_order_number: true,
-    reference_number: '',
     sales_order_date: new Date().toISOString().split('T')[0],
     expected_shipment_date: '',
-    payment_terms: 'due_on_receipt',
-    salesperson_id: '',
-    salesperson_name: '',
-    delivery_method: '',
     status: 'draft',
-    discount_type: 'percentage',
+    discount_type: 'percentage' as 'percentage' | 'amount',
     discount_value: 0,
-    tds_tcs_type: '',
-    tds_tcs_rate: 0,
+    cgst_rate: 0,
+    sgst_rate: 0,
+    igst_rate: 0,
     shipping_charges: 0,
     adjustment: 0,
-    customer_notes: '',
+    notes: '',
     terms_and_conditions: ''
   });
 
@@ -112,7 +68,7 @@ const NewSalesOrderForm = () => {
       const [itemsRes, salesOrderNumberRes, customersRes] = await Promise.all([
         itemsService.getAllItems({ isActive: true }),
         salesOrdersService.generateSalesOrderNumber(),
-        customersService.getAllCustomers({ isActive: true })
+        customersService.getAllCustomers({})
       ]);
 
       const itemsApiResponse = itemsRes.data;
@@ -120,7 +76,6 @@ const NewSalesOrderForm = () => {
         setItems(itemsApiResponse.data);
       }
 
-      // salesOrderNumberRes returns { success, data } directly (not wrapped in .data)
       if (salesOrderNumberRes.success && salesOrderNumberRes.data) {
         setFormData(prev => ({
           ...prev,
@@ -133,7 +88,6 @@ const NewSalesOrderForm = () => {
         setCustomers(customersApiResponse.data);
       }
 
-      // Fetch salespersons from service
       const allSalespersons = salespersonService.getAllSalespersons();
       setSalespersons(allSalespersons);
     } catch (error) {
@@ -180,7 +134,6 @@ const NewSalesOrderForm = () => {
       const rate = field === 'rate' ? value : updatedItems[index].rate;
       updatedItems[index].amount = quantity * rate;
 
-      // Generate Serial Numbers if Quantity Changes or Item Changed (handled in select too, but just in case)
       if (field === 'quantity') {
         const item = items.find(i => i.id === updatedItems[index].item_id);
         if (item && item.sku && quantity > 0) {
@@ -192,14 +145,6 @@ const NewSalesOrderForm = () => {
     }
 
     setSalesOrderItems(updatedItems);
-  };
-
-  const getFilteredItems = (index: number) => {
-    const query = itemSearchQuery[index] || '';
-    if (!query) return items;
-    return items.filter(item =>
-      item.item_name?.toLowerCase().includes(query.toLowerCase())
-    );
   };
 
   const addNewItem = () => {
@@ -224,38 +169,37 @@ const NewSalesOrderForm = () => {
     }
   };
 
-  const calculateTotals = () => {
-    const subtotal = salesOrderItems.reduce((sum, item) => sum + (item.amount || 0), 0);
-
-    const discountAmount = formData.discount_type === 'percentage'
-      ? (subtotal * formData.discount_value) / 100
-      : formData.discount_value;
-
-    const taxableAmount = subtotal - discountAmount;
-
-    const tdsTcsAmount = formData.tds_tcs_type
-      ? (taxableAmount * formData.tds_tcs_rate) / 100
-      : 0;
-
-    const total = formData.tds_tcs_type === 'TDS'
-      ? taxableAmount + formData.shipping_charges + formData.adjustment + tdsTcsAmount
-      : taxableAmount + formData.shipping_charges + formData.adjustment + tdsTcsAmount;
-
-    return {
-      subtotal,
-      discountAmount,
-      tdsTcsAmount,
-      total
-    };
+  const calculateSubtotal = () => {
+    return salesOrderItems.reduce((sum, item) => sum + (item.amount || 0), 0);
   };
 
-  const totals = calculateTotals();
+  const calculateDiscount = () => {
+    const subtotal = calculateSubtotal();
+    if (formData.discount_type === 'percentage') {
+      return (subtotal * formData.discount_value) / 100;
+    }
+    return formData.discount_value;
+  };
+
+  const calculateGST = () => {
+    const afterDiscount = calculateSubtotal() - calculateDiscount();
+    const cgst = (afterDiscount * (formData.cgst_rate || 0)) / 100;
+    const sgst = (afterDiscount * (formData.sgst_rate || 0)) / 100;
+    const igst = (afterDiscount * (formData.igst_rate || 0)) / 100;
+    return { cgst, sgst, igst, total: cgst + sgst + igst };
+  };
+
+  const calculateTotal = () => {
+    const subtotal = calculateSubtotal();
+    const discount = calculateDiscount();
+    const gst = calculateGST().total;
+    return subtotal - discount + gst + formData.shipping_charges + formData.adjustment;
+  };
 
   const handleAddSalesperson = () => {
     if (newSalesperson.name.trim() && newSalesperson.email.trim()) {
       const addedSalesperson = salespersonService.addSalesperson(newSalesperson);
       setSalespersons([...salespersons, addedSalesperson]);
-      setFormData({ ...formData, salesperson_id: addedSalesperson.id, salesperson_name: addedSalesperson.name });
       setNewSalesperson({ name: '', email: '' });
       setShowAddSalespersonForm(false);
       setShowSalespersonModal(false);
@@ -265,48 +209,9 @@ const NewSalesOrderForm = () => {
     }
   };
 
-  const handleTDSSelection = (taxId: string) => {
-    const tax = tdsTaxes.find(t => t.id === taxId);
-    if (tax) {
-      setSelectedTDSTax(taxId);
-      setFormData({
-        ...formData,
-        tds_tcs_type: 'TDS',
-        tds_tcs_rate: tax.rate
-      });
-    }
-    setShowTDSModal(false);
-  };
-
-  const handleTCSSelection = (taxId: string) => {
-    const tax = tcsTaxes.find(t => t.id === taxId);
-    if (tax) {
-      setSelectedTCSTax(taxId);
-      setFormData({
-        ...formData,
-        tds_tcs_type: 'TCS',
-        tds_tcs_rate: tax.rate
-      });
-    }
-    setShowTCSModal(false);
-  };
-
-  const getSelectedTaxName = () => {
-    if (formData.tds_tcs_type === 'TDS' && selectedTDSTax) {
-      const tax = tdsTaxes.find(t => t.id === selectedTDSTax);
-      return tax ? tax.name : '';
-    } else if (formData.tds_tcs_type === 'TCS' && selectedTCSTax) {
-      const tax = tcsTaxes.find(t => t.id === selectedTCSTax);
-      return tax ? tax.name : '';
-    }
-    return '';
-  };
-
   const handleSubmit = async (status: 'draft' | 'confirmed') => {
     try {
       setLoading(true);
-      console.log('=== SUBMIT STARTED ===');
-      console.log('Status:', status);
 
       if (!formData.customer_name || formData.customer_name.trim() === '') {
         alert('Please enter customer name');
@@ -320,32 +225,34 @@ const NewSalesOrderForm = () => {
         return;
       }
 
+      const subtotal = calculateSubtotal();
+      const discountAmount = calculateDiscount();
+      const gst = calculateGST();
+      const totalAmount = calculateTotal();
+
       const salesOrderData: any = {
         customer_id: null,
         customer_name: formData.customer_name.trim(),
         customer_email: null,
-        customer_phone: null,
         sales_order_number: formData.sales_order_number,
-        reference_number: formData.reference_number || null,
-        sales_order_date: formData.sales_order_date,
+        order_date: formData.sales_order_date,
         expected_shipment_date: formData.expected_shipment_date || null,
-        payment_terms: formData.payment_terms,
-        salesperson_id: formData.salesperson_id || null,
-        salesperson_name: formData.salesperson_name || null,
-        delivery_method: formData.delivery_method || null,
         status: status,
-        subtotal: totals.subtotal,
+        subtotal: subtotal,
         discount_type: formData.discount_type,
         discount_value: formData.discount_value,
-        discount_amount: totals.discountAmount,
-        tax_amount: 0,
-        tds_tcs_type: formData.tds_tcs_type || null,
-        tds_tcs_rate: formData.tds_tcs_rate || 0,
-        tds_tcs_amount: totals.tdsTcsAmount,
+        discount_amount: discountAmount,
+        cgst_rate: formData.cgst_rate,
+        cgst_amount: gst.cgst,
+        sgst_rate: formData.sgst_rate,
+        sgst_amount: gst.sgst,
+        igst_rate: formData.igst_rate,
+        igst_amount: gst.igst,
+        tax_amount: gst.total,
         shipping_charges: formData.shipping_charges,
         adjustment: formData.adjustment,
-        total_amount: totals.total,
-        customer_notes: formData.customer_notes || null,
+        total_amount: totalAmount,
+        notes: formData.notes || null,
         terms_and_conditions: formData.terms_and_conditions || null,
         items: salesOrderItems
           .filter(item => (item.item_id || item.item_name) && item.quantity > 0)
@@ -361,11 +268,7 @@ const NewSalesOrderForm = () => {
           }))
       };
 
-      console.log('Sales Order Data to Submit:', salesOrderData);
-
       const response = await salesOrdersService.createSalesOrder(salesOrderData);
-
-      console.log('Response from API:', response);
 
       if (response.success) {
         alert(`Sales Order ${status === 'draft' ? 'saved as draft' : 'confirmed'} successfully!`);
@@ -373,7 +276,6 @@ const NewSalesOrderForm = () => {
       }
     } catch (error: any) {
       console.error('Error creating sales order:', error);
-      console.error('Error response:', error.response);
       const errorMessage = error.response?.data?.error ||
         error.response?.data?.message ||
         error.message ||
@@ -425,14 +327,14 @@ const NewSalesOrderForm = () => {
               className="flex items-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors shadow-md font-medium disabled:opacity-50"
             >
               <Send size={20} />
-              <span>Confirm Order</span>
+              <span>Save and Send</span>
             </button>
           </div>
         </div>
 
         {/* Form */}
         <div className="bg-white rounded-lg shadow-md p-8">
-          {/* Phase 1: Customer Information */}
+          {/* Customer Information */}
           <div className="mb-8">
             <h2 className="text-xl font-semibold text-slate-800 mb-6">Customer Information</h2>
 
@@ -471,20 +373,6 @@ const NewSalesOrderForm = () => {
                 />
               </div>
 
-              {/* Reference Number */}
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-2">
-                  Reference#
-                </label>
-                <input
-                  type="text"
-                  value={formData.reference_number}
-                  onChange={(e) => setFormData({ ...formData, reference_number: e.target.value })}
-                  placeholder="Enter reference number"
-                  className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                />
-              </div>
-
               {/* Sales Order Date */}
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-2">
@@ -510,89 +398,10 @@ const NewSalesOrderForm = () => {
                   className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 />
               </div>
-
-              {/* Payment Terms */}
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-2">
-                  Payment Terms
-                </label>
-                <select
-                  value={formData.payment_terms}
-                  onChange={(e) => setFormData({ ...formData, payment_terms: e.target.value })}
-                  className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                >
-                  <option value="due_on_receipt">Due on Receipt</option>
-                  <option value="net_15">Net 15</option>
-                  <option value="net_30">Net 30</option>
-                  <option value="net_45">Net 45</option>
-                  <option value="net_60">Net 60</option>
-                </select>
-              </div>
             </div>
           </div>
 
-          {/* Phase 2: Salesperson and Logistics */}
-          <div className="mb-8 pt-8 border-t border-slate-200">
-            <h2 className="text-xl font-semibold text-slate-800 mb-6">Salesperson & Delivery</h2>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {/* Salesperson */}
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-2">
-                  Salesperson
-                </label>
-                <div className="flex gap-2">
-                  <select
-                    value={formData.salesperson_id}
-                    onChange={(e) => {
-                      const sp = salespersons.find(s => s.id === e.target.value);
-                      setFormData({
-                        ...formData,
-                        salesperson_id: e.target.value,
-                        salesperson_name: sp?.name || ''
-                      });
-                    }}
-                    className="flex-1 px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  >
-                    <option value="">Select a salesperson</option>
-                    {salespersons.map((sp) => (
-                      <option key={sp.id} value={sp.id}>
-                        {sp.name}
-                      </option>
-                    ))}
-                  </select>
-                  <button
-                    type="button"
-                    onClick={() => setShowSalespersonModal(true)}
-                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-                  >
-                    Manage
-                  </button>
-                </div>
-              </div>
-
-              {/* Delivery Method */}
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-2">
-                  Delivery Method
-                </label>
-                <select
-                  value={formData.delivery_method}
-                  onChange={(e) => setFormData({ ...formData, delivery_method: e.target.value })}
-                  className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                >
-                  <option value="">Select delivery method</option>
-                  {deliveryMethods.map((method) => (
-                    <option key={method} value={method}>
-                      {method}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </div>
-          </div>
-
-          {/* Phase 3: Items Table with Searchable Dropdown */}
+          {/* Items Table */}
           <div className="mb-8 pt-8 border-t border-slate-200">
             <h2 className="text-xl font-semibold text-slate-800 mb-6">Items</h2>
 
@@ -638,27 +447,8 @@ const NewSalesOrderForm = () => {
                           className="w-24 px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                           min="1"
                           step="1"
-                          onKeyDown={(e) => {
-                            if (e.key === '.' || e.key === 'e') {
-                              e.preventDefault();
-                            }
-                          }}
                           placeholder="Qty"
                         />
-                        {item.serial_numbers && item.serial_numbers.length > 0 && (
-                          <div className="mt-2 flex flex-wrap gap-1 max-w-[200px]">
-                            {item.serial_numbers.map((sn, i) => (
-                              <span key={i} className="inline-flex items-center px-2 py-0.5 rounded textxs font-medium bg-blue-100 text-blue-800 border border-blue-200">
-                                {sn}
-                              </span>
-                            ))}
-                          </div>
-                        )}
-                        {item.quantity > 0 && (!item.serial_numbers || item.serial_numbers.length === 0) && (
-                          <div className="mt-1 text-[10px] text-orange-500 font-medium">
-                            Select Item w/ SKU
-                          </div>
-                        )}
                       </td>
                       <td className="px-4 py-3">
                         <input
@@ -705,7 +495,7 @@ const NewSalesOrderForm = () => {
             </button>
           </div>
 
-          {/* Financial Adjustments with TDS/TCS Modals */}
+          {/* Financial Adjustments with GST */}
           <div className="mb-8 pt-8 border-t border-slate-200">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
               {/* Left Column - Taxes & Discounts */}
@@ -737,33 +527,63 @@ const NewSalesOrderForm = () => {
                   </div>
                 </div>
 
-                {/* TDS/TCS with Modal Selection */}
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-2">
-                    TDS/TCS
-                  </label>
-                  <div className="space-y-2">
-                    <div className="flex gap-2">
-                      <button
-                        type="button"
-                        onClick={() => setShowTDSModal(true)}
-                        className="flex-1 px-4 py-2 border border-slate-300 rounded-lg hover:bg-slate-50 transition-colors text-left"
-                      >
-                        {formData.tds_tcs_type === 'TDS' && getSelectedTaxName() ? getSelectedTaxName() : 'Select TDS Tax'}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setShowTCSModal(true)}
-                        className="flex-1 px-4 py-2 border border-slate-300 rounded-lg hover:bg-slate-50 transition-colors text-left"
-                      >
-                        {formData.tds_tcs_type === 'TCS' && getSelectedTaxName() ? getSelectedTaxName() : 'Select TCS Tax'}
-                      </button>
-                    </div>
-                    {formData.tds_tcs_type && (
-                      <div className="text-sm text-slate-600">
-                        {formData.tds_tcs_type} Rate: {formData.tds_tcs_rate}%
-                      </div>
-                    )}
+                {/* GST Section */}
+                <div className="space-y-3">
+                  {/* CGST */}
+                  <div className="flex items-center gap-4">
+                    <label className={`text-sm font-medium w-16 ${formData.igst_rate ? 'text-slate-400' : 'text-slate-700'}`}>
+                      CGST
+                    </label>
+                    <select
+                      value={formData.cgst_rate}
+                      onChange={(e) => setFormData({ ...formData, cgst_rate: parseFloat(e.target.value) || 0, igst_rate: 0 })}
+                      disabled={!!formData.igst_rate}
+                      className={`flex-1 px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${formData.igst_rate ? 'bg-slate-100 text-slate-400 cursor-not-allowed' : 'bg-white'}`}
+                    >
+                      <option value={0}>0%</option>
+                      <option value={2.5}>2.5%</option>
+                      <option value={6}>6%</option>
+                      <option value={9}>9%</option>
+                    </select>
+                    <span className="w-32 text-right font-medium">₹{calculateGST().cgst.toFixed(2)}</span>
+                  </div>
+
+                  {/* SGST */}
+                  <div className="flex items-center gap-4">
+                    <label className={`text-sm font-medium w-16 ${formData.igst_rate ? 'text-slate-400' : 'text-slate-700'}`}>
+                      SGST
+                    </label>
+                    <select
+                      value={formData.sgst_rate}
+                      onChange={(e) => setFormData({ ...formData, sgst_rate: parseFloat(e.target.value) || 0, igst_rate: 0 })}
+                      disabled={!!formData.igst_rate}
+                      className={`flex-1 px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${formData.igst_rate ? 'bg-slate-100 text-slate-400 cursor-not-allowed' : 'bg-white'}`}
+                    >
+                      <option value={0}>0%</option>
+                      <option value={2.5}>2.5%</option>
+                      <option value={6}>6%</option>
+                      <option value={9}>9%</option>
+                    </select>
+                    <span className="w-32 text-right font-medium">₹{calculateGST().sgst.toFixed(2)}</span>
+                  </div>
+
+                  {/* IGST */}
+                  <div className="flex items-center gap-4">
+                    <label className={`text-sm font-medium w-16 ${(formData.cgst_rate || formData.sgst_rate) ? 'text-slate-400' : 'text-slate-700'}`}>
+                      IGST
+                    </label>
+                    <select
+                      value={formData.igst_rate}
+                      onChange={(e) => setFormData({ ...formData, igst_rate: parseFloat(e.target.value) || 0, cgst_rate: 0, sgst_rate: 0 })}
+                      disabled={!!(formData.cgst_rate || formData.sgst_rate)}
+                      className={`flex-1 px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${(formData.cgst_rate || formData.sgst_rate) ? 'bg-slate-100 text-slate-400 cursor-not-allowed' : 'bg-white'}`}
+                    >
+                      <option value={0}>0%</option>
+                      <option value={5}>5%</option>
+                      <option value={12}>12%</option>
+                      <option value={18}>18%</option>
+                    </select>
+                    <span className="w-32 text-right font-medium">₹{calculateGST().igst.toFixed(2)}</span>
                   </div>
                 </div>
 
@@ -803,18 +623,30 @@ const NewSalesOrderForm = () => {
                 <div className="space-y-3">
                   <div className="flex justify-between text-sm">
                     <span className="text-slate-600">Subtotal:</span>
-                    <span className="font-medium text-slate-800">₹{totals.subtotal.toFixed(2)}</span>
+                    <span className="font-medium text-slate-800">₹{calculateSubtotal().toFixed(2)}</span>
                   </div>
                   {formData.discount_value > 0 && (
                     <div className="flex justify-between text-sm">
                       <span className="text-slate-600">Discount:</span>
-                      <span className="font-medium text-slate-800">-₹{totals.discountAmount.toFixed(2)}</span>
+                      <span className="font-medium text-slate-800">-₹{calculateDiscount().toFixed(2)}</span>
                     </div>
                   )}
-                  {formData.tds_tcs_rate > 0 && (
+                  {calculateGST().cgst > 0 && (
                     <div className="flex justify-between text-sm">
-                      <span className="text-slate-600">{formData.tds_tcs_type} ({formData.tds_tcs_rate}%):</span>
-                      <span className="font-medium text-slate-800">₹{totals.tdsTcsAmount.toFixed(2)}</span>
+                      <span className="text-slate-600">CGST ({formData.cgst_rate}%):</span>
+                      <span className="font-medium text-slate-800">₹{calculateGST().cgst.toFixed(2)}</span>
+                    </div>
+                  )}
+                  {calculateGST().sgst > 0 && (
+                    <div className="flex justify-between text-sm">
+                      <span className="text-slate-600">SGST ({formData.sgst_rate}%):</span>
+                      <span className="font-medium text-slate-800">₹{calculateGST().sgst.toFixed(2)}</span>
+                    </div>
+                  )}
+                  {calculateGST().igst > 0 && (
+                    <div className="flex justify-between text-sm">
+                      <span className="text-slate-600">IGST ({formData.igst_rate}%):</span>
+                      <span className="font-medium text-slate-800">₹{calculateGST().igst.toFixed(2)}</span>
                     </div>
                   )}
                   {formData.shipping_charges > 0 && (
@@ -832,7 +664,7 @@ const NewSalesOrderForm = () => {
                   <div className="pt-3 border-t border-slate-300">
                     <div className="flex justify-between">
                       <span className="text-lg font-semibold text-slate-800">Total:</span>
-                      <span className="text-lg font-bold text-blue-600">₹{totals.total.toFixed(2)}</span>
+                      <span className="text-lg font-bold text-blue-600">₹{calculateTotal().toFixed(2)}</span>
                     </div>
                   </div>
                 </div>
@@ -840,7 +672,7 @@ const NewSalesOrderForm = () => {
             </div>
           </div>
 
-          {/* Phase 4: Additional Information */}
+          {/* Additional Information */}
           <div className="pt-8 border-t border-slate-200">
             <h2 className="text-xl font-semibold text-slate-800 mb-6">Additional Information</h2>
 
@@ -851,8 +683,8 @@ const NewSalesOrderForm = () => {
                   Customer Notes
                 </label>
                 <textarea
-                  value={formData.customer_notes}
-                  onChange={(e) => setFormData({ ...formData, customer_notes: e.target.value })}
+                  value={formData.notes}
+                  onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
                   rows={3}
                   placeholder="Add notes for the customer (visible on sales order)"
                   className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
@@ -905,78 +737,6 @@ const NewSalesOrderForm = () => {
           </div>
         </div>
       </div>
-
-      {/* TDS Modal */}
-      {showTDSModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 w-full max-w-3xl max-h-[80vh] overflow-y-auto">
-            <div className="flex items-center justify-between mb-6">
-              <h2 className="text-2xl font-bold text-slate-800">Select TDS Tax</h2>
-              <button
-                onClick={() => setShowTDSModal(false)}
-                className="p-2 hover:bg-slate-100 rounded-lg transition-colors"
-              >
-                <X size={20} />
-              </button>
-            </div>
-
-            <div className="space-y-2">
-              {tdsTaxes.map((tax) => (
-                <div
-                  key={tax.id}
-                  onClick={() => handleTDSSelection(tax.id)}
-                  className="flex items-center justify-between p-4 border border-slate-200 rounded-lg hover:bg-blue-50 cursor-pointer transition-colors"
-                >
-                  <div>
-                    <div className="font-medium text-slate-800">{tax.name}</div>
-                    <div className="text-sm text-slate-600">{tax.section}</div>
-                  </div>
-                  <div className="text-lg font-semibold text-blue-600">{tax.rate}%</div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* TCS Modal */}
-      {showTCSModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 w-full max-w-3xl max-h-[80vh] overflow-y-auto">
-            <div className="flex items-center justify-between mb-6">
-              <h2 className="text-2xl font-bold text-slate-800">Select TCS Tax</h2>
-              <button
-                onClick={() => setShowTCSModal(false)}
-                className="p-2 hover:bg-slate-100 rounded-lg transition-colors"
-              >
-                <X size={20} />
-              </button>
-            </div>
-
-            {tcsTaxes.length === 0 ? (
-              <div className="text-center py-12">
-                <p className="text-slate-600">No TCS taxes available. Add TCS taxes from settings.</p>
-              </div>
-            ) : (
-              <div className="space-y-2">
-                {tcsTaxes.map((tax) => (
-                  <div
-                    key={tax.id}
-                    onClick={() => handleTCSSelection(tax.id)}
-                    className="flex items-center justify-between p-4 border border-slate-200 rounded-lg hover:bg-blue-50 cursor-pointer transition-colors"
-                  >
-                    <div>
-                      <div className="font-medium text-slate-800">{tax.name}</div>
-                      <div className="text-sm text-slate-600">{tax.natureOfCollection}</div>
-                    </div>
-                    <div className="text-lg font-semibold text-blue-600">{tax.rate}%</div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
-      )}
 
       {/* Salesperson Management Modal */}
       {showSalespersonModal && (
