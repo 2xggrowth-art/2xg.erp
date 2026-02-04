@@ -1,7 +1,7 @@
 import { supabaseAdmin } from '../config/supabase';
 
 // Auto-approval threshold in INR
-const AUTO_APPROVAL_THRESHOLD = 200;
+const AUTO_APPROVAL_THRESHOLD = 2000;
 
 export class ExpensesService {
   /**
