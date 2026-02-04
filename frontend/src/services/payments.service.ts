@@ -1,6 +1,4 @@
-import axios from 'axios';
-
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5002/api';
+import apiClient from './api.client';
 
 export interface PaymentMade {
   id: string;
@@ -62,8 +60,8 @@ export const paymentsService = {
    */
   generatePaymentNumber: async (): Promise<APIResponse<{ payment_number: string }>> => {
     try {
-      const response = await axios.get<APIResponse<{ payment_number: string }>>(
-        `${API_BASE_URL}/payments/generate-payment-number`
+      const response = await apiClient.get<APIResponse<{ payment_number: string }>>(
+        `/payments/generate-payment-number`
       );
       return response.data;
     } catch (error) {
@@ -77,8 +75,8 @@ export const paymentsService = {
    */
   createPayment: async (data: CreatePaymentData): Promise<APIResponse<PaymentMade>> => {
     try {
-      const response = await axios.post<APIResponse<PaymentMade>>(
-        `${API_BASE_URL}/payments`,
+      const response = await apiClient.post<APIResponse<PaymentMade>>(
+        `/payments`,
         data
       );
       return response.data;
@@ -106,8 +104,8 @@ export const paymentsService = {
       if (filters?.to_date) params.append('to_date', filters.to_date);
       if (filters?.search) params.append('search', filters.search);
 
-      const response = await axios.get<APIResponse<PaymentMade[]>>(
-        `${API_BASE_URL}/payments?${params.toString()}`
+      const response = await apiClient.get<APIResponse<PaymentMade[]>>(
+        `/payments?${params.toString()}`
       );
       return response.data;
     } catch (error) {
@@ -121,8 +119,8 @@ export const paymentsService = {
    */
   getPaymentById: async (id: string): Promise<APIResponse<PaymentMade>> => {
     try {
-      const response = await axios.get<APIResponse<PaymentMade>>(
-        `${API_BASE_URL}/payments/${id}`
+      const response = await apiClient.get<APIResponse<PaymentMade>>(
+        `/payments/${id}`
       );
       return response.data;
     } catch (error) {
@@ -136,8 +134,8 @@ export const paymentsService = {
    */
   updatePayment: async (id: string, data: Partial<CreatePaymentData>): Promise<APIResponse<PaymentMade>> => {
     try {
-      const response = await axios.put<APIResponse<PaymentMade>>(
-        `${API_BASE_URL}/payments/${id}`,
+      const response = await apiClient.put<APIResponse<PaymentMade>>(
+        `/payments/${id}`,
         data
       );
       return response.data;
@@ -152,8 +150,8 @@ export const paymentsService = {
    */
   deletePayment: async (id: string): Promise<APIResponse<PaymentMade>> => {
     try {
-      const response = await axios.delete<APIResponse<PaymentMade>>(
-        `${API_BASE_URL}/payments/${id}`
+      const response = await apiClient.delete<APIResponse<PaymentMade>>(
+        `/payments/${id}`
       );
       return response.data;
     } catch (error) {
@@ -167,8 +165,8 @@ export const paymentsService = {
    */
   getPaymentsSummary: async (): Promise<APIResponse<any>> => {
     try {
-      const response = await axios.get<APIResponse<any>>(
-        `${API_BASE_URL}/payments/summary`
+      const response = await apiClient.get<APIResponse<any>>(
+        `/payments/summary`
       );
       return response.data;
     } catch (error) {
