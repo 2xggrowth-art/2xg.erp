@@ -16,7 +16,7 @@ export class VendorCreditsController {
       const creditNumber = await this.vendorCreditsService.generateCreditNumber();
       res.json({
         success: true,
-        data: { credit_number: creditNumber }
+        data: { credit_note_number: creditNumber }
       });
     } catch (error: any) {
       res.status(500).json({
