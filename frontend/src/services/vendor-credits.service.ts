@@ -1,6 +1,4 @@
-import axios from 'axios';
-
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5002/api';
+import apiClient from './api.client';
 
 export interface VendorCreditItem {
   id?: string;
@@ -29,8 +27,15 @@ export interface VendorCredit {
   subject?: string;
   status: 'draft' | 'open' | 'closed' | 'cancelled';
   subtotal: number;
+  discount_type?: string;
+  discount_value?: number;
   discount_amount: number;
-  tax_type?: string;
+  cgst_rate?: number;
+  cgst_amount?: number;
+  sgst_rate?: number;
+  sgst_amount?: number;
+  igst_rate?: number;
+  igst_amount?: number;
   tax_amount: number;
   adjustment: number;
   total_amount: number;
@@ -56,8 +61,15 @@ export interface CreateVendorCreditData {
   subject?: string;
   status?: string;
   subtotal: number;
+  discount_type?: string;
+  discount_value?: number;
   discount_amount?: number;
-  tax_type?: string;
+  cgst_rate?: number;
+  cgst_amount?: number;
+  sgst_rate?: number;
+  sgst_amount?: number;
+  igst_rate?: number;
+  igst_amount?: number;
   tax_amount?: number;
   adjustment?: number;
   total_amount: number;
@@ -102,8 +114,8 @@ export const vendorCreditsService = {
       if (filters?.to_date) params.append('to_date', filters.to_date);
       if (filters?.search) params.append('search', filters.search);
 
-      const response = await axios.get<APIResponse<VendorCredit[]>>(
-        `${API_BASE_URL}/vendor-credits?${params.toString()}`
+      const response = await apiClient.get<APIResponse<VendorCredit[]>>(
+        `/vendor-credits?${params.toString()}`
       );
       return response.data;
     } catch (error) {
@@ -117,8 +129,8 @@ export const vendorCreditsService = {
    */
   getVendorCreditById: async (id: string): Promise<APIResponse<VendorCredit>> => {
     try {
-      const response = await axios.get<APIResponse<VendorCredit>>(
-        `${API_BASE_URL}/vendor-credits/${id}`
+      const response = await apiClient.get<APIResponse<VendorCredit>>(
+        `/vendor-credits/${id}`
       );
       return response.data;
     } catch (error) {
@@ -132,8 +144,8 @@ export const vendorCreditsService = {
    */
   generateCreditNumber: async (): Promise<APIResponse<{ credit_number: string }>> => {
     try {
-      const response = await axios.get<APIResponse<{ credit_number: string }>>(
-        `${API_BASE_URL}/vendor-credits/generate-credit-number`
+      const response = await apiClient.get<APIResponse<{ credit_number: string }>>(
+        `/vendor-credits/generate-credit-number`
       );
       return response.data;
     } catch (error) {
@@ -147,8 +159,8 @@ export const vendorCreditsService = {
    */
   createVendorCredit: async (data: CreateVendorCreditData): Promise<APIResponse<VendorCredit>> => {
     try {
-      const response = await axios.post<APIResponse<VendorCredit>>(
-        `${API_BASE_URL}/vendor-credits`,
+      const response = await apiClient.post<APIResponse<VendorCredit>>(
+        `/vendor-credits`,
         data
       );
       return response.data;
@@ -163,8 +175,8 @@ export const vendorCreditsService = {
    */
   updateVendorCredit: async (id: string, data: Partial<CreateVendorCreditData>): Promise<APIResponse<VendorCredit>> => {
     try {
-      const response = await axios.put<APIResponse<VendorCredit>>(
-        `${API_BASE_URL}/vendor-credits/${id}`,
+      const response = await apiClient.put<APIResponse<VendorCredit>>(
+        `/vendor-credits/${id}`,
         data
       );
       return response.data;
@@ -179,8 +191,8 @@ export const vendorCreditsService = {
    */
   deleteVendorCredit: async (id: string): Promise<APIResponse<VendorCredit>> => {
     try {
-      const response = await axios.delete<APIResponse<VendorCredit>>(
-        `${API_BASE_URL}/vendor-credits/${id}`
+      const response = await apiClient.delete<APIResponse<VendorCredit>>(
+        `/vendor-credits/${id}`
       );
       return response.data;
     } catch (error) {
@@ -194,8 +206,8 @@ export const vendorCreditsService = {
    */
   getVendorCreditsSummary: async (): Promise<APIResponse<VendorCreditsSummary>> => {
     try {
-      const response = await axios.get<APIResponse<VendorCreditsSummary>>(
-        `${API_BASE_URL}/vendor-credits/summary`
+      const response = await apiClient.get<APIResponse<VendorCreditsSummary>>(
+        `/vendor-credits/summary`
       );
       return response.data;
     } catch (error) {
@@ -215,8 +227,8 @@ export const vendorCreditsService = {
     }
   ): Promise<APIResponse<any>> => {
     try {
-      const response = await axios.post<APIResponse<any>>(
-        `${API_BASE_URL}/vendor-credits/${creditId}/apply-to-bill`,
+      const response = await apiClient.post<APIResponse<any>>(
+        `/vendor-credits/${creditId}/apply-to-bill`,
         billData
       );
       return response.data;

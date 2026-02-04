@@ -4,8 +4,6 @@ import { X, Plus, Trash2, RefreshCw, Search } from 'lucide-react';
 import { vendorCreditsService, CreateVendorCreditData, VendorCreditItem } from '../../services/vendor-credits.service';
 import { vendorsService } from '../../services/vendors.service';
 import { itemsService, Item } from '../../services/items.service';
-import ManageTDSModal from '../bills/ManageTDSModal';
-import ManageTCSModal from '../bills/ManageTCSModal';
 import { openVendorCreditPDFInNewTab } from '../../utils/pdfGenerators/vendorCreditPDF';
 
 interface Vendor {
@@ -17,22 +15,6 @@ interface Vendor {
   is_active: boolean;
 }
 
-interface TDSTax {
-  id: string;
-  name: string;
-  rate: number;
-  section: string;
-  status: 'Active' | 'Inactive';
-}
-
-interface TCSTax {
-  id: string;
-  name: string;
-  rate: number;
-  natureOfCollection: string;
-  status: 'Active' | 'Inactive';
-}
-
 const NewVendorCreditForm = () => {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
@@ -40,42 +22,6 @@ const NewVendorCreditForm = () => {
   const [items, setItems] = useState<Item[]>([]);
   const [creditNumber, setCreditNumber] = useState('');
   const [errors, setErrors] = useState<Record<string, string>>({});
-  const [showTDSModal, setShowTDSModal] = useState(false);
-  const [selectedTDSTax, setSelectedTDSTax] = useState<string>('');
-  const [showTCSModal, setShowTCSModal] = useState(false);
-  const [selectedTCSTax, setSelectedTCSTax] = useState<string>('');
-
-  // TDS Tax Options (matching Bills form)
-  const [tdsTaxes, setTdsTaxes] = useState<TDSTax[]>([
-    { id: '1', name: 'Commission or Brokerage [2%]', rate: 2, section: 'Section 194 H', status: 'Active' },
-    { id: '2', name: 'Commission or Brokerage (Reduced) [3.75%]', rate: 3.75, section: 'Section 194 H', status: 'Active' },
-    { id: '3', name: 'Dividend [10%]', rate: 10, section: 'Section 194', status: 'Active' },
-    { id: '4', name: 'Dividend (Reduced) [7.5%]', rate: 7.5, section: 'Section 194', status: 'Active' },
-    { id: '5', name: 'Other Interest than securities [10%]', rate: 10, section: 'Section 194 A', status: 'Active' },
-    { id: '6', name: 'Other Interest than securities (Reduced) [7.5%]', rate: 7.5, section: 'Section 194 A', status: 'Active' },
-    { id: '7', name: 'Payment of contractors for Others [2%]', rate: 2, section: 'Section 194 C', status: 'Active' },
-    { id: '8', name: 'Payment of contractors for Others (Reduced) [1.5%]', rate: 1.5, section: 'Section 194 C', status: 'Active' },
-    { id: '9', name: 'Payment of contractors HUF/Indiv [1%]', rate: 1, section: 'Section 194 C', status: 'Active' },
-    { id: '10', name: 'Payment of contractors HUF/Indiv (Reduced) [0.75%]', rate: 0.75, section: 'Section 194 C', status: 'Active' },
-    { id: '11', name: 'Professional Fees [10%]', rate: 10, section: 'Section 194J', status: 'Active' },
-    { id: '12', name: 'Professional Fees (Reduced) [7.5%]', rate: 7.5, section: 'Section 194J', status: 'Active' },
-    { id: '13', name: 'Rent on land or furniture etc [10%]', rate: 10, section: 'Section 194I', status: 'Active' },
-    { id: '14', name: 'Rent on land or furniture etc (Reduced) [7.5%]', rate: 7.5, section: 'Section 194I', status: 'Active' },
-    { id: '15', name: 'Technical Fees (2%) [2%]', rate: 2, section: 'Section 194J', status: 'Active' },
-  ]);
-
-  const handleAddTax = (newTax: TDSTax) => {
-    setTdsTaxes([...tdsTaxes, newTax]);
-  };
-
-  // TCS Tax Options
-  const [tcsTaxes, setTcsTaxes] = useState<TCSTax[]>([]);
-
-  const handleAddTCSTax = (newTax: TCSTax) => {
-    setTcsTaxes([...tcsTaxes, newTax]);
-    setSelectedTCSTax(newTax.id);
-    setFormData({ ...formData, tds_tcs_rate: newTax.rate });
-  };
 
   // Form data
   const [formData, setFormData] = useState({
@@ -86,8 +32,12 @@ const NewVendorCreditForm = () => {
     order_number: '',
     reference_number: '',
     subject: '',
-    discount_amount: 0,
-    tds_tcs_type: 'TDS' as 'TDS' | 'TCS' | '',
+    discount_type: 'percentage' as 'percentage' | 'amount',
+    discount_value: 0,
+    cgst_rate: 0,
+    sgst_rate: 0,
+    igst_rate: 0,
+    tds_tcs_type: '' as 'TDS' | 'TCS' | '',
     tds_tcs_rate: 0,
     adjustment: 0,
     notes: '',
@@ -227,9 +177,24 @@ const NewVendorCreditForm = () => {
     return creditItems.reduce((sum, item) => sum + (item.amount || 0), 0);
   };
 
-  const calculateTax = () => {
+  const calculateDiscount = () => {
     const subtotal = calculateSubtotal();
-    const afterDiscount = subtotal - formData.discount_amount;
+    if (formData.discount_type === 'percentage') {
+      return (subtotal * formData.discount_value) / 100;
+    }
+    return formData.discount_value;
+  };
+
+  const calculateGST = () => {
+    const afterDiscount = calculateSubtotal() - calculateDiscount();
+    const cgst = (afterDiscount * (formData.cgst_rate || 0)) / 100;
+    const sgst = (afterDiscount * (formData.sgst_rate || 0)) / 100;
+    const igst = (afterDiscount * (formData.igst_rate || 0)) / 100;
+    return { cgst, sgst, igst, total: cgst + sgst + igst };
+  };
+
+  const calculateTdsTcs = () => {
+    const afterDiscount = calculateSubtotal() - calculateDiscount();
     if (formData.tds_tcs_type && formData.tds_tcs_rate) {
       return (afterDiscount * formData.tds_tcs_rate) / 100;
     }
@@ -238,15 +203,17 @@ const NewVendorCreditForm = () => {
 
   const calculateTotal = () => {
     const subtotal = calculateSubtotal();
-    const discount = formData.discount_amount;
-    const tax = calculateTax();
+    const discount = calculateDiscount();
+    const gst = calculateGST().total;
+    const tdsTcs = calculateTdsTcs();
 
+    let total = subtotal - discount + gst;
     if (formData.tds_tcs_type === 'TDS') {
-      return subtotal - discount - tax + formData.adjustment;
+      total -= tdsTcs;
     } else if (formData.tds_tcs_type === 'TCS') {
-      return subtotal - discount + tax + formData.adjustment;
+      total += tdsTcs;
     }
-    return subtotal - discount + formData.adjustment;
+    return total + formData.adjustment;
   };
 
   const validateForm = (): boolean => {
@@ -278,7 +245,9 @@ const NewVendorCreditForm = () => {
       setLoading(true);
 
       const subtotal = calculateSubtotal();
-      const taxAmount = calculateTax();
+      const discountAmount = calculateDiscount();
+      const gst = calculateGST();
+      const taxAmount = gst.total;
       const totalAmount = calculateTotal();
 
       const creditData: CreateVendorCreditData = {
@@ -292,8 +261,15 @@ const NewVendorCreditForm = () => {
         subject: formData.subject,
         status: saveType,
         subtotal,
-        discount_amount: formData.discount_amount,
-        tax_type: formData.tds_tcs_type || undefined,
+        discount_type: formData.discount_type,
+        discount_value: formData.discount_value,
+        discount_amount: discountAmount,
+        cgst_rate: formData.cgst_rate,
+        cgst_amount: gst.cgst,
+        sgst_rate: formData.sgst_rate,
+        sgst_amount: gst.sgst,
+        igst_rate: formData.igst_rate,
+        igst_amount: gst.igst,
         tax_amount: taxAmount,
         adjustment: formData.adjustment,
         total_amount: totalAmount,
@@ -585,137 +561,149 @@ const NewVendorCreditForm = () => {
 
           {/* Calculation Section */}
           <div className="border-t border-gray-200 pt-6 mb-6">
-            <div className="flex justify-between items-center mb-3">
-              <span className="text-sm text-gray-700">Sub Total</span>
-              <span className="text-sm font-medium">₹{calculateSubtotal().toFixed(2)}</span>
-            </div>
-
-            <div className="flex justify-between items-center mb-3">
-              <span className="text-sm text-gray-700">Discount</span>
-              <div className="flex items-center gap-2">
-                <input
-                  type="number"
-                  value={formData.discount_amount}
-                  onChange={(e) => setFormData({ ...formData, discount_amount: parseFloat(e.target.value) || 0 })}
-                  className="w-32 px-2 py-1 border border-gray-300 rounded text-right focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  step="0.01"
-                  min="0"
-                />
-                <span className="text-sm font-medium">₹{formData.discount_amount.toFixed(2)}</span>
+            <div className="space-y-3">
+              {/* Sub Total */}
+              <div className="flex justify-between items-center py-2">
+                <span className="text-gray-700">Sub Total</span>
+                <span className="font-medium">₹{calculateSubtotal().toFixed(2)}</span>
               </div>
-            </div>
 
-            <div className="flex justify-between items-center mb-3">
-              <div className="flex items-center gap-3">
+              {/* Discount */}
+              <div className="flex justify-between items-center gap-4 py-2">
                 <div className="flex items-center gap-2">
-                  <input
-                    type="radio"
-                    name="tds_tcs_type"
-                    value="TDS"
-                    checked={formData.tds_tcs_type === 'TDS'}
-                    onChange={(e) => setFormData({ ...formData, tds_tcs_type: e.target.value as 'TDS' })}
-                    className="text-blue-600"
-                  />
-                  <label className="text-sm text-gray-700">TDS</label>
-                </div>
-                <div className="flex items-center gap-2">
-                  <input
-                    type="radio"
-                    name="tds_tcs_type"
-                    value="TCS"
-                    checked={formData.tds_tcs_type === 'TCS'}
-                    onChange={(e) => setFormData({ ...formData, tds_tcs_type: e.target.value as 'TCS' })}
-                    className="text-blue-600"
-                  />
-                  <label className="text-sm text-gray-700">TCS</label>
-                </div>
-                {formData.tds_tcs_type === 'TDS' && (
+                  <span className="text-gray-700">Discount</span>
                   <select
-                    value={selectedTDSTax}
-                    onChange={(e) => {
-                      const value = e.target.value;
-                      if (value === 'manage_tds') {
-                        setShowTDSModal(true);
-                        setSelectedTDSTax('');
-                      } else {
-                        setSelectedTDSTax(value);
-                        const tax = tdsTaxes.find(t => t.id === value);
-                        if (tax) {
-                          setFormData({ ...formData, tds_tcs_rate: tax.rate });
-                        }
-                      }
-                    }}
-                    className="px-3 py-1.5 border border-gray-300 rounded-md text-sm min-w-[200px]"
+                    value={formData.discount_type}
+                    onChange={(e) => setFormData({ ...formData, discount_type: e.target.value as 'percentage' | 'amount' })}
+                    className="px-2 py-1 border border-gray-300 rounded text-sm"
                   >
-                    <option value="">Select a Tax</option>
-                    <optgroup label="Taxes">
-                      {tdsTaxes.map(tax => (
-                        <option key={tax.id} value={tax.id}>
-                          {tax.name}
-                        </option>
-                      ))}
-                    </optgroup>
-                    <option value="manage_tds" className="text-blue-600 font-medium">
-                      ⚙ Manage TDS
-                    </option>
+                    <option value="percentage">%</option>
+                    <option value="amount">₹</option>
                   </select>
-                )}
-                {formData.tds_tcs_type === 'TCS' && (
-                  <select
-                    value={selectedTCSTax}
-                    onChange={(e) => {
-                      const value = e.target.value;
-                      if (value === 'manage_tcs') {
-                        setShowTCSModal(true);
-                        setSelectedTCSTax('');
-                      } else {
-                        setSelectedTCSTax(value);
-                        const tax = tcsTaxes.find(t => t.id === value);
-                        if (tax) {
-                          setFormData({ ...formData, tds_tcs_rate: tax.rate });
-                        }
-                      }
-                    }}
-                    className="px-3 py-1.5 border border-gray-300 rounded-md text-sm min-w-[200px]"
-                  >
-                    <option value="">Select a Tax</option>
-                    {tcsTaxes.length > 0 ? (
-                      <optgroup label="Taxes">
-                        {tcsTaxes.map(tax => (
-                          <option key={tax.id} value={tax.id}>
-                            {tax.name}
-                          </option>
-                        ))}
-                      </optgroup>
-                    ) : (
-                      <option value="" disabled>No TCS Taxes Available</option>
-                    )}
-                    <option value="manage_tcs" className="text-blue-600 font-medium">
-                      ⚙ Manage TCS
-                    </option>
-                  </select>
-                )}
+                  <input
+                    type="number"
+                    value={formData.discount_value}
+                    onChange={(e) => setFormData({ ...formData, discount_value: parseFloat(e.target.value) || 0 })}
+                    step="0.01"
+                    className="w-24 px-2 py-1 border border-gray-300 rounded text-sm"
+                  />
+                </div>
+                <span className="font-medium">-₹{calculateDiscount().toFixed(2)}</span>
               </div>
-              <span className="text-sm font-medium">
-                {formData.tds_tcs_type === 'TDS' ? '-' : ''}
-                ₹{calculateTax().toFixed(2)}
-              </span>
-            </div>
 
-            <div className="flex justify-between items-center mb-3">
-              <span className="text-sm text-gray-700">Adjustment</span>
-              <input
-                type="number"
-                value={formData.adjustment}
-                onChange={(e) => setFormData({ ...formData, adjustment: parseFloat(e.target.value) || 0 })}
-                className="w-32 px-2 py-1 border border-gray-300 rounded text-right focus:outline-none focus:ring-2 focus:ring-blue-500"
-                step="0.01"
-              />
-            </div>
+              {/* CGST */}
+              <div className="flex justify-between items-center py-2">
+                <div className="flex items-center gap-2">
+                  <span className={`text-sm w-12 ${formData.igst_rate ? 'text-gray-400' : 'text-gray-700'}`}>CGST</span>
+                  <select
+                    value={formData.cgst_rate}
+                    onChange={(e) => setFormData({ ...formData, cgst_rate: parseFloat(e.target.value) || 0, igst_rate: 0 })}
+                    disabled={!!formData.igst_rate}
+                    className={`px-2 py-1 border border-gray-300 rounded text-sm w-20 ${formData.igst_rate ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : 'bg-white'}`}
+                  >
+                    <option value={0}>0%</option>
+                    <option value={2.5}>2.5%</option>
+                    <option value={6}>6%</option>
+                    <option value={9}>9%</option>
+                  </select>
+                </div>
+                <span className="font-medium text-gray-900">
+                  ₹{calculateGST().cgst.toFixed(2)}
+                </span>
+              </div>
 
-            <div className="flex justify-between items-center text-lg font-semibold border-t pt-3">
-              <span>Total</span>
-              <span>₹{calculateTotal().toFixed(2)}</span>
+              {/* SGST */}
+              <div className="flex justify-between items-center py-2">
+                <div className="flex items-center gap-2">
+                  <span className={`text-sm w-12 ${formData.igst_rate ? 'text-gray-400' : 'text-gray-700'}`}>SGST</span>
+                  <select
+                    value={formData.sgst_rate}
+                    onChange={(e) => setFormData({ ...formData, sgst_rate: parseFloat(e.target.value) || 0, igst_rate: 0 })}
+                    disabled={!!formData.igst_rate}
+                    className={`px-2 py-1 border border-gray-300 rounded text-sm w-20 ${formData.igst_rate ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : 'bg-white'}`}
+                  >
+                    <option value={0}>0%</option>
+                    <option value={2.5}>2.5%</option>
+                    <option value={6}>6%</option>
+                    <option value={9}>9%</option>
+                  </select>
+                </div>
+                <span className="font-medium text-gray-900">
+                  ₹{calculateGST().sgst.toFixed(2)}
+                </span>
+              </div>
+
+              {/* IGST */}
+              <div className="flex justify-between items-center py-2">
+                <div className="flex items-center gap-2">
+                  <span className={`text-sm w-12 ${(formData.cgst_rate || formData.sgst_rate) ? 'text-gray-400' : 'text-gray-700'}`}>IGST</span>
+                  <select
+                    value={formData.igst_rate}
+                    onChange={(e) => setFormData({ ...formData, igst_rate: parseFloat(e.target.value) || 0, cgst_rate: 0, sgst_rate: 0 })}
+                    disabled={!!(formData.cgst_rate || formData.sgst_rate)}
+                    className={`px-2 py-1 border border-gray-300 rounded text-sm w-20 ${(formData.cgst_rate || formData.sgst_rate) ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : 'bg-white'}`}
+                  >
+                    <option value={0}>0%</option>
+                    <option value={5}>5%</option>
+                    <option value={12}>12%</option>
+                    <option value={18}>18%</option>
+                  </select>
+                </div>
+                <span className="font-medium text-gray-900">
+                  ₹{calculateGST().igst.toFixed(2)}
+                </span>
+              </div>
+
+              {/* TDS/TCS */}
+              <div className="flex justify-between items-center gap-4 py-2">
+                <div className="flex items-center gap-2">
+                  <select
+                    value={formData.tds_tcs_type}
+                    onChange={(e) => setFormData({ ...formData, tds_tcs_type: e.target.value as 'TDS' | 'TCS' | '' })}
+                    className="px-2 py-1 border border-gray-300 rounded text-sm"
+                  >
+                    <option value="">None</option>
+                    <option value="TDS">TDS</option>
+                    <option value="TCS">TCS</option>
+                  </select>
+                  {formData.tds_tcs_type && (
+                    <input
+                      type="number"
+                      value={formData.tds_tcs_rate}
+                      onChange={(e) => setFormData({ ...formData, tds_tcs_rate: parseFloat(e.target.value) || 0 })}
+                      step="0.01"
+                      placeholder="Rate %"
+                      className="w-20 px-2 py-1 border border-gray-300 rounded text-sm"
+                    />
+                  )}
+                </div>
+                <span className="font-medium">
+                  {formData.tds_tcs_type && `${formData.tds_tcs_type === 'TDS' ? '-' : '+'}₹${calculateTdsTcs().toFixed(2)}`}
+                </span>
+              </div>
+
+              {/* Adjustment */}
+              <div className="flex justify-between items-center gap-4 py-2">
+                <div className="flex items-center gap-2">
+                  <span className="text-gray-700">Adjustment</span>
+                  <input
+                    type="number"
+                    value={formData.adjustment}
+                    onChange={(e) => setFormData({ ...formData, adjustment: parseFloat(e.target.value) || 0 })}
+                    step="0.01"
+                    className="w-24 px-2 py-1 border border-gray-300 rounded text-sm"
+                  />
+                </div>
+                <span className="font-medium">₹{formData.adjustment.toFixed(2)}</span>
+              </div>
+
+              {/* Total */}
+              <div className="border-t pt-3 mt-3">
+                <div className="flex justify-between items-center">
+                  <span className="text-lg font-semibold text-gray-800">Total (₹)</span>
+                  <span className="text-2xl font-bold text-blue-600">₹{calculateTotal().toFixed(2)}</span>
+                </div>
+              </div>
             </div>
           </div>
 
@@ -777,21 +765,6 @@ const NewVendorCreditForm = () => {
         </div>
       </div>
 
-      {/* Manage TDS Modal */}
-      <ManageTDSModal
-        isOpen={showTDSModal}
-        onClose={() => setShowTDSModal(false)}
-        taxes={tdsTaxes}
-        onAddTax={handleAddTax}
-      />
-
-      {/* Manage TCS Modal */}
-      <ManageTCSModal
-        isOpen={showTCSModal}
-        onClose={() => setShowTCSModal(false)}
-        taxes={tcsTaxes}
-        onAddTax={handleAddTCSTax}
-      />
     </div>
   );
 };
