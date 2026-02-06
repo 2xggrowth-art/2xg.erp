@@ -53,6 +53,7 @@ export interface PurchaseOrder {
   created_at: string;
   updated_at: string;
   items?: PurchaseOrderItem[];
+  purchase_order_items?: PurchaseOrderItem[];
 }
 
 export interface CreatePurchaseOrderData {

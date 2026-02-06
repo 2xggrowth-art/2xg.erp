@@ -113,12 +113,12 @@ const PurchaseOrderDetailPage: React.FC = () => {
           bill_of_lading_date: poData.bill_of_lading_date,
           motor_vehicle_no: poData.motor_vehicle_no,
           terms_conditions: poData.terms_and_conditions,
-          line_items: (poData.items || []).map((item: any) => ({
+          line_items: (poData.purchase_order_items || poData.items || []).map((item: any) => ({
             id: item.id,
             item_name: item.item_name,
             quantity: item.quantity,
-            unit_price: item.rate,
-            total: item.amount
+            unit_price: item.unit_price || item.rate,
+            total: item.total || item.amount
           })),
           created_at: poData.created_at,
           updated_at: poData.updated_at

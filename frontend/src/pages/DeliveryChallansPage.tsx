@@ -119,7 +119,6 @@ Alternate Phone: ${challan.alternate_phone || '-'}
 
 DELIVERY DETAILS
 ----------------
-Challan Type: ${challan.challan_type || '-'}
 Product Name: ${challan.product_name || '-'}
 Delivery Location Type: ${challan.delivery_location_type || '-'}
 Delivery Address: ${challan.delivery_address || '-'}
@@ -138,14 +137,14 @@ Notes: ${challan.notes || '-'}
 
 AMOUNT
 ------
-Total Amount: ${formatCurrency(challan.total_amount)}
+Total Amount: Rs.${new Intl.NumberFormat('en-IN', { minimumFractionDigits: 2 }).format(challan.total_amount)}
 
 ================
 Generated on: ${new Date().toLocaleString('en-IN')}
     `.trim();
 
     // Create and download the file
-    const blob = new Blob([challanContent], { type: 'text/plain' });
+    const blob = new Blob(['\uFEFF' + challanContent], { type: 'text/plain;charset=utf-8' });
     const url = window.URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
@@ -254,7 +253,6 @@ Generated on: ${new Date().toLocaleString('en-IN')}
                   <th className="px-4 py-3 text-left text-sm font-semibold text-slate-700">CHALLAN#</th>
                   <th className="px-4 py-3 text-left text-sm font-semibold text-slate-700">REFERENCE#</th>
                   <th className="px-4 py-3 text-left text-sm font-semibold text-slate-700">CUSTOMER NAME</th>
-                  <th className="px-4 py-3 text-left text-sm font-semibold text-slate-700">TYPE</th>
                   <th className="px-4 py-3 text-left text-sm font-semibold text-slate-700">STATUS</th>
                   <th className="px-4 py-3 text-right text-sm font-semibold text-slate-700">AMOUNT</th>
                   <th className="px-4 py-3 text-center text-sm font-semibold text-slate-700">DOWNLOAD</th>
@@ -289,9 +287,6 @@ Generated on: ${new Date().toLocaleString('en-IN')}
                     </td>
                     <td className="px-4 py-4 text-sm text-slate-800 font-medium">
                       {challan.customer_name}
-                    </td>
-                    <td className="px-4 py-4 text-sm text-slate-600">
-                      {challan.challan_type}
                     </td>
                     <td className="px-4 py-4">
                       {getStatusBadge(challan.status || 'draft')}

@@ -53,6 +53,7 @@ import VendorDetailPage from './pages/VendorDetailPage';
 import VendorCreditDetailPage from './pages/VendorCreditDetailPage';
 import NewPaymentReceivedForm from './components/payments-received/NewPaymentReceivedForm';
 import DeliveryChallansPage from './pages/DeliveryChallansPage';
+import DeliveryChallanDetailPage from './pages/DeliveryChallanDetailPage';
 import NewDeliveryChallanForm from './components/delivery-challans/NewDeliveryChallanForm';
 import NewExpenseForm from './components/expenses/NewExpenseForm';
 import SettingsPage from './pages/SettingsPage';
@@ -136,6 +137,7 @@ function App() {
             <Route path="/purchase-orders" element={<ProtectedRoute><DashboardLayout><PurchaseOrderPage /></DashboardLayout></ProtectedRoute>} />
             <Route path="/purchase-orders/new" element={<ProtectedRoute><DashboardLayout><NewPurchaseOrderForm /></DashboardLayout></ProtectedRoute>} />
             <Route path="/purchase-orders/:id" element={<ProtectedRoute><DashboardLayout><PurchaseOrderDetailPage /></DashboardLayout></ProtectedRoute>} />
+            <Route path="/purchase-orders/:id/edit" element={<ProtectedRoute><DashboardLayout><NewPurchaseOrderForm /></DashboardLayout></ProtectedRoute>} />
 
             {/* Sales Routes */}
             <Route path="/sales" element={<ProtectedRoute><DashboardLayout><SalesPage /></DashboardLayout></ProtectedRoute>} />
@@ -161,6 +163,8 @@ function App() {
 
             {/* Delivery Challan Routes (Logistics Module) */}
             <Route path="/logistics/delivery-challan" element={<ProtectedRoute><DashboardLayout><DeliveryChallansPage /></DashboardLayout></ProtectedRoute>} />
+            <Route path="/logistics/delivery-challan/:id" element={<ProtectedRoute><DashboardLayout><DeliveryChallanDetailPage /></DashboardLayout></ProtectedRoute>} />
+            <Route path="/logistics/delivery-challan/:id/edit" element={<ProtectedRoute><DashboardLayout><NewDeliveryChallanForm /></DashboardLayout></ProtectedRoute>} />
             <Route path="/logistics/create-delivery-challan" element={<ProtectedRoute><DashboardLayout><NewDeliveryChallanForm /></DashboardLayout></ProtectedRoute>} />
 
             <Route path="/expenses" element={<ProtectedRoute><DashboardLayout><ExpensesPage /></DashboardLayout></ProtectedRoute>} />

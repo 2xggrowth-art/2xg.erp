@@ -224,20 +224,126 @@ export class PurchaseOrdersService {
    * Update purchase order
    */
   async updatePurchaseOrder(id: string, poData: any) {
-    // Validate GST mutual exclusivity: CGST/SGST and IGST cannot be used together
+    // Validate GST mutual exclusivity
     if ((poData.cgst_rate || poData.sgst_rate) && poData.igst_rate) {
       throw new Error('CGST/SGST and IGST cannot be applied together. Use either CGST+SGST or IGST.');
     }
 
-    const { data, error } = await supabaseAdmin
+    // Calculate totals from items
+    const items = poData.items || [];
+    const subtotal = items.reduce((sum: number, item: any) => {
+      return sum + (item.quantity || 0) * (item.rate || 0);
+    }, 0);
+
+    let discountAmount = 0;
+    if (poData.discount_type === 'percentage') {
+      discountAmount = (subtotal * (poData.discount_value || 0)) / 100;
+    } else {
+      discountAmount = poData.discount_value || 0;
+    }
+
+    const afterDiscount = subtotal - discountAmount;
+    const cgstAmount = (afterDiscount * (poData.cgst_rate || 0)) / 100;
+    const sgstAmount = (afterDiscount * (poData.sgst_rate || 0)) / 100;
+    const igstAmount = (afterDiscount * (poData.igst_rate || 0)) / 100;
+    const gstTotal = cgstAmount + sgstAmount + igstAmount;
+
+    let tdsTcsAmount = 0;
+    if (poData.tds_tcs_type && poData.tds_tcs_rate) {
+      tdsTcsAmount = (afterDiscount * poData.tds_tcs_rate) / 100;
+    }
+
+    const taxAmount = gstTotal + tdsTcsAmount;
+    const adjustment = parseFloat(poData.adjustment) || 0;
+    const totalAmount = afterDiscount + taxAmount + adjustment;
+
+    // Build update object with only valid DB columns
+    const updateData: any = {
+      po_number: poData.po_number,
+      purchase_order_number: poData.po_number,
+      vendor_id: poData.vendor_id && poData.vendor_id !== '' ? poData.vendor_id : null,
+      vendor_name: poData.vendor_name || null,
+      supplier_id: poData.vendor_id && poData.vendor_id !== '' ? poData.vendor_id : null,
+      supplier_name: poData.vendor_name || null,
+      supplier_email: poData.vendor_email || null,
+      location_id: poData.location_id && poData.location_id !== '' ? poData.location_id : null,
+      delivery_address_type: poData.delivery_address_type || 'location',
+      delivery_address: poData.delivery_address || null,
+      order_date: poData.order_date || new Date().toISOString().split('T')[0],
+      expected_delivery_date: poData.expected_delivery_date && poData.expected_delivery_date !== '' ? poData.expected_delivery_date : null,
+      status: poData.status || 'draft',
+      subtotal,
+      discount_type: poData.discount_type || 'percentage',
+      discount_value: poData.discount_value || 0,
+      cgst_rate: poData.cgst_rate || 0,
+      cgst_amount: cgstAmount,
+      sgst_rate: poData.sgst_rate || 0,
+      sgst_amount: sgstAmount,
+      igst_rate: poData.igst_rate || 0,
+      igst_amount: igstAmount,
+      tax_amount: taxAmount,
+      tds_tcs_type: poData.tds_tcs_type || null,
+      tds_tcs_rate: poData.tds_tcs_rate || 0,
+      tds_tcs_amount: tdsTcsAmount,
+      adjustment,
+      total_amount: totalAmount,
+      payment_terms: poData.payment_terms || null,
+      other_references: poData.other_references || null,
+      terms_of_delivery: poData.terms_of_delivery || null,
+      dispatch_through: poData.dispatch_through || null,
+      destination: poData.destination || null,
+      carrier_name_agent: poData.carrier_name_agent || null,
+      bill_of_lading_no: poData.bill_of_lading_no || null,
+      bill_of_lading_date: poData.bill_of_lading_date && poData.bill_of_lading_date !== '' ? poData.bill_of_lading_date : null,
+      motor_vehicle_no: poData.motor_vehicle_no || null,
+      terms_and_conditions: poData.terms_and_conditions || null,
+      attachment_urls: poData.attachment_urls || [],
+    };
+
+    // Update the PO record
+    const { data: purchaseOrder, error: poError } = await supabaseAdmin
       .from('purchase_orders')
-      .update(poData)
+      .update(updateData)
       .eq('id', id)
       .select()
       .single();
 
-    if (error) throw error;
-    return data;
+    if (poError) throw poError;
+
+    // Update items: delete old ones and insert new ones
+    if (items.length > 0) {
+      const { error: deleteError } = await supabaseAdmin
+        .from('purchase_order_items')
+        .delete()
+        .eq('purchase_order_id', id);
+
+      if (deleteError) throw deleteError;
+
+      const newItems = items.map((item: any) => ({
+        purchase_order_id: id,
+        item_id: item.item_id && item.item_id !== '' ? item.item_id : null,
+        item_name: item.item_name || '',
+        description: item.description || null,
+        account: item.account || 'Cost of Goods Sold',
+        quantity: item.quantity || 0,
+        unit_price: item.rate || 0,
+        unit_of_measurement: item.unit_of_measurement || item.unit || 'pcs',
+        tax_rate: item.tax_rate || 0,
+        discount: item.discount || 0,
+        total: (item.quantity || 0) * (item.rate || 0)
+      }));
+
+      const { data: poItems, error: itemsError } = await supabaseAdmin
+        .from('purchase_order_items')
+        .insert(newItems)
+        .select();
+
+      if (itemsError) throw itemsError;
+
+      return { ...purchaseOrder, purchase_order_items: poItems };
+    }
+
+    return purchaseOrder;
   }
 
   /**

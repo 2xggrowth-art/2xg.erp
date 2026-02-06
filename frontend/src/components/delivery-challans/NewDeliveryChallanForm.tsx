@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import { X, Plus } from 'lucide-react';
 import { deliveryChallansService, DeliveryChallan } from '../../services/delivery-challans.service';
 import { invoicesService } from '../../services/invoices.service';
@@ -18,7 +18,10 @@ interface Invoice {
 
 const NewDeliveryChallanForm = () => {
   const navigate = useNavigate();
+  const { id } = useParams<{ id: string }>();
+  const isEditMode = !!id;
   const [loading, setLoading] = useState(false);
+  const [fetching, setFetching] = useState(false);
   const [challanNumber, setChallanNumber] = useState('');
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [selectedInvoice, setSelectedInvoice] = useState<Invoice | null>(null);
@@ -48,20 +51,25 @@ const NewDeliveryChallanForm = () => {
     location: 'Head Office',
     reference_number: '',
     challan_date: new Date().toISOString().split('T')[0],
-    challan_type: 'Supply of Liquid Gas',
+    challan_type: '',
     notes: ''
   });
 
   useEffect(() => {
     fetchInitialData();
-  }, []);
+    if (isEditMode && id) {
+      fetchDeliveryChallan(id);
+    }
+  }, [id, isEditMode]);
 
   const fetchInitialData = async () => {
     try {
-      // Fetch challan number
-      const challanRes = await deliveryChallansService.generateChallanNumber();
-      if (challanRes.success && challanRes.data) {
-        setChallanNumber(challanRes.data.challan_number);
+      // Fetch challan number only for new challans
+      if (!isEditMode) {
+        const challanRes = await deliveryChallansService.generateChallanNumber();
+        if (challanRes.success && challanRes.data) {
+          setChallanNumber(challanRes.data.challan_number);
+        }
       }
 
       // Fetch invoices
@@ -76,6 +84,43 @@ const NewDeliveryChallanForm = () => {
     } catch (error) {
       console.error('Error fetching initial data:', error);
       setChallanNumber('DC-00001');
+    }
+  };
+
+  const fetchDeliveryChallan = async (challanId: string) => {
+    try {
+      setFetching(true);
+      const response = await deliveryChallansService.getDeliveryChallanById(challanId);
+      if (response.success && response.data) {
+        const dc = response.data;
+        setChallanNumber(dc.challan_number || '');
+        setFormData({
+          customer_name: dc.customer_name || '',
+          invoice_number: dc.invoice_number || '',
+          invoice_id: '',
+          alternate_phone: dc.alternate_phone || '',
+          delivery_location_type: dc.delivery_location_type || 'delivery in bangalore',
+          delivery_address: dc.delivery_address || '',
+          product_name: dc.product_name || '',
+          pincode: dc.pincode || '',
+          free_accessories: dc.free_accessories || '',
+          salesperson_id: '',
+          salesperson_name: dc.salesperson_name || '',
+          estimated_delivery_day: dc.estimated_delivery_day || '',
+          reverse_pickup: dc.reverse_pickup || '',
+          location: dc.location || 'Head Office',
+          reference_number: dc.reference_number || '',
+          challan_date: dc.challan_date ? dc.challan_date.split('T')[0] : new Date().toISOString().split('T')[0],
+          challan_type: dc.challan_type || '',
+          notes: dc.notes || ''
+        });
+      }
+    } catch (error) {
+      console.error('Error fetching delivery challan:', error);
+      alert('Failed to load delivery challan');
+      navigate('/logistics/delivery-challan');
+    } finally {
+      setFetching(false);
     }
   };
 
@@ -218,17 +263,24 @@ const NewDeliveryChallanForm = () => {
         items: []
       };
 
-      console.log('Submitting delivery challan:', challanData);
-
-      const response = await deliveryChallansService.createDeliveryChallan(challanData);
+      let response;
+      if (isEditMode && id) {
+        response = await deliveryChallansService.updateDeliveryChallan(id, challanData);
+      } else {
+        response = await deliveryChallansService.createDeliveryChallan(challanData);
+      }
 
       if (response.success) {
-        alert(`Delivery Challan ${challanNumber} ${status === 'draft' ? 'saved as draft' : 'confirmed'} successfully!`);
-        navigate('/logistics/delivery-challan');
+        alert(`Delivery Challan ${challanNumber} ${isEditMode ? 'updated' : (status === 'draft' ? 'saved as draft' : 'confirmed')} successfully!`);
+        if (isEditMode && id) {
+          navigate(`/logistics/delivery-challan/${id}`);
+        } else {
+          navigate('/logistics/delivery-challan');
+        }
       }
     } catch (error: any) {
-      console.error('Error creating delivery challan:', error);
-      const errorMessage = error.message || 'Failed to create delivery challan';
+      console.error(isEditMode ? 'Error updating delivery challan:' : 'Error creating delivery challan:', error);
+      const errorMessage = error.message || (isEditMode ? 'Failed to update delivery challan' : 'Failed to create delivery challan');
       alert(errorMessage);
     } finally {
       setLoading(false);
@@ -241,8 +293,8 @@ const NewDeliveryChallanForm = () => {
         {/* Header */}
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-3xl font-bold text-slate-800">New Delivery Challan</h1>
-            <p className="text-slate-600 mt-1">Create a new delivery challan for goods movement</p>
+            <h1 className="text-3xl font-bold text-slate-800">{isEditMode ? 'Edit Delivery Challan' : 'New Delivery Challan'}</h1>
+            <p className="text-slate-600 mt-1">{isEditMode ? 'Update delivery challan details' : 'Create a new delivery challan for goods movement'}</p>
           </div>
           <button
             onClick={() => navigate('/logistics/delivery-challan')}
@@ -253,6 +305,11 @@ const NewDeliveryChallanForm = () => {
         </div>
 
         {/* Form */}
+        {fetching ? (
+          <div className="bg-white rounded-lg shadow-md p-6 flex items-center justify-center min-h-[200px]">
+            <div className="text-slate-500">Loading delivery challan...</div>
+          </div>
+        ) : (
         <div className="bg-white rounded-lg shadow-md p-6 space-y-6">
           {/* BCH-AFS Sales Form Header */}
           <div className="border-b border-slate-200 pb-4">
@@ -453,18 +510,19 @@ const NewDeliveryChallanForm = () => {
                 disabled={loading}
                 className="px-6 py-2 border border-slate-300 text-slate-700 rounded hover:bg-slate-50 transition-colors disabled:opacity-50 text-sm"
               >
-                {loading ? 'Saving...' : 'Save as Draft'}
+                {loading ? 'Saving...' : (isEditMode ? 'Update as Draft' : 'Save as Draft')}
               </button>
               <button
                 onClick={() => handleSubmit('confirmed')}
                 disabled={loading}
                 className="flex items-center gap-2 px-6 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors disabled:opacity-50 text-sm"
               >
-                {loading ? 'Saving...' : 'Save and Send'}
+                {loading ? 'Saving...' : (isEditMode ? 'Update and Confirm' : 'Save and Send')}
               </button>
             </div>
           </div>
         </div>
+        )}
       </div>
 
       {/* Salesperson Management Modal */}

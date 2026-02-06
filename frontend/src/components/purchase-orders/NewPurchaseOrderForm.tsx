@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { ArrowLeft, Save, Send, Plus, Trash2, Upload, X } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import { purchaseOrdersService, PurchaseOrderItem } from '../../services/purchase-orders.service';
 import { vendorsService, Vendor } from '../../services/vendors.service';
 import { itemsService, Item } from '../../services/items.service';
@@ -14,7 +14,10 @@ interface Location {
 
 const NewPurchaseOrderForm = () => {
   const navigate = useNavigate();
+  const { id } = useParams<{ id: string }>();
+  const isEditMode = !!id;
   const [loading, setLoading] = useState(false);
+  const [fetching, setFetching] = useState(false);
   const [vendors, setVendors] = useState<Vendor[]>([]);
   const [items, setItems] = useState<Item[]>([]);
   const [itemSearchQueries, setItemSearchQueries] = useState<{ [key: number]: string }>({});
@@ -85,7 +88,12 @@ Payment will be made after successful delivery and acceptance.`,
   useEffect(() => {
     fetchVendors();
     fetchItems();
-    generatePONumber();
+
+    if (isEditMode && id) {
+      fetchPurchaseOrder(id);
+    } else {
+      generatePONumber();
+    }
 
     // Close dropdowns when clicking outside
     const handleClickOutside = () => {
@@ -94,7 +102,7 @@ Payment will be made after successful delivery and acceptance.`,
 
     document.addEventListener('click', handleClickOutside);
     return () => document.removeEventListener('click', handleClickOutside);
-  }, []);
+  }, [id, isEditMode]);
 
   const fetchVendors = async () => {
     try {
@@ -128,6 +136,72 @@ Payment will be made after successful delivery and acceptance.`,
       } catch (error) {
         console.error('Error generating PO number:', error);
       }
+    }
+  };
+
+  const fetchPurchaseOrder = async (poId: string) => {
+    try {
+      setFetching(true);
+      const response = await purchaseOrdersService.getPurchaseOrderById(poId);
+      if (response.success && response.data) {
+        const po = response.data;
+        setFormData({
+          vendor_id: po.supplier_id || '',
+          vendor_name: po.supplier_name || '',
+          vendor_email: po.supplier_email || '',
+          po_number: po.po_number || '',
+          auto_po_number: false,
+          order_date: po.order_date ? po.order_date.split('T')[0] : new Date().toISOString().split('T')[0],
+          expected_delivery_date: po.expected_delivery_date ? po.expected_delivery_date.split('T')[0] : '',
+          location_id: po.location_id || '',
+          delivery_address_type: (po.delivery_address_type as 'location' | 'customer') || 'location',
+          delivery_address: po.delivery_address || '',
+          discount_type: (po.discount_type as 'percentage' | 'amount') || 'percentage',
+          discount_value: po.discount_value || 0,
+          cgst_rate: 0,
+          sgst_rate: 0,
+          igst_rate: 0,
+          tds_tcs_type: po.tds_tcs_type || '',
+          tds_tcs_rate: po.tds_tcs_rate || 0,
+          adjustment: po.adjustment || 0,
+          payment_terms: po.payment_terms || '',
+          other_references: po.other_references || '',
+          terms_of_delivery: po.terms_of_delivery || '',
+          dispatch_through: po.dispatch_through || '',
+          destination: po.destination || '',
+          carrier_name_agent: po.carrier_name_agent || '',
+          bill_of_lading_no: po.bill_of_lading_no || '',
+          bill_of_lading_date: po.bill_of_lading_date ? po.bill_of_lading_date.split('T')[0] : '',
+          motor_vehicle_no: po.motor_vehicle_no || '',
+          terms_and_conditions: po.terms_and_conditions || formData.terms_and_conditions,
+          status: po.status || 'draft'
+        });
+
+        const poItems = po.purchase_order_items || po.items || [];
+        if (poItems.length > 0) {
+          setPoItems(poItems.map((item: any) => ({
+            item_id: item.item_id || '',
+            item_name: item.item_name || '',
+            account: item.account || 'Cost of Goods Sold',
+            description: item.description || '',
+            quantity: item.quantity || 1,
+            unit_of_measurement: item.unit_of_measurement || 'pcs',
+            rate: item.unit_price || item.rate || 0,
+            amount: (item.quantity || 1) * (item.unit_price || item.rate || 0)
+          })));
+          const queries: { [key: number]: string } = {};
+          poItems.forEach((item: any, index: number) => {
+            queries[index] = item.item_name || '';
+          });
+          setItemSearchQueries(queries);
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching purchase order:', error);
+      alert('Failed to load purchase order');
+      navigate('/purchase-orders');
+    } finally {
+      setFetching(false);
     }
   };
 
@@ -350,16 +424,25 @@ Payment will be made after successful delivery and acceptance.`,
         delete poData.expected_delivery_date;
       }
 
-      const response = await purchaseOrdersService.createPurchaseOrder(poData);
+      let response;
+      if (isEditMode && id) {
+        response = await purchaseOrdersService.updatePurchaseOrder(id, poData);
+      } else {
+        response = await purchaseOrdersService.createPurchaseOrder(poData);
+      }
 
       if (response.success) {
-        navigate('/purchase-orders');
+        if (isEditMode && id) {
+          navigate(`/purchase-orders/${id}`);
+        } else {
+          navigate('/purchase-orders');
+        }
       } else {
-        alert('Failed to create purchase order');
+        alert(isEditMode ? 'Failed to update purchase order' : 'Failed to create purchase order');
       }
     } catch (error: any) {
-      console.error('Error creating PO:', error);
-      alert(error.message || 'Failed to create purchase order');
+      console.error(isEditMode ? 'Error updating PO:' : 'Error creating PO:', error);
+      alert(error.message || (isEditMode ? 'Failed to update purchase order' : 'Failed to create purchase order'));
     } finally {
       setLoading(false);
     }
@@ -377,11 +460,16 @@ Payment will be made after successful delivery and acceptance.`,
             <ArrowLeft size={24} className="text-slate-600" />
           </button>
           <div>
-            <h1 className="text-3xl font-bold text-slate-800">New Purchase Order</h1>
-            <p className="text-slate-600 mt-1">Create a new purchase order for your vendor</p>
+            <h1 className="text-3xl font-bold text-slate-800">{isEditMode ? 'Edit Purchase Order' : 'New Purchase Order'}</h1>
+            <p className="text-slate-600 mt-1">{isEditMode ? 'Update purchase order details' : 'Create a new purchase order for your vendor'}</p>
           </div>
         </div>
 
+        {fetching ? (
+          <div className="bg-white rounded-lg shadow-md p-6 flex items-center justify-center min-h-[200px]">
+            <div className="text-slate-500">Loading purchase order...</div>
+          </div>
+        ) : (
         <div className="bg-white rounded-lg shadow-md p-6 space-y-6">
           {/* Vendor Selection */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -981,7 +1069,7 @@ Payment will be made after successful delivery and acceptance.`,
               disabled={loading || !formData.vendor_name}
             >
               <Save size={18} />
-              Save as Draft
+              {isEditMode ? 'Update as Draft' : 'Save as Draft'}
             </button>
             <button
               onClick={() => handleSubmit('sent')}
@@ -989,10 +1077,11 @@ Payment will be made after successful delivery and acceptance.`,
               disabled={loading || !formData.vendor_name}
             >
               <Send size={18} />
-              Save and Send
+              {isEditMode ? 'Update and Send' : 'Save and Send'}
             </button>
           </div>
         </div>
+        )}
       </div>
     </div>
   );
