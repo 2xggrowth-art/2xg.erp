@@ -8,7 +8,6 @@ import { invoicesService } from '../services/invoices.service';
 import { posSessionsService, PosSession } from '../services/pos-sessions.service';
 import { binLocationService } from '../services/binLocation.service';
 import SplitPaymentModal from '../components/pos/SplitPaymentModal';
-import PosBinPicker from '../components/pos/PosBinPicker';
 
 // Define the shape of a Cart Item
 interface BinAllocation {
@@ -16,6 +15,13 @@ interface BinAllocation {
   bin_code: string;
   location_name: string;
   quantity: number;
+}
+
+interface AvailableBin {
+  bin_id: string;
+  bin_code: string;
+  location_name: string;
+  stock: number;
 }
 
 interface CartItem {
@@ -28,6 +34,7 @@ interface CartItem {
   rate: number;
   cost_price: number;
   bin_allocations?: BinAllocation[];
+  available_bins?: AvailableBin[];
 }
 
 interface HeldCart {
@@ -77,10 +84,6 @@ const PosCreate: React.FC = () => {
     cash_in: 0,
     cash_out: 0,
   });
-
-  // Bin picker states
-  const [showBinPicker, setShowBinPicker] = useState(false);
-  const [binPickerItem, setBinPickerItem] = useState<{ item: Item; bins: any[] } | null>(null);
 
   // Cash movement states
   const [showCashMovementModal, setShowCashMovementModal] = useState(false);
@@ -273,76 +276,21 @@ const PosCreate: React.FC = () => {
     }
 
     // Fetch bin locations for this item
+    let itemBins: AvailableBin[] = [];
     try {
       const binResponse = await binLocationService.getBinLocationsForItem(item.id);
-      const itemBins = binResponse.success && binResponse.data ? binResponse.data : [];
-
-      if (itemBins.length === 1) {
-        // Auto-assign to the single bin
-        const bin = itemBins[0];
-        const cartItem: CartItem = {
-          id: `cart-${Date.now()}-${item.id}`,
-          item_id: item.id,
-          name: item.item_name,
-          sku: item.sku,
-          tax_rate: item.tax_rate,
-          qty: 1,
-          rate: item.unit_price,
-          cost_price: item.cost_price,
-          bin_allocations: [{
-            bin_location_id: bin.bin_id,
-            bin_code: bin.bin_code,
-            location_name: bin.location_name,
-            quantity: 1
-          }]
-        };
-        setCart([...cart, cartItem]);
-        setShowItemModal(false);
-        setItemSearch('');
-      } else if (itemBins.length > 1) {
-        // Show bin picker for multiple bins
-        setBinPickerItem({ item, bins: itemBins });
-        setShowBinPicker(true);
-        setShowItemModal(false);
-        setItemSearch('');
-      } else {
-        // No bins tracked - proceed without bin allocation
-        const cartItem: CartItem = {
-          id: `cart-${Date.now()}-${item.id}`,
-          item_id: item.id,
-          name: item.item_name,
-          sku: item.sku,
-          tax_rate: item.tax_rate,
-          qty: 1,
-          rate: item.unit_price,
-          cost_price: item.cost_price,
-        };
-        setCart([...cart, cartItem]);
-        setShowItemModal(false);
-        setItemSearch('');
+      if (binResponse.success && binResponse.data) {
+        itemBins = binResponse.data.map((b: any) => ({
+          bin_id: b.bin_id,
+          bin_code: b.bin_code,
+          location_name: b.location_name,
+          stock: b.stock
+        }));
       }
     } catch (error) {
       console.error('Error fetching bin locations:', error);
-      // Fallback: add without bin allocation
-      const cartItem: CartItem = {
-        id: `cart-${Date.now()}-${item.id}`,
-        item_id: item.id,
-        name: item.item_name,
-        sku: item.sku,
-        tax_rate: item.tax_rate,
-        qty: 1,
-        rate: item.unit_price,
-        cost_price: item.cost_price,
-      };
-      setCart([...cart, cartItem]);
-      setShowItemModal(false);
-      setItemSearch('');
     }
-  };
 
-  const handleBinPickerSelect = (allocations: BinAllocation[]) => {
-    if (!binPickerItem) return;
-    const item = binPickerItem.item;
     const cartItem: CartItem = {
       id: `cart-${Date.now()}-${item.id}`,
       item_id: item.id,
@@ -352,11 +300,37 @@ const PosCreate: React.FC = () => {
       qty: 1,
       rate: item.unit_price,
       cost_price: item.cost_price,
-      bin_allocations: allocations
+      available_bins: itemBins.length > 0 ? itemBins : undefined,
+      bin_allocations: itemBins.length === 1 ? [{
+        bin_location_id: itemBins[0].bin_id,
+        bin_code: itemBins[0].bin_code,
+        location_name: itemBins[0].location_name,
+        quantity: 1
+      }] : undefined
     };
     setCart([...cart, cartItem]);
-    setBinPickerItem(null);
-    setShowBinPicker(false);
+    setShowItemModal(false);
+    setItemSearch('');
+  };
+
+  const handleBinChange = (cartItemId: string, binId: string) => {
+    setCart(cart.map(item => {
+      if (item.id !== cartItemId) return item;
+      if (!binId) {
+        return { ...item, bin_allocations: undefined };
+      }
+      const bin = item.available_bins?.find(b => b.bin_id === binId);
+      if (!bin) return item;
+      return {
+        ...item,
+        bin_allocations: [{
+          bin_location_id: bin.bin_id,
+          bin_code: bin.bin_code,
+          location_name: bin.location_name,
+          quantity: item.qty
+        }]
+      };
+    }));
   };
 
   const handleRemoveItem = (id: string) => {
@@ -1102,12 +1076,25 @@ const PosCreate: React.FC = () => {
                           <div className="text-xs text-gray-500 mt-1">
                             SKU: {item.sku} | Tax: {item.tax_rate}%
                           </div>
-                          {item.bin_allocations && item.bin_allocations.length > 0 && (
+                          {item.available_bins && item.available_bins.length > 0 && (
                             <div className="flex items-center gap-1 mt-1">
                               <MapPin size={10} className="text-blue-500" />
-                              <span className="text-xs text-blue-600">
-                                {item.bin_allocations.map(b => b.bin_code).join(', ')}
-                              </span>
+                              {item.available_bins.length === 1 ? (
+                                <span className="text-xs text-blue-600">{item.available_bins[0].bin_code}</span>
+                              ) : (
+                                <select
+                                  value={item.bin_allocations?.[0]?.bin_location_id || ''}
+                                  onChange={(e) => handleBinChange(item.id, e.target.value)}
+                                  className="text-xs text-blue-600 bg-transparent border border-blue-200 rounded px-1 py-0.5 focus:outline-none focus:ring-1 focus:ring-blue-400"
+                                >
+                                  <option value="">Select Bin</option>
+                                  {item.available_bins.map(b => (
+                                    <option key={b.bin_id} value={b.bin_id}>
+                                      {b.bin_code} - {b.location_name} ({b.stock} pcs)
+                                    </option>
+                                  ))}
+                                </select>
+                              )}
                             </div>
                           )}
                         </div>
@@ -2156,18 +2143,6 @@ const PosCreate: React.FC = () => {
           customerMobile={selectedCustomer?.mobile}
           onComplete={handleSplitPaymentComplete}
         />
-
-        {/* Bin Picker Modal */}
-        {binPickerItem && (
-          <PosBinPicker
-            isOpen={showBinPicker}
-            onClose={() => { setShowBinPicker(false); setBinPickerItem(null); }}
-            itemName={binPickerItem.item.item_name}
-            itemQty={1}
-            bins={binPickerItem.bins}
-            onSelect={handleBinPickerSelect}
-          />
-        )}
 
         {/* Cash Movement Modal */}
         {showCashMovementModal && activeSession && (
