@@ -1,5 +1,7 @@
 import { Request, Response } from 'express';
 import { ExpensesService } from '../services/expenses.service';
+import { expenseCategoriesService } from '../services/expense-categories.service';
+import { supabaseAdmin } from '../config/supabase';
 
 const expensesService = new ExpensesService();
 
@@ -73,5 +75,47 @@ export const createExpense = async (req: Request, res: Response) => {
   } catch (error: any) {
     console.error('Error creating expense:', error);
     res.status(500).json({ success: false, error: error.message || 'Failed to create expense' });
+  }
+};
+
+export const createExpenseCategory = async (req: Request, res: Response) => {
+  try {
+    const { category_name } = req.body;
+    if (!category_name || !category_name.trim()) {
+      return res.status(400).json({ success: false, error: 'Category name is required' });
+    }
+
+    // Get organization_id
+    const { data: org } = await supabaseAdmin
+      .from('organizations')
+      .select('id')
+      .limit(1)
+      .single();
+
+    const category = await expenseCategoriesService.createCategory(
+      org?.id || '',
+      { category_name: category_name.trim() }
+    );
+    res.status(201).json({ success: true, data: category });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+};
+
+export const deleteExpenseCategory = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+
+    // Get organization_id
+    const { data: org } = await supabaseAdmin
+      .from('organizations')
+      .select('id')
+      .limit(1)
+      .single();
+
+    const category = await expenseCategoriesService.deleteCategory(id, org?.id || '');
+    res.json({ success: true, data: category });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
   }
 };

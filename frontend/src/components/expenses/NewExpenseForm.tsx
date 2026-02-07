@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Save, Upload } from 'lucide-react';
+import { ArrowLeft, Save, Upload, Settings, Plus, Trash2, X } from 'lucide-react';
 import { expensesService, type Expense, type ExpenseCategory } from '../../services/expenses.service';
 
 const NewExpenseForm = () => {
@@ -9,6 +9,10 @@ const NewExpenseForm = () => {
   const [categories, setCategories] = useState<ExpenseCategory[]>([]);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [filePreview, setFilePreview] = useState<string | null>(null);
+  const [showManageCategories, setShowManageCategories] = useState(false);
+  const [newCategoryName, setNewCategoryName] = useState('');
+  const [categoryLoading, setCategoryLoading] = useState(false);
+  const [categoryError, setCategoryError] = useState('');
   const [formData, setFormData] = useState<Partial<Expense>>({
     category_id: '',
     expense_item: '',
@@ -105,6 +109,38 @@ const NewExpenseForm = () => {
     }));
   };
 
+  const handleAddCategory = async () => {
+    if (!newCategoryName.trim()) return;
+    setCategoryLoading(true);
+    setCategoryError('');
+    try {
+      await expensesService.createExpenseCategory({ category_name: newCategoryName.trim() });
+      setNewCategoryName('');
+      await fetchCategories();
+    } catch (error: any) {
+      setCategoryError(error.response?.data?.error || error.message || 'Failed to add category');
+    } finally {
+      setCategoryLoading(false);
+    }
+  };
+
+  const handleDeleteCategory = async (id: string, name: string) => {
+    if (!confirm(`Delete category "${name}"? This cannot be undone.`)) return;
+    setCategoryLoading(true);
+    setCategoryError('');
+    try {
+      await expensesService.deleteExpenseCategory(id);
+      if (formData.category_id === id) {
+        setFormData(prev => ({ ...prev, category_id: '' }));
+      }
+      await fetchCategories();
+    } catch (error: any) {
+      setCategoryError(error.response?.data?.error || error.message || 'Failed to delete category');
+    } finally {
+      setCategoryLoading(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gray-50 p-4 sm:p-6 lg:p-8">
       <div className="max-w-4xl mx-auto">
@@ -126,9 +162,19 @@ const NewExpenseForm = () => {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {/* Expense Category */}
             <div className="md:col-span-2">
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Expense Category <span className="text-red-500">*</span>
-              </label>
+              <div className="flex items-center justify-between mb-2">
+                <label className="block text-sm font-medium text-gray-700">
+                  Expense Category <span className="text-red-500">*</span>
+                </label>
+                <button
+                  type="button"
+                  onClick={() => { setShowManageCategories(true); setCategoryError(''); }}
+                  className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 transition-colors"
+                >
+                  <Settings size={14} />
+                  Manage Categories
+                </button>
+              </div>
               <select
                 name="category_id"
                 value={formData.category_id}
@@ -379,6 +425,92 @@ const NewExpenseForm = () => {
           </ul>
         </div>
       </div>
+
+      {/* Manage Categories Modal */}
+      {showManageCategories && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-md max-h-[80vh] flex flex-col">
+            {/* Modal Header */}
+            <div className="flex items-center justify-between p-5 border-b border-gray-200">
+              <h2 className="text-lg font-bold text-gray-900">Manage Expense Categories</h2>
+              <button
+                onClick={() => setShowManageCategories(false)}
+                className="p-1 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100 transition-colors"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            {/* Error Message */}
+            {categoryError && (
+              <div className="mx-5 mt-4 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
+                {categoryError}
+              </div>
+            )}
+
+            {/* Add New Category */}
+            <div className="p-5 border-b border-gray-200">
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={newCategoryName}
+                  onChange={(e) => setNewCategoryName(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleAddCategory(); } }}
+                  placeholder="New category name..."
+                  className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+                <button
+                  type="button"
+                  onClick={handleAddCategory}
+                  disabled={categoryLoading || !newCategoryName.trim()}
+                  className="flex items-center gap-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed text-sm font-medium"
+                >
+                  <Plus size={16} />
+                  Add
+                </button>
+              </div>
+            </div>
+
+            {/* Categories List */}
+            <div className="flex-1 overflow-y-auto p-5">
+              {categories.length === 0 ? (
+                <p className="text-center text-gray-500 py-8 text-sm">No categories found. Add one above.</p>
+              ) : (
+                <div className="space-y-2">
+                  {categories.map((category) => (
+                    <div
+                      key={category.id}
+                      className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border border-gray-200 hover:border-gray-300 transition-colors"
+                    >
+                      <span className="text-sm font-medium text-gray-800">{category.category_name}</span>
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteCategory(category.id, category.category_name)}
+                        disabled={categoryLoading}
+                        className="p-1.5 text-red-500 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50"
+                        title="Delete category"
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Modal Footer */}
+            <div className="p-5 border-t border-gray-200">
+              <button
+                type="button"
+                onClick={() => setShowManageCategories(false)}
+                className="w-full px-4 py-2.5 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors font-medium text-sm"
+              >
+                Done
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

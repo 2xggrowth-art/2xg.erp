@@ -36,7 +36,7 @@ export interface Bill {
 export interface BinAllocation {
   bin_location_id: string;
   bin_code: string;
-  warehouse: string;
+  location_name: string;
   quantity: number;
 }
 

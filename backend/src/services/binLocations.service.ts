@@ -5,17 +5,17 @@ export class BinLocationsService {
    * Get all bin locations with optional filters
    */
   async getAllBinLocations(filters?: {
-    warehouse?: string;
+    location_id?: string;
     status?: string;
     search?: string;
   }) {
     let query = supabaseAdmin
       .from('bin_locations')
-      .select('*')
+      .select('*, locations(id, name)')
       .order('created_at', { ascending: false });
 
-    if (filters?.warehouse) {
-      query = query.ilike('warehouse', `%${filters.warehouse}%`);
+    if (filters?.location_id) {
+      query = query.eq('location_id', filters.location_id);
     }
 
     if (filters?.status) {
@@ -23,7 +23,7 @@ export class BinLocationsService {
     }
 
     if (filters?.search) {
-      query = query.or(`bin_code.ilike.%${filters.search}%,warehouse.ilike.%${filters.search}%,description.ilike.%${filters.search}%`);
+      query = query.or(`bin_code.ilike.%${filters.search}%,description.ilike.%${filters.search}%`);
     }
 
     const { data, error } = await query;
@@ -38,7 +38,7 @@ export class BinLocationsService {
   async getBinLocationById(id: string) {
     const { data, error } = await supabaseAdmin
       .from('bin_locations')
-      .select('*')
+      .select('*, locations(id, name)')
       .eq('id', id)
       .single();
 
@@ -73,7 +73,7 @@ export class BinLocationsService {
    */
   async createBinLocation(binLocationData: {
     bin_code: string;
-    warehouse: string;
+    location_id: string;
     description?: string;
     status?: string;
   }) {
@@ -85,7 +85,7 @@ export class BinLocationsService {
 
     const newBinLocation = {
       bin_code: binLocationData.bin_code.trim(),
-      warehouse: binLocationData.warehouse.trim(),
+      location_id: binLocationData.location_id,
       description: binLocationData.description?.trim() || null,
       status: binLocationData.status || 'active'
     };
@@ -93,7 +93,7 @@ export class BinLocationsService {
     const { data, error } = await supabaseAdmin
       .from('bin_locations')
       .insert(newBinLocation)
-      .select()
+      .select('*, locations(id, name)')
       .single();
 
     if (error) throw error;
@@ -105,7 +105,7 @@ export class BinLocationsService {
    */
   async updateBinLocation(id: string, binLocationData: {
     bin_code?: string;
-    warehouse?: string;
+    location_id?: string;
     description?: string;
     status?: string;
   }) {
@@ -122,8 +122,8 @@ export class BinLocationsService {
     if (binLocationData.bin_code !== undefined) {
       updateData.bin_code = binLocationData.bin_code.trim();
     }
-    if (binLocationData.warehouse !== undefined) {
-      updateData.warehouse = binLocationData.warehouse.trim();
+    if (binLocationData.location_id !== undefined) {
+      updateData.location_id = binLocationData.location_id;
     }
     if (binLocationData.description !== undefined) {
       updateData.description = binLocationData.description?.trim() || null;
@@ -136,7 +136,7 @@ export class BinLocationsService {
       .from('bin_locations')
       .update(updateData)
       .eq('id', id)
-      .select()
+      .select('*, locations(id, name)')
       .single();
 
     if (error) throw error;
@@ -163,10 +163,10 @@ export class BinLocationsService {
    */
   async getBinLocationsWithStock() {
     try {
-      // Get all bin locations
+      // Get all bin locations with their location info
       const { data: bins, error: binsError } = await supabaseAdmin
         .from('bin_locations')
-        .select('*')
+        .select('*, locations(id, name)')
         .order('bin_code', { ascending: true });
 
       if (binsError) throw binsError;
@@ -349,7 +349,9 @@ export class BinLocationsService {
             bin_code,
             warehouse,
             description,
-            status
+            status,
+            location_id,
+            locations(id, name)
           ),
           bill_items!inner (
             id,
@@ -381,7 +383,9 @@ export class BinLocationsService {
             bin_code,
             warehouse,
             description,
-            status
+            status,
+            location_id,
+            locations(id, name)
           ),
           invoice_items!inner (
             id,
@@ -408,7 +412,7 @@ export class BinLocationsService {
         purchaseAllocations.forEach((allocation: any) => {
           const binId = allocation.bin_locations.id;
           const binCode = allocation.bin_locations.bin_code;
-          const warehouse = allocation.bin_locations.warehouse;
+          const locationName = allocation.bin_locations.locations?.name || allocation.bin_locations.warehouse;
           const description = allocation.bin_locations.description;
           const status = allocation.bin_locations.status;
           const quantity = parseFloat(allocation.quantity) || 0;
@@ -418,7 +422,7 @@ export class BinLocationsService {
             binMap.set(binId, {
               bin_id: binId,
               bin_code: binCode,
-              warehouse: warehouse,
+              location_name: locationName,
               description: description,
               status: status,
               quantity: 0,
@@ -444,7 +448,7 @@ export class BinLocationsService {
         salesAllocations.forEach((allocation: any) => {
           const binId = allocation.bin_locations.id;
           const binCode = allocation.bin_locations.bin_code;
-          const warehouse = allocation.bin_locations.warehouse;
+          const locationName = allocation.bin_locations.locations?.name || allocation.bin_locations.warehouse;
           const description = allocation.bin_locations.description;
           const status = allocation.bin_locations.status;
           const quantity = parseFloat(allocation.quantity) || 0;
@@ -454,7 +458,7 @@ export class BinLocationsService {
             binMap.set(binId, {
               bin_id: binId,
               bin_code: binCode,
-              warehouse: warehouse,
+              location_name: locationName,
               description: description,
               status: status,
               quantity: 0,

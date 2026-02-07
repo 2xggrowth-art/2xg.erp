@@ -297,7 +297,7 @@ const ItemDetailPage: React.FC = () => {
                         Bin Location
                       </th>
                       <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Warehouse
+                        Location
                       </th>
                       <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
                         Quantity
@@ -314,7 +314,7 @@ const ItemDetailPage: React.FC = () => {
                           </div>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
-                          <span className="text-sm text-gray-700">{binLocation.warehouse}</span>
+                          <span className="text-sm text-gray-700">{binLocation.location_name || binLocation.warehouse}</span>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-right">
                           <div className="flex items-baseline justify-end gap-1">

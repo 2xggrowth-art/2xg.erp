@@ -66,56 +66,62 @@ export default function AmountScreen({ navigation, route }: Props) {
         <View style={styles.placeholder} />
       </View>
 
-      {/* Receipt Preview */}
-      {imageUri && (
-        <View style={styles.receiptContainer}>
-          <Image source={{ uri: imageUri }} style={styles.receiptImage} />
-        </View>
-      )}
-
-      {/* Amount Display */}
-      <View style={styles.amountContainer}>
-        <Text style={styles.currencyLabel}>INR</Text>
-        <Text style={styles.amountText}>₹{formattedAmount}</Text>
-        {parseFloat(amount) > 0 && isAutoApproved && (
-          <View style={styles.autoApprovedBadge}>
-            <Text style={styles.autoApprovedText}>Will be auto-approved</Text>
+      {/* Top section - Receipt + Amount (takes remaining space) */}
+      <View style={styles.topSection}>
+        {/* Receipt Preview */}
+        {imageUri && (
+          <View style={styles.receiptContainer}>
+            <Image source={{ uri: imageUri }} style={styles.receiptImage} resizeMode="contain" />
           </View>
         )}
+
+        {/* Amount Display */}
+        <View style={styles.amountContainer}>
+          <Text style={styles.currencyLabel}>INR</Text>
+          <Text style={styles.amountText} numberOfLines={1} adjustsFontSizeToFit>₹{formattedAmount}</Text>
+          {parseFloat(amount) > 0 && isAutoApproved && (
+            <View style={styles.autoApprovedBadge}>
+              <Text style={styles.autoApprovedText}>Will be auto-approved</Text>
+            </View>
+          )}
+        </View>
       </View>
 
-      {/* Numeric Keypad */}
-      <View style={styles.keypad}>
-        {['1', '2', '3', '4', '5', '6', '7', '8', '9'].map((digit) => (
-          <TouchableOpacity
-            key={digit}
-            style={styles.keypadButton}
-            onPress={() => handleDigit(digit)}
-          >
-            <Text style={styles.keypadText}>{digit}</Text>
+      {/* Bottom section - Keypad + Continue (fixed at bottom) */}
+      <View style={styles.bottomSection}>
+        {/* Numeric Keypad */}
+        <View style={styles.keypad}>
+          {['1', '2', '3', '4', '5', '6', '7', '8', '9'].map((digit) => (
+            <TouchableOpacity
+              key={digit}
+              style={styles.keypadButton}
+              onPress={() => handleDigit(digit)}
+            >
+              <Text style={styles.keypadText}>{digit}</Text>
+            </TouchableOpacity>
+          ))}
+          <TouchableOpacity style={[styles.keypadButton, styles.clearButton]} onPress={handleClear}>
+            <Text style={[styles.keypadText, styles.clearText]}>C</Text>
           </TouchableOpacity>
-        ))}
-        <TouchableOpacity style={[styles.keypadButton, styles.clearButton]} onPress={handleClear}>
-          <Text style={[styles.keypadText, styles.clearText]}>C</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.keypadButton} onPress={() => handleDigit('0')}>
-          <Text style={styles.keypadText}>0</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.keypadButton} onPress={handleDelete}>
-          <Text style={styles.keypadText}>⌫</Text>
-        </TouchableOpacity>
-      </View>
+          <TouchableOpacity style={styles.keypadButton} onPress={() => handleDigit('0')}>
+            <Text style={styles.keypadText}>0</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.keypadButton} onPress={handleDelete}>
+            <Text style={styles.keypadText}>⌫</Text>
+          </TouchableOpacity>
+        </View>
 
-      {/* Continue Button */}
-      <View style={styles.footer}>
-        <TouchableOpacity
-          style={[styles.continueButton, parseFloat(amount) <= 0 && styles.continueButtonDisabled]}
-          onPress={handleContinue}
-          disabled={parseFloat(amount) <= 0}
-        >
-          <Text style={styles.continueText}>Continue</Text>
-          <Text style={styles.continueArrow}>→</Text>
-        </TouchableOpacity>
+        {/* Continue Button */}
+        <View style={styles.footer}>
+          <TouchableOpacity
+            style={[styles.continueButton, parseFloat(amount) <= 0 && styles.continueButtonDisabled]}
+            onPress={handleContinue}
+            disabled={parseFloat(amount) <= 0}
+          >
+            <Text style={styles.continueText}>Continue</Text>
+            <Text style={styles.continueArrow}>→</Text>
+          </TouchableOpacity>
+        </View>
       </View>
     </View>
   );
@@ -151,9 +157,14 @@ const styles = StyleSheet.create({
   placeholder: {
     width: 40,
   },
+  topSection: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
   receiptContainer: {
     alignItems: 'center',
-    paddingVertical: 16,
+    paddingVertical: 8,
   },
   receiptImage: {
     width: 100,
@@ -162,7 +173,8 @@ const styles = StyleSheet.create({
   },
   amountContainer: {
     alignItems: 'center',
-    paddingVertical: 24,
+    paddingVertical: 16,
+    paddingHorizontal: 24,
   },
   currencyLabel: {
     fontSize: 16,
@@ -185,6 +197,9 @@ const styles = StyleSheet.create({
     color: '#059669',
     fontSize: 14,
     fontWeight: '500',
+  },
+  bottomSection: {
+    // Fixed at bottom - does not flex
   },
   keypad: {
     flexDirection: 'row',

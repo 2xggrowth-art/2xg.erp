@@ -34,9 +34,8 @@ export default function CaptureScreen({ navigation }: Props) {
 
       const result = await ImagePicker.launchCameraAsync({
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        allowsEditing: true,
+        allowsEditing: false,
         quality: 0.7,
-        aspect: [4, 3],
       });
 
       if (!result.canceled && result.assets && result.assets[0]) {
@@ -64,9 +63,8 @@ export default function CaptureScreen({ navigation }: Props) {
 
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        allowsEditing: true,
+        allowsEditing: false,
         quality: 0.7,
-        aspect: [4, 3],
       });
 
       if (!result.canceled && result.assets && result.assets[0]) {

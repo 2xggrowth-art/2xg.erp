@@ -5,10 +5,10 @@ const binLocationsService = new BinLocationsService();
 
 export const getAllBinLocations = async (req: Request, res: Response) => {
   try {
-    const { warehouse, status, search } = req.query;
+    const { location_id, status, search } = req.query;
 
     const filters = {
-      warehouse: warehouse as string | undefined,
+      location_id: location_id as string | undefined,
       status: status as string | undefined,
       search: search as string | undefined
     };
@@ -33,10 +33,10 @@ export const getBinLocationById = async (req: Request, res: Response) => {
 export const createBinLocation = async (req: Request, res: Response) => {
   try {
     // Validate required fields
-    if (!req.body.bin_code || !req.body.warehouse) {
+    if (!req.body.bin_code || !req.body.location_id) {
       return res.status(400).json({
         success: false,
-        error: 'Bin code and warehouse are required fields'
+        error: 'Bin code and location are required fields'
       });
     }
 

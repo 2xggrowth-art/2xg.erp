@@ -1,14 +1,23 @@
 import React, { useState, ChangeEvent, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Search, User, X, Plus, Edit2, ShoppingCart, Package, Trash2, Check, Printer, Clock, DollarSign, TrendingUp } from 'lucide-react';
+import { Search, User, X, Plus, Edit2, ShoppingCart, Package, Trash2, Check, Printer, Clock, DollarSign, TrendingUp, MapPin, ArrowDownCircle, ArrowUpCircle } from 'lucide-react';
 import { customersService, Customer, CreateCustomerData } from '../services/customers.service';
 import { itemsService, Item } from '../services/items.service';
 import { salespersonService, Salesperson } from '../services/salesperson.service';
 import { invoicesService } from '../services/invoices.service';
 import { posSessionsService, PosSession } from '../services/pos-sessions.service';
+import { binLocationService } from '../services/binLocation.service';
 import SplitPaymentModal from '../components/pos/SplitPaymentModal';
+import PosBinPicker from '../components/pos/PosBinPicker';
 
 // Define the shape of a Cart Item
+interface BinAllocation {
+  bin_location_id: string;
+  bin_code: string;
+  location_name: string;
+  quantity: number;
+}
+
 interface CartItem {
   id: string;
   item_id: string;
@@ -18,6 +27,7 @@ interface CartItem {
   qty: number;
   rate: number;
   cost_price: number;
+  bin_allocations?: BinAllocation[];
 }
 
 interface HeldCart {
@@ -67,6 +77,16 @@ const PosCreate: React.FC = () => {
     cash_in: 0,
     cash_out: 0,
   });
+
+  // Bin picker states
+  const [showBinPicker, setShowBinPicker] = useState(false);
+  const [binPickerItem, setBinPickerItem] = useState<{ item: Item; bins: any[] } | null>(null);
+
+  // Cash movement states
+  const [showCashMovementModal, setShowCashMovementModal] = useState(false);
+  const [cashMovementType, setCashMovementType] = useState<'in' | 'out'>('in');
+  const [cashMovementAmount, setCashMovementAmount] = useState<number>(0);
+  const [cashMovementLoading, setCashMovementLoading] = useState(false);
 
   // Payment states
   const [showPaymentModal, setShowPaymentModal] = useState(false);
@@ -225,6 +245,14 @@ const PosCreate: React.FC = () => {
     const updatedCart = cart.map((item) => {
       if (item.id === id) {
         const numericQty = parseInt(newQty) || 0;
+        // Update bin allocation quantity if single bin assigned
+        if (item.bin_allocations && item.bin_allocations.length === 1) {
+          return {
+            ...item,
+            qty: numericQty,
+            bin_allocations: [{ ...item.bin_allocations[0], quantity: numericQty }]
+          };
+        }
         return { ...item, qty: numericQty };
       }
       return item;
@@ -238,12 +266,83 @@ const PosCreate: React.FC = () => {
     setCustomerSearch('');
   };
 
-  const handleSelectItem = (item: Item) => {
+  const handleSelectItem = async (item: Item) => {
     if (item.current_stock <= 0) {
       alert('Stock is not available');
       return;
     }
 
+    // Fetch bin locations for this item
+    try {
+      const binResponse = await binLocationService.getBinLocationsForItem(item.id);
+      const itemBins = binResponse.success && binResponse.data ? binResponse.data : [];
+
+      if (itemBins.length === 1) {
+        // Auto-assign to the single bin
+        const bin = itemBins[0];
+        const cartItem: CartItem = {
+          id: `cart-${Date.now()}-${item.id}`,
+          item_id: item.id,
+          name: item.item_name,
+          sku: item.sku,
+          tax_rate: item.tax_rate,
+          qty: 1,
+          rate: item.unit_price,
+          cost_price: item.cost_price,
+          bin_allocations: [{
+            bin_location_id: bin.bin_id,
+            bin_code: bin.bin_code,
+            location_name: bin.location_name,
+            quantity: 1
+          }]
+        };
+        setCart([...cart, cartItem]);
+        setShowItemModal(false);
+        setItemSearch('');
+      } else if (itemBins.length > 1) {
+        // Show bin picker for multiple bins
+        setBinPickerItem({ item, bins: itemBins });
+        setShowBinPicker(true);
+        setShowItemModal(false);
+        setItemSearch('');
+      } else {
+        // No bins tracked - proceed without bin allocation
+        const cartItem: CartItem = {
+          id: `cart-${Date.now()}-${item.id}`,
+          item_id: item.id,
+          name: item.item_name,
+          sku: item.sku,
+          tax_rate: item.tax_rate,
+          qty: 1,
+          rate: item.unit_price,
+          cost_price: item.cost_price,
+        };
+        setCart([...cart, cartItem]);
+        setShowItemModal(false);
+        setItemSearch('');
+      }
+    } catch (error) {
+      console.error('Error fetching bin locations:', error);
+      // Fallback: add without bin allocation
+      const cartItem: CartItem = {
+        id: `cart-${Date.now()}-${item.id}`,
+        item_id: item.id,
+        name: item.item_name,
+        sku: item.sku,
+        tax_rate: item.tax_rate,
+        qty: 1,
+        rate: item.unit_price,
+        cost_price: item.cost_price,
+      };
+      setCart([...cart, cartItem]);
+      setShowItemModal(false);
+      setItemSearch('');
+    }
+  };
+
+  const handleBinPickerSelect = (allocations: BinAllocation[]) => {
+    if (!binPickerItem) return;
+    const item = binPickerItem.item;
     const cartItem: CartItem = {
       id: `cart-${Date.now()}-${item.id}`,
       item_id: item.id,
@@ -253,10 +352,11 @@ const PosCreate: React.FC = () => {
       qty: 1,
       rate: item.unit_price,
       cost_price: item.cost_price,
+      bin_allocations: allocations
     };
     setCart([...cart, cartItem]);
-    setShowItemModal(false);
-    setItemSearch('');
+    setBinPickerItem(null);
+    setShowBinPicker(false);
   };
 
   const handleRemoveItem = (id: string) => {
@@ -481,7 +581,8 @@ const PosCreate: React.FC = () => {
           unit_of_measurement: 'pcs',
           rate: item.rate,
           amount: item.qty * item.rate,
-          stock_on_hand: 0
+          stock_on_hand: 0,
+          bin_allocations: item.bin_allocations || undefined
         }))
       };
 
@@ -600,7 +701,8 @@ const PosCreate: React.FC = () => {
           unit_of_measurement: 'pcs',
           rate: item.rate,
           amount: item.qty * item.rate,
-          stock_on_hand: 0
+          stock_on_hand: 0,
+          bin_allocations: item.bin_allocations || undefined
         }))
       };
 
@@ -667,6 +769,29 @@ const PosCreate: React.FC = () => {
     setTimeout(() => {
       window.print();
     }, 100);
+  };
+
+  const handleCashMovement = async () => {
+    if (!activeSession || cashMovementAmount <= 0) return;
+    try {
+      setCashMovementLoading(true);
+      const response = await posSessionsService.recordCashMovement(
+        activeSession.id,
+        cashMovementType,
+        cashMovementAmount
+      );
+      if (response.success && response.data) {
+        setActiveSession(response.data);
+        setShowCashMovementModal(false);
+        setCashMovementAmount(0);
+        alert(`Cash ${cashMovementType === 'in' ? 'In' : 'Out'} of ₹${cashMovementAmount} recorded successfully`);
+      }
+    } catch (error: any) {
+      console.error('Error recording cash movement:', error);
+      alert(error.response?.data?.error || 'Failed to record cash movement');
+    } finally {
+      setCashMovementLoading(false);
+    }
   };
 
   useEffect(() => {
@@ -858,8 +983,22 @@ const PosCreate: React.FC = () => {
                     Session: {activeSession.session_number}
                   </span>
                   <button
+                    onClick={() => { setCashMovementType('in'); setCashMovementAmount(0); setShowCashMovementModal(true); }}
+                    className="ml-2 px-2 py-1 text-xs font-medium text-green-700 bg-green-50 border border-green-200 rounded hover:bg-green-100 transition-colors flex items-center gap-1"
+                  >
+                    <ArrowDownCircle size={12} />
+                    Cash In
+                  </button>
+                  <button
+                    onClick={() => { setCashMovementType('out'); setCashMovementAmount(0); setShowCashMovementModal(true); }}
+                    className="px-2 py-1 text-xs font-medium text-orange-700 bg-orange-50 border border-orange-200 rounded hover:bg-orange-100 transition-colors flex items-center gap-1"
+                  >
+                    <ArrowUpCircle size={12} />
+                    Cash Out
+                  </button>
+                  <button
                     onClick={() => setShowCloseSessionModal(true)}
-                    className="ml-2 px-3 py-1 text-xs font-medium text-red-700 bg-red-50 border border-red-200 rounded hover:bg-red-100 transition-colors"
+                    className="px-3 py-1 text-xs font-medium text-red-700 bg-red-50 border border-red-200 rounded hover:bg-red-100 transition-colors"
                   >
                     End Session
                   </button>
@@ -963,6 +1102,14 @@ const PosCreate: React.FC = () => {
                           <div className="text-xs text-gray-500 mt-1">
                             SKU: {item.sku} | Tax: {item.tax_rate}%
                           </div>
+                          {item.bin_allocations && item.bin_allocations.length > 0 && (
+                            <div className="flex items-center gap-1 mt-1">
+                              <MapPin size={10} className="text-blue-500" />
+                              <span className="text-xs text-blue-600">
+                                {item.bin_allocations.map(b => b.bin_code).join(', ')}
+                              </span>
+                            </div>
+                          )}
                         </div>
                         <div className="col-span-1 text-center">
                           <input
@@ -2009,6 +2156,76 @@ const PosCreate: React.FC = () => {
           customerMobile={selectedCustomer?.mobile}
           onComplete={handleSplitPaymentComplete}
         />
+
+        {/* Bin Picker Modal */}
+        {binPickerItem && (
+          <PosBinPicker
+            isOpen={showBinPicker}
+            onClose={() => { setShowBinPicker(false); setBinPickerItem(null); }}
+            itemName={binPickerItem.item.item_name}
+            itemQty={1}
+            bins={binPickerItem.bins}
+            onSelect={handleBinPickerSelect}
+          />
+        )}
+
+        {/* Cash Movement Modal */}
+        {showCashMovementModal && activeSession && (
+          <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+            <div className="bg-white rounded-xl w-[400px] shadow-2xl">
+              <div className="flex justify-between items-center p-5 border-b border-gray-200">
+                <h3 className="text-lg font-semibold text-gray-800">
+                  {cashMovementType === 'in' ? 'Cash In' : 'Cash Out'}
+                </h3>
+                <button onClick={() => setShowCashMovementModal(false)} className="text-gray-400 hover:text-gray-600">
+                  <X size={20} />
+                </button>
+              </div>
+              <div className="p-5">
+                <div className="mb-4 text-sm text-gray-600">
+                  <div className="flex justify-between mb-1">
+                    <span>Current Cash In:</span>
+                    <span className="font-medium text-green-600">₹{activeSession.cash_in.toFixed(2)}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Current Cash Out:</span>
+                    <span className="font-medium text-orange-600">₹{activeSession.cash_out.toFixed(2)}</span>
+                  </div>
+                </div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Amount (₹)</label>
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={cashMovementAmount || ''}
+                  onChange={(e) => setCashMovementAmount(parseFloat(e.target.value) || 0)}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg text-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  placeholder="Enter amount"
+                  autoFocus
+                />
+              </div>
+              <div className="flex justify-end gap-3 p-5 border-t border-gray-200">
+                <button
+                  onClick={() => setShowCashMovementModal(false)}
+                  className="px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleCashMovement}
+                  disabled={cashMovementLoading || cashMovementAmount <= 0}
+                  className={`px-4 py-2 rounded-lg text-white transition ${
+                    cashMovementType === 'in'
+                      ? 'bg-green-600 hover:bg-green-700'
+                      : 'bg-orange-600 hover:bg-orange-700'
+                  } disabled:opacity-50`}
+                >
+                  {cashMovementLoading ? 'Processing...' : `Record Cash ${cashMovementType === 'in' ? 'In' : 'Out'}`}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Start Session Modal */}
         {showStartSessionModal && (

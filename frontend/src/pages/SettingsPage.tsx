@@ -1,8 +1,9 @@
 import { useState, useEffect, useRef } from 'react';
-import { Settings, Users, Plus, Trash2, Edit2, Save, X, Shield, CheckSquare, Square, MapPin } from 'lucide-react';
+import { Settings, Users, Plus, Trash2, Edit2, Save, X, Shield, CheckSquare, Square, MapPin, Smartphone } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { authService, User } from '../services/auth.service';
-import { binLocationService, BinLocation } from '../services/binLocation.service';
+import { locationsService, Location } from '../services/locations.service';
+import { mobileUsersService, MobileUser } from '../services/mobileUsers.service';
 
 interface Permission {
   module: string;
@@ -67,13 +68,21 @@ const SettingsPage = () => {
 
   const [editRole, setEditRole] = useState<Role | null>(null);
 
-  // Bin Location state
-  const [binLocations, setBinLocations] = useState<BinLocation[]>([]);
-  const [showAddBinModal, setShowAddBinModal] = useState(false);
-  const [editingBinId, setEditingBinId] = useState<string | null>(null);
-  const [editBin, setEditBin] = useState<BinLocation | null>(null);
-  const [newBin, setNewBin] = useState({ bin_code: '', warehouse: '', description: '' });
-  const [binLoading, setBinLoading] = useState(false);
+  // Location state
+  const [locations, setLocations] = useState<Location[]>([]);
+  const [showAddLocationModal, setShowAddLocationModal] = useState(false);
+  const [editingLocationId, setEditingLocationId] = useState<string | null>(null);
+  const [editLocation, setEditLocation] = useState<Location | null>(null);
+  const [newLocation, setNewLocation] = useState({ name: '', description: '' });
+  const [locationLoading, setLocationLoading] = useState(false);
+
+  // Mobile users state
+  const [mobileUsers, setMobileUsers] = useState<MobileUser[]>([]);
+  const [showAddMobileUserModal, setShowAddMobileUserModal] = useState(false);
+  const [newMobileUser, setNewMobileUser] = useState({ phone_number: '', pin: '', employee_name: '', branch: 'Head Office' });
+  const [mobileUserLoading, setMobileUserLoading] = useState(false);
+  const [editingPinUserId, setEditingPinUserId] = useState<string | null>(null);
+  const [newPinValue, setNewPinValue] = useState('');
 
   // Load roles from localStorage on mount
   useEffect(() => {
@@ -327,88 +336,146 @@ const SettingsPage = () => {
     }
   };
 
-  // Load bin locations
+  // Load locations
   useEffect(() => {
-    const loadBinLocations = async () => {
+    const loadLocations = async () => {
       try {
-        setBinLoading(true);
-        const response = await binLocationService.getAllBinLocations();
+        setLocationLoading(true);
+        const response = await locationsService.getAllLocations();
         if (response.success && response.data) {
-          setBinLocations(response.data);
+          setLocations(response.data);
         }
       } catch (error) {
-        console.error('Error loading bin locations:', error);
+        console.error('Error loading locations:', error);
       } finally {
-        setBinLoading(false);
+        setLocationLoading(false);
       }
     };
-    if (activeTab === 'bins') {
-      loadBinLocations();
+    if (activeTab === 'locations') {
+      loadLocations();
+    }
+    if (activeTab === 'mobile-users') {
+      fetchMobileUsers();
     }
   }, [activeTab]);
 
-  const handleAddBin = async () => {
-    if (!newBin.bin_code || !newBin.warehouse) {
-      alert('Bin Code and Warehouse are required');
+  const fetchMobileUsers = async () => {
+    try {
+      const response = await mobileUsersService.getAllUsers();
+      if (response.success) {
+        setMobileUsers(response.data);
+      }
+    } catch (error) {
+      console.error('Error fetching mobile users:', error);
+    }
+  };
+
+  const handleAddMobileUser = async () => {
+    if (!newMobileUser.phone_number || !newMobileUser.pin || !newMobileUser.employee_name) {
+      alert('Please fill all required fields');
+      return;
+    }
+    if (!/^\d{10}$/.test(newMobileUser.phone_number)) {
+      alert('Phone number must be 10 digits');
+      return;
+    }
+    if (!/^\d{4}$/.test(newMobileUser.pin)) {
+      alert('PIN must be 4 digits');
       return;
     }
     try {
-      const response = await binLocationService.createBinLocation(newBin);
-      if (response.success && response.data) {
-        setBinLocations([...binLocations, response.data]);
-        setNewBin({ bin_code: '', warehouse: '', description: '' });
-        setShowAddBinModal(false);
-        alert('Bin location created successfully!');
-      } else {
-        alert(response.error || 'Failed to create bin location');
+      setMobileUserLoading(true);
+      const response = await mobileUsersService.createUser(newMobileUser);
+      if (response.success) {
+        setMobileUsers([...mobileUsers, response.data]);
+        setShowAddMobileUserModal(false);
+        setNewMobileUser({ phone_number: '', pin: '', employee_name: '', branch: 'Head Office' });
       }
     } catch (error: any) {
-      console.error('Error creating bin location:', error);
-      alert(error.response?.data?.error || 'Failed to create bin location');
+      alert(error.response?.data?.error || error.message || 'Failed to create mobile user');
+    } finally {
+      setMobileUserLoading(false);
     }
   };
 
-  const handleEditBin = (bin: BinLocation) => {
-    setEditingBinId(bin.id!);
-    setEditBin({ ...bin });
+  const handleUpdatePin = async (userId: string) => {
+    if (!/^\d{4}$/.test(newPinValue)) {
+      alert('PIN must be 4 digits');
+      return;
+    }
+    try {
+      const response = await mobileUsersService.updatePin(userId, newPinValue);
+      if (response.success) {
+        setMobileUsers(mobileUsers.map(u => u.id === userId ? { ...u, ...response.data } : u));
+        setEditingPinUserId(null);
+        setNewPinValue('');
+      }
+    } catch (error: any) {
+      alert(error.response?.data?.error || 'Failed to update PIN');
+    }
   };
 
-  const handleSaveBinEdit = async () => {
-    if (!editBin || !editingBinId) return;
+  const handleAddLocation = async () => {
+    if (!newLocation.name) {
+      alert('Location name is required');
+      return;
+    }
     try {
-      const response = await binLocationService.updateBinLocation(editingBinId, {
-        bin_code: editBin.bin_code,
-        warehouse: editBin.warehouse,
-        description: editBin.description,
-        status: editBin.status
+      const response = await locationsService.createLocation(newLocation);
+      if (response.success && response.data) {
+        setLocations([response.data, ...locations]);
+        setNewLocation({ name: '', description: '' });
+        setShowAddLocationModal(false);
+        alert('Location created successfully!');
+      } else {
+        alert(response.error || 'Failed to create location');
+      }
+    } catch (error: any) {
+      console.error('Error creating location:', error);
+      alert(error.response?.data?.error || 'Failed to create location');
+    }
+  };
+
+  const handleEditLocation = (location: Location) => {
+    setEditingLocationId(location.id);
+    setEditLocation({ ...location });
+  };
+
+  const handleSaveLocationEdit = async () => {
+    if (!editLocation || !editingLocationId) return;
+    try {
+      const response = await locationsService.updateLocation(editingLocationId, {
+        name: editLocation.name,
+        description: editLocation.description,
+        status: editLocation.status
       });
       if (response.success && response.data) {
-        setBinLocations(binLocations.map(b => b.id === editingBinId ? response.data : b));
-        setEditingBinId(null);
-        setEditBin(null);
-        alert('Bin location updated successfully!');
+        setLocations(locations.map(l => l.id === editingLocationId ? response.data : l));
+        setEditingLocationId(null);
+        setEditLocation(null);
+        alert('Location updated successfully!');
       } else {
-        alert(response.error || 'Failed to update bin location');
+        alert(response.error || 'Failed to update location');
       }
     } catch (error: any) {
-      console.error('Error updating bin location:', error);
-      alert(error.response?.data?.error || 'Failed to update bin location');
+      console.error('Error updating location:', error);
+      alert(error.response?.data?.error || 'Failed to update location');
     }
   };
 
-  const handleDeleteBin = async (binId: string) => {
-    if (!window.confirm('Are you sure you want to delete this bin location?')) return;
+  const handleDeleteLocation = async (locationId: string) => {
+    if (!window.confirm('Are you sure you want to delete this location?')) return;
     try {
-      const response = await binLocationService.deleteBinLocation(binId);
+      const response = await locationsService.deleteLocation(locationId);
       if (response.success) {
-        setBinLocations(binLocations.filter(b => b.id !== binId));
-        alert('Bin location deleted successfully!');
+        setLocations(locations.filter(l => l.id !== locationId));
+        alert('Location deleted successfully!');
       } else {
-        alert(response.error || 'Failed to delete bin location');
+        alert(response.error || 'Failed to delete location');
       }
     } catch (error: any) {
-      console.error('Error deleting bin location:', error);
-      alert(error.response?.data?.error || 'Failed to delete bin location');
+      console.error('Error deleting location:', error);
+      alert(error.response?.data?.error || 'Failed to delete location');
     }
   };
 
@@ -471,15 +538,27 @@ const SettingsPage = () => {
             </div>
           </button>
           <button
-            onClick={() => setActiveTab('bins')}
-            className={`py-3 px-1 font-medium text-sm border-b-2 transition ${activeTab === 'bins'
+            onClick={() => setActiveTab('locations')}
+            className={`py-3 px-1 font-medium text-sm border-b-2 transition ${activeTab === 'locations'
                 ? 'border-blue-600 text-blue-600'
                 : 'border-transparent text-gray-500 hover:text-gray-700'
               }`}
           >
             <div className="flex items-center gap-2">
               <MapPin size={18} />
-              Bin Locations
+              Locations
+            </div>
+          </button>
+          <button
+            onClick={() => setActiveTab('mobile-users')}
+            className={`py-3 px-1 font-medium text-sm border-b-2 transition ${activeTab === 'mobile-users'
+                ? 'border-blue-600 text-blue-600'
+                : 'border-transparent text-gray-500 hover:text-gray-700'
+              }`}
+          >
+            <div className="flex items-center gap-2">
+              <Smartphone size={18} />
+              Mobile Users
             </div>
           </button>
         </div>
@@ -641,78 +720,69 @@ const SettingsPage = () => {
           </div>
         )}
 
-        {activeTab === 'bins' && (
+        {activeTab === 'locations' && (
           <div className="bg-white rounded-lg shadow-sm border border-gray-200">
-            {/* Bin Location Management Header */}
+            {/* Location Management Header */}
             <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
               <div>
-                <h2 className="text-lg font-semibold text-gray-800">Bin Locations</h2>
-                <p className="text-sm text-gray-500">Manage warehouse bin locations for inventory tracking</p>
+                <h2 className="text-lg font-semibold text-gray-800">Locations</h2>
+                <p className="text-sm text-gray-500">Manage locations for inventory tracking. Create locations first, then add bins under them.</p>
               </div>
               {isAdmin && (
                 <button
-                  onClick={() => setShowAddBinModal(true)}
+                  onClick={() => setShowAddLocationModal(true)}
                   className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
                 >
                   <Plus size={18} />
-                  Add Bin Location
+                  Add Location
                 </button>
               )}
             </div>
 
-            {/* Bin Locations Table */}
+            {/* Locations Table */}
             <div className="overflow-x-auto">
-              {binLoading ? (
-                <div className="p-8 text-center text-gray-500">Loading bin locations...</div>
-              ) : binLocations.length === 0 ? (
+              {locationLoading ? (
+                <div className="p-8 text-center text-gray-500">Loading locations...</div>
+              ) : locations.length === 0 ? (
                 <div className="p-8 text-center text-gray-500">
                   <MapPin size={48} className="mx-auto mb-3 text-gray-300" />
-                  <p>No bin locations found. Create your first bin location to start tracking inventory by location.</p>
+                  <p>No locations found. Create your first location to start organizing inventory.</p>
                 </div>
               ) : (
                 <table className="w-full">
                   <thead className="bg-gray-50 border-b border-gray-200">
                     <tr>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Bin Code</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Warehouse</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Description</th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
                       <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-200">
-                    {binLocations.map((bin) => (
-                      <tr key={bin.id} className="hover:bg-gray-50">
-                        {editingBinId === bin.id ? (
+                    {locations.map((location) => (
+                      <tr key={location.id} className="hover:bg-gray-50">
+                        {editingLocationId === location.id ? (
                           <>
                             <td className="px-6 py-4">
                               <input
                                 type="text"
-                                value={editBin?.bin_code || ''}
-                                onChange={(e) => setEditBin(editBin ? { ...editBin, bin_code: e.target.value } : null)}
+                                value={editLocation?.name || ''}
+                                onChange={(e) => setEditLocation(editLocation ? { ...editLocation, name: e.target.value } : null)}
                                 className="w-full px-2 py-1 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500"
                               />
                             </td>
                             <td className="px-6 py-4">
                               <input
                                 type="text"
-                                value={editBin?.warehouse || ''}
-                                onChange={(e) => setEditBin(editBin ? { ...editBin, warehouse: e.target.value } : null)}
-                                className="w-full px-2 py-1 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500"
-                              />
-                            </td>
-                            <td className="px-6 py-4">
-                              <input
-                                type="text"
-                                value={editBin?.description || ''}
-                                onChange={(e) => setEditBin(editBin ? { ...editBin, description: e.target.value } : null)}
+                                value={editLocation?.description || ''}
+                                onChange={(e) => setEditLocation(editLocation ? { ...editLocation, description: e.target.value } : null)}
                                 className="w-full px-2 py-1 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500"
                               />
                             </td>
                             <td className="px-6 py-4">
                               <select
-                                value={editBin?.status || 'active'}
-                                onChange={(e) => setEditBin(editBin ? { ...editBin, status: e.target.value } : null)}
+                                value={editLocation?.status || 'active'}
+                                onChange={(e) => setEditLocation(editLocation ? { ...editLocation, status: e.target.value as 'active' | 'inactive' } : null)}
                                 className="px-2 py-1 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500"
                               >
                                 <option value="active">Active</option>
@@ -721,10 +791,10 @@ const SettingsPage = () => {
                             </td>
                             <td className="px-6 py-4 text-right">
                               <div className="flex items-center justify-end gap-2">
-                                <button onClick={handleSaveBinEdit} className="p-1 text-green-600 hover:bg-green-50 rounded" title="Save">
+                                <button onClick={handleSaveLocationEdit} className="p-1 text-green-600 hover:bg-green-50 rounded" title="Save">
                                   <Save size={18} />
                                 </button>
-                                <button onClick={() => { setEditingBinId(null); setEditBin(null); }} className="p-1 text-gray-600 hover:bg-gray-100 rounded" title="Cancel">
+                                <button onClick={() => { setEditingLocationId(null); setEditLocation(null); }} className="p-1 text-gray-600 hover:bg-gray-100 rounded" title="Cancel">
                                   <X size={18} />
                                 </button>
                               </div>
@@ -735,25 +805,24 @@ const SettingsPage = () => {
                             <td className="px-6 py-4">
                               <div className="flex items-center gap-2">
                                 <MapPin size={16} className="text-blue-600" />
-                                <span className="text-sm font-medium text-gray-900">{bin.bin_code}</span>
+                                <span className="text-sm font-medium text-gray-900">{location.name}</span>
                               </div>
                             </td>
-                            <td className="px-6 py-4 text-sm text-gray-600">{bin.warehouse}</td>
-                            <td className="px-6 py-4 text-sm text-gray-600">{bin.description || '-'}</td>
+                            <td className="px-6 py-4 text-sm text-gray-600">{location.description || '-'}</td>
                             <td className="px-6 py-4">
                               <span className={`px-2 py-1 text-xs font-medium rounded-full ${
-                                bin.status === 'active' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-700'
+                                location.status === 'active' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-700'
                               }`}>
-                                {bin.status === 'active' ? 'Active' : 'Inactive'}
+                                {location.status === 'active' ? 'Active' : 'Inactive'}
                               </span>
                             </td>
                             <td className="px-6 py-4 text-right">
                               {isAdmin ? (
                                 <div className="flex items-center justify-end gap-2">
-                                  <button onClick={() => handleEditBin(bin)} className="p-1 text-blue-600 hover:bg-blue-50 rounded" title="Edit">
+                                  <button onClick={() => handleEditLocation(location)} className="p-1 text-blue-600 hover:bg-blue-50 rounded" title="Edit">
                                     <Edit2 size={18} />
                                   </button>
-                                  <button onClick={() => handleDeleteBin(bin.id!)} className="p-1 text-red-600 hover:bg-red-50 rounded" title="Delete">
+                                  <button onClick={() => handleDeleteLocation(location.id)} className="p-1 text-red-600 hover:bg-red-50 rounded" title="Delete">
                                     <Trash2 size={18} />
                                   </button>
                                 </div>
@@ -935,6 +1004,113 @@ const SettingsPage = () => {
             </div>
           </div>
         )}
+
+        {activeTab === 'mobile-users' && (
+          <div className="bg-white rounded-lg shadow-sm border border-gray-200">
+            {/* Mobile Users Header */}
+            <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
+              <div>
+                <h2 className="text-lg font-semibold text-gray-800">Mobile Expense Users</h2>
+                <p className="text-sm text-gray-500">Manage users who can submit expenses via mobile app (phone + PIN login)</p>
+              </div>
+              {isAdmin && (
+                <button
+                  onClick={() => setShowAddMobileUserModal(true)}
+                  className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
+                >
+                  <Plus size={18} />
+                  Add Mobile User
+                </button>
+              )}
+            </div>
+
+            {/* Mobile Users Table */}
+            <div className="overflow-x-auto">
+              {mobileUsers.length === 0 ? (
+                <div className="p-8 text-center text-gray-500">
+                  <Smartphone size={48} className="mx-auto mb-3 text-gray-300" />
+                  <p>No mobile users found. Add a user to enable mobile expense submissions.</p>
+                </div>
+              ) : (
+                <table className="w-full">
+                  <thead className="bg-gray-50 border-b border-gray-200">
+                    <tr>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Employee Name</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Phone Number</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Branch</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">PIN</th>
+                      <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-200">
+                    {mobileUsers.map((mu) => (
+                      <tr key={mu.id} className="hover:bg-gray-50">
+                        <td className="px-6 py-4">
+                          <div className="flex items-center gap-3">
+                            <div className="w-8 h-8 bg-purple-600 rounded-full flex items-center justify-center text-white font-semibold text-sm">
+                              {mu.employee_name.charAt(0).toUpperCase()}
+                            </div>
+                            <span className="text-sm font-medium text-gray-900">{mu.employee_name}</span>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 text-sm text-gray-600">{mu.phone_number}</td>
+                        <td className="px-6 py-4 text-sm text-gray-600">{mu.branch}</td>
+                        <td className="px-6 py-4">
+                          <span className={`px-2 py-1 text-xs font-medium rounded-full ${
+                            mu.is_active ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-700'
+                          }`}>
+                            {mu.is_active ? 'Active' : 'Inactive'}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4">
+                          {editingPinUserId === mu.id ? (
+                            <div className="flex items-center gap-2">
+                              <input
+                                type="text"
+                                value={newPinValue}
+                                onChange={(e) => setNewPinValue(e.target.value.replace(/\D/g, '').slice(0, 4))}
+                                placeholder="4-digit PIN"
+                                maxLength={4}
+                                className="w-24 px-2 py-1 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-blue-500"
+                              />
+                              <button
+                                onClick={() => handleUpdatePin(mu.id)}
+                                className="p-1 text-green-600 hover:bg-green-50 rounded"
+                                title="Save PIN"
+                              >
+                                <Save size={16} />
+                              </button>
+                              <button
+                                onClick={() => { setEditingPinUserId(null); setNewPinValue(''); }}
+                                className="p-1 text-gray-600 hover:bg-gray-100 rounded"
+                                title="Cancel"
+                              >
+                                <X size={16} />
+                              </button>
+                            </div>
+                          ) : (
+                            <button
+                              onClick={() => { setEditingPinUserId(mu.id); setNewPinValue(''); }}
+                              className="text-sm text-blue-600 hover:text-blue-800"
+                            >
+                              Change PIN
+                            </button>
+                          )}
+                        </td>
+                        <td className="px-6 py-4 text-right">
+                          <span className="text-xs text-gray-400">
+                            {new Date(mu.created_at).toLocaleDateString()}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Add User Modal */}
@@ -1031,37 +1207,25 @@ const SettingsPage = () => {
         </div>
       )}
 
-      {/* Add Bin Location Modal */}
-      {showAddBinModal && (
+      {/* Add Location Modal */}
+      {showAddLocationModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white rounded-lg shadow-xl w-full max-w-md mx-4">
             <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
-              <h3 className="text-lg font-semibold text-gray-800">Add Bin Location</h3>
-              <button onClick={() => setShowAddBinModal(false)} className="p-1 hover:bg-gray-100 rounded">
+              <h3 className="text-lg font-semibold text-gray-800">Add Location</h3>
+              <button onClick={() => setShowAddLocationModal(false)} className="p-1 hover:bg-gray-100 rounded">
                 <X size={20} className="text-gray-500" />
               </button>
             </div>
             <div className="p-6 space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Bin Code <span className="text-red-500">*</span>
+                  Name <span className="text-red-500">*</span>
                 </label>
                 <input
                   type="text"
-                  value={newBin.bin_code}
-                  onChange={(e) => setNewBin({ ...newBin, bin_code: e.target.value })}
-                  placeholder="e.g., A-01-01, RACK-1-SHELF-2"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Warehouse <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="text"
-                  value={newBin.warehouse}
-                  onChange={(e) => setNewBin({ ...newBin, warehouse: e.target.value })}
+                  value={newLocation.name}
+                  onChange={(e) => setNewLocation({ ...newLocation, name: e.target.value })}
                   placeholder="e.g., Main Warehouse, Storage Unit B"
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 />
@@ -1069,20 +1233,104 @@ const SettingsPage = () => {
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
                 <textarea
-                  value={newBin.description}
-                  onChange={(e) => setNewBin({ ...newBin, description: e.target.value })}
-                  placeholder="Optional description of this bin location"
+                  value={newLocation.description}
+                  onChange={(e) => setNewLocation({ ...newLocation, description: e.target.value })}
+                  placeholder="Optional description of this location"
                   rows={2}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 />
               </div>
             </div>
             <div className="px-6 py-4 border-t border-gray-200 flex justify-end gap-3">
-              <button onClick={() => setShowAddBinModal(false)} className="px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition">
+              <button onClick={() => setShowAddLocationModal(false)} className="px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition">
                 Cancel
               </button>
-              <button onClick={handleAddBin} className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition">
-                Add Bin Location
+              <button onClick={handleAddLocation} className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition">
+                Add Location
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Add Mobile User Modal */}
+      {showAddMobileUserModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg shadow-xl w-full max-w-md mx-4">
+            <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
+              <h3 className="text-lg font-semibold text-gray-800">Add Mobile User</h3>
+              <button
+                onClick={() => setShowAddMobileUserModal(false)}
+                className="p-1 hover:bg-gray-100 rounded"
+              >
+                <X size={20} className="text-gray-500" />
+              </button>
+            </div>
+            <div className="p-6 space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Employee Name <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={newMobileUser.employee_name}
+                  onChange={(e) => setNewMobileUser({ ...newMobileUser, employee_name: e.target.value })}
+                  placeholder="Enter employee name"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Phone Number <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="tel"
+                  value={newMobileUser.phone_number}
+                  onChange={(e) => setNewMobileUser({ ...newMobileUser, phone_number: e.target.value.replace(/\D/g, '').slice(0, 10) })}
+                  placeholder="10-digit phone number"
+                  maxLength={10}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+                <p className="text-xs text-gray-500 mt-1">User will login with this phone number</p>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  PIN <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={newMobileUser.pin}
+                  onChange={(e) => setNewMobileUser({ ...newMobileUser, pin: e.target.value.replace(/\D/g, '').slice(0, 4) })}
+                  placeholder="4-digit PIN"
+                  maxLength={4}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+                <p className="text-xs text-gray-500 mt-1">User will use this PIN to login on mobile app</p>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Branch</label>
+                <input
+                  type="text"
+                  value={newMobileUser.branch}
+                  onChange={(e) => setNewMobileUser({ ...newMobileUser, branch: e.target.value })}
+                  placeholder="e.g., Head Office"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+              </div>
+            </div>
+            <div className="px-6 py-4 border-t border-gray-200 flex justify-end gap-3">
+              <button
+                onClick={() => setShowAddMobileUserModal(false)}
+                className="px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleAddMobileUser}
+                disabled={mobileUserLoading}
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition disabled:opacity-50"
+              >
+                {mobileUserLoading ? 'Adding...' : 'Add User'}
               </button>
             </div>
           </div>

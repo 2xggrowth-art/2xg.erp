@@ -20,25 +20,12 @@ type Props = {
 
 // Category icon and color mapping
 const categoryIcons: Record<string, { icon: string; color: string; bgColor: string }> = {
-  food: { icon: '🍽️', color: '#EA580C', bgColor: '#FED7AA' },
-  'food & beverages': { icon: '🍽️', color: '#EA580C', bgColor: '#FED7AA' },
-  meals: { icon: '🍽️', color: '#EA580C', bgColor: '#FED7AA' },
-  fuel: { icon: '⛽', color: '#2563EB', bgColor: '#BFDBFE' },
-  'fuel/petrol': { icon: '⛽', color: '#2563EB', bgColor: '#BFDBFE' },
-  petrol: { icon: '⛽', color: '#2563EB', bgColor: '#BFDBFE' },
-  travel: { icon: '🚗', color: '#16A34A', bgColor: '#BBF7D0' },
-  'travel/transport': { icon: '🚗', color: '#16A34A', bgColor: '#BBF7D0' },
-  transport: { icon: '🚗', color: '#16A34A', bgColor: '#BBF7D0' },
-  conveyance: { icon: '🚗', color: '#16A34A', bgColor: '#BBF7D0' },
-  tea: { icon: '☕', color: '#D97706', bgColor: '#FDE68A' },
-  'tea/coffee': { icon: '☕', color: '#D97706', bgColor: '#FDE68A' },
-  refreshments: { icon: '☕', color: '#D97706', bgColor: '#FDE68A' },
-  'office supplies': { icon: '📦', color: '#7C3AED', bgColor: '#DDD6FE' },
-  supplies: { icon: '📦', color: '#7C3AED', bgColor: '#DDD6FE' },
-  stationery: { icon: '📦', color: '#7C3AED', bgColor: '#DDD6FE' },
-  maintenance: { icon: '🔧', color: '#0891B2', bgColor: '#A5F3FC' },
-  equipment: { icon: '🖥️', color: '#4F46E5', bgColor: '#C7D2FE' },
-  insurance: { icon: '🛡️', color: '#0D9488', bgColor: '#99F6E4' },
+  'local delivery': { icon: '🚚', color: '#2563EB', bgColor: '#BFDBFE' },
+  'lunch and tea': { icon: '☕', color: '#EA580C', bgColor: '#FED7AA' },
+  'godown logistics': { icon: '🏭', color: '#16A34A', bgColor: '#BBF7D0' },
+  cleaning: { icon: '🧹', color: '#0891B2', bgColor: '#A5F3FC' },
+  'petrol and diesel': { icon: '⛽', color: '#D97706', bgColor: '#FDE68A' },
+  'office expense': { icon: '🏢', color: '#7C3AED', bgColor: '#DDD6FE' },
 };
 
 const getIconConfig = (categoryName: string) => {

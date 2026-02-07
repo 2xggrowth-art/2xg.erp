@@ -3,7 +3,9 @@ import apiClient, { APIResponse } from './api.client';
 export interface BinLocation {
   id: string;
   bin_code: string;
-  warehouse: string;
+  warehouse?: string;
+  location_id?: string;
+  locations?: { id: string; name: string };
   description: string;
   status: 'active' | 'inactive';
   created_at: string;
@@ -12,13 +14,13 @@ export interface BinLocation {
 
 export interface CreateBinLocationData {
   bin_code: string;
-  warehouse: string;
+  location_id: string;
   description?: string;
   status?: 'active' | 'inactive';
 }
 
 export interface BinLocationFilters {
-  warehouse?: string;
+  location_id?: string;
   status?: string;
   search?: string;
 }
@@ -51,8 +53,8 @@ class BinLocationService {
     try {
       const params = new URLSearchParams();
 
-      if (filters?.warehouse) {
-        params.append('warehouse', filters.warehouse);
+      if (filters?.location_id) {
+        params.append('location_id', filters.location_id);
       }
       if (filters?.status) {
         params.append('status', filters.status);

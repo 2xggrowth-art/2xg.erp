@@ -1,11 +1,11 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { X, Plus, Trash2 } from 'lucide-react';
 import { binLocationService, BinLocation } from '../../services/binLocation.service';
 
 interface BinAllocation {
   bin_location_id: string;
   bin_code: string;
-  warehouse: string;
+  location_name: string;
   quantity: number;
 }
 
@@ -32,16 +32,17 @@ const SelectBinsModal = ({
 }: SelectBinsModalProps) => {
   const [binLocations, setBinLocations] = useState<BinLocation[]>([]);
   const [allocations, setAllocations] = useState<BinAllocation[]>([]);
+  const [selectedLocation, setSelectedLocation] = useState('');
   const [error, setError] = useState('');
 
   useEffect(() => {
     if (isOpen) {
       fetchBinLocations();
+      setSelectedLocation('');
       if (currentAllocations.length > 0) {
         setAllocations(currentAllocations);
       } else {
-        // Initialize with one empty row
-        setAllocations([{ bin_location_id: '', bin_code: '', warehouse: '', quantity: 0 }]);
+        setAllocations([{ bin_location_id: '', bin_code: '', location_name: '', quantity: 0 }]);
       }
     }
   }, [isOpen, currentAllocations]);
@@ -57,6 +58,25 @@ const SelectBinsModal = ({
     }
   };
 
+  // Get unique locations from bin data
+  const locationNames = useMemo(() => {
+    const names = new Set<string>();
+    binLocations.forEach(bin => {
+      const name = bin.locations?.name || bin.warehouse || 'Unknown';
+      names.add(name);
+    });
+    return Array.from(names).sort();
+  }, [binLocations]);
+
+  // Filter bins by selected location
+  const filteredBins = useMemo(() => {
+    if (!selectedLocation) return binLocations;
+    return binLocations.filter(bin => {
+      const name = bin.locations?.name || bin.warehouse || 'Unknown';
+      return name === selectedLocation;
+    });
+  }, [binLocations, selectedLocation]);
+
   const handleBinChange = (index: number, binId: string) => {
     const selectedBin = binLocations.find(bin => bin.id === binId);
     const updatedAllocations = [...allocations];
@@ -64,7 +84,7 @@ const SelectBinsModal = ({
       ...updatedAllocations[index],
       bin_location_id: binId,
       bin_code: selectedBin?.bin_code || '',
-      warehouse: selectedBin?.warehouse || ''
+      location_name: selectedBin?.locations?.name || selectedBin?.warehouse || ''
     };
     setAllocations(updatedAllocations);
     setError('');
@@ -78,7 +98,7 @@ const SelectBinsModal = ({
   };
 
   const addRow = () => {
-    setAllocations([...allocations, { bin_location_id: '', bin_code: '', warehouse: '', quantity: 0 }]);
+    setAllocations([...allocations, { bin_location_id: '', bin_code: '', location_name: '', quantity: 0 }]);
   };
 
   const removeRow = (index: number) => {
@@ -152,6 +172,23 @@ const SelectBinsModal = ({
             <span className="ml-4">Quantity to be added: {remainingQuantity} {unitOfMeasurement}</span>
           </div>
 
+          {/* Location Filter */}
+          <div className="mb-4">
+            <label className="block text-sm font-medium text-slate-700 mb-1">
+              LOCATION
+            </label>
+            <select
+              value={selectedLocation}
+              onChange={(e) => setSelectedLocation(e.target.value)}
+              className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="">All Locations</option>
+              {locationNames.map(name => (
+                <option key={name} value={name}>{name}</option>
+              ))}
+            </select>
+          </div>
+
           {/* Bin Allocations Table */}
           <div className="mb-4">
             <div className="grid grid-cols-12 gap-4 mb-3">
@@ -177,9 +214,9 @@ const SelectBinsModal = ({
                     className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
                   >
                     <option value="">Select Bin</option>
-                    {binLocations.map(bin => (
+                    {filteredBins.map(bin => (
                       <option key={bin.id} value={bin.id}>
-                        {bin.bin_code} - {bin.warehouse}
+                        {bin.bin_code} - {bin.locations?.name || bin.warehouse}
                       </option>
                     ))}
                   </select>

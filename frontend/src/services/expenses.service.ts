@@ -105,6 +105,18 @@ export const expensesService = {
     }
   },
 
+  // Create expense category
+  createExpenseCategory: async (data: { category_name: string }) => {
+    const response = await apiClient.post('/expenses/categories', data);
+    return response.data;
+  },
+
+  // Delete expense category
+  deleteExpenseCategory: async (id: string) => {
+    const response = await apiClient.delete(`/expenses/categories/${id}`);
+    return response.data;
+  },
+
   // Create new expense
   createExpense: async (
     expense: Omit<Expense, 'id' | 'expense_number' | 'created_at' | 'updated_at'>,
