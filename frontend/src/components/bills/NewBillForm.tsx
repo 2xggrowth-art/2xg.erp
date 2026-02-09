@@ -108,6 +108,9 @@ const NewBillForm = () => {
     }
   ]);
 
+  // Track last saved serial number per item_id (from DB)
+  const [serialOffsets, setSerialOffsets] = useState<Record<string, number>>({});
+
   useEffect(() => {
     fetchVendors();
     fetchItems();
@@ -161,7 +164,25 @@ const NewBillForm = () => {
     }));
   };
 
-  const handleItemChange = (index: number, field: string, value: any) => {
+  // Helper to regenerate serial numbers for all rows of a given item
+  const regenerateSerials = (updatedItems: typeof billItems, itemId: string, dbOffset: number) => {
+    const item = items.find(i => i.id === itemId);
+    if (!item || !item.sku) return;
+    let counter = dbOffset;
+    for (let i = 0; i < updatedItems.length; i++) {
+      if (updatedItems[i].item_id === itemId) {
+        const rowQty = updatedItems[i].quantity;
+        if (rowQty > 0) {
+          updatedItems[i].serial_numbers = Array.from({ length: rowQty }, (_, j) => `${item.sku}/${counter + j + 1}`);
+          counter += rowQty;
+        } else {
+          updatedItems[i].serial_numbers = [];
+        }
+      }
+    }
+  };
+
+  const handleItemChange = async (index: number, field: string, value: any) => {
     const updatedItems = [...billItems];
 
     // Update the specific field
@@ -174,45 +195,51 @@ const NewBillForm = () => {
     if (field === 'item_id' && value) {
       const selectedItem = items.find(item => item.id === value);
       if (selectedItem) {
-        // Auto-populate item details
         updatedItems[index].item_name = selectedItem.item_name;
         updatedItems[index].unit_price = selectedItem.cost_price || selectedItem.unit_price || 0;
         updatedItems[index].unit_of_measurement = selectedItem.unit_of_measurement || 'pcs';
         updatedItems[index].description = selectedItem.description || '';
-
-        // Auto-populate account based on item type
-        // If item has inventory tracking, set to Inventory Asset, otherwise Cost of Goods Sold
         updatedItems[index].account = selectedItem.current_stock !== undefined && selectedItem.current_stock >= 0
           ? 'Inventory Asset'
           : 'Cost of Goods Sold';
 
-        // Set default quantity if not set
         if (updatedItems[index].quantity === 0) {
           updatedItems[index].quantity = 1;
+        }
+
+        // Fetch last serial number from DB if not cached
+        if (!(value in serialOffsets)) {
+          try {
+            const lastSerial = await billsService.getLastSerialNumber(value);
+            setSerialOffsets(prev => ({ ...prev, [value]: lastSerial }));
+            regenerateSerials(updatedItems, value, lastSerial);
+          } catch {
+            regenerateSerials(updatedItems, value, 0);
+          }
+        } else {
+          regenerateSerials(updatedItems, value, serialOffsets[value]);
         }
       }
     }
 
-    // Real-time calculation: Update amount whenever quantity, rate, tax, or discount changes
+    // Real-time calculation
     if (field === 'quantity' || field === 'unit_price' || field === 'tax_rate' || field === 'discount' || field === 'item_id') {
       const quantity = updatedItems[index].quantity;
       const unitPrice = updatedItems[index].unit_price;
       const taxRate = updatedItems[index].tax_rate || 0;
       const discount = updatedItems[index].discount || 0;
 
-      // Calculate: (Quantity × Rate) - Discount + Tax
       const subtotal = quantity * unitPrice;
       const afterDiscount = subtotal - discount;
       const tax = (afterDiscount * taxRate) / 100;
       updatedItems[index].total = afterDiscount + tax;
 
-      // Generate Serial Numbers if Quantity Changes
-      if (field === 'quantity' || field === 'item_id') {
-        const item = items.find(i => i.id === updatedItems[index].item_id);
-        if (item && item.sku && quantity > 0) {
-          updatedItems[index].serial_numbers = Array.from({ length: quantity }, (_, i) => `${item.sku}/${i + 1}`);
-        } else {
-          updatedItems[index].serial_numbers = [];
+      // Regenerate serial numbers for all rows with same item
+      if (field === 'quantity') {
+        const currentItemId = updatedItems[index].item_id;
+        if (currentItemId) {
+          const offset = serialOffsets[currentItemId] || 0;
+          regenerateSerials(updatedItems, currentItemId, offset);
         }
       }
     }
@@ -325,6 +352,7 @@ const NewBillForm = () => {
           tax_rate: item.tax_rate,
           discount: item.discount,
           total: item.total,
+          serial_numbers: item.serial_numbers || [],
           bin_allocations: item.bin_allocations || []
         }))
       };
@@ -615,12 +643,16 @@ const NewBillForm = () => {
                           </button>
                         )}
                         {item.serial_numbers && item.serial_numbers.length > 0 && (
-                          <div className="mt-2 flex flex-wrap gap-1 max-w-[200px] justify-center">
-                            {item.serial_numbers.map((sn, i) => (
-                              <span key={i} className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-blue-100 text-blue-800">
-                                {sn}
-                              </span>
-                            ))}
+                          <div className="mt-2 text-center">
+                            <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium bg-blue-100 text-blue-800">
+                              {item.serial_numbers.length === 1
+                                ? item.serial_numbers[0]
+                                : `${item.serial_numbers[0]} → ${item.serial_numbers[item.serial_numbers.length - 1]}`
+                              }
+                              {item.serial_numbers.length > 1 && (
+                                <span className="ml-1 text-blue-500">({item.serial_numbers.length})</span>
+                              )}
+                            </span>
                           </div>
                         )}
                         {item.quantity > 0 && (!item.serial_numbers || item.serial_numbers.length === 0) && !item.item_id && (
@@ -877,6 +909,7 @@ const NewBillForm = () => {
           totalQuantity={billItems[selectedItemIndex].quantity}
           unitOfMeasurement={billItems[selectedItemIndex].unit_of_measurement || 'pcs'}
           currentAllocations={billItems[selectedItemIndex].bin_allocations || []}
+          serialNumbers={billItems[selectedItemIndex].serial_numbers || []}
           onSave={handleBinAllocationSave}
         />
       )}

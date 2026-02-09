@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Calendar, Clock, DollarSign, TrendingUp, TrendingDown, Printer, Package, RefreshCw } from 'lucide-react';
 import { invoicesService } from '../services/invoices.service';
+import { posSessionsService } from '../services/pos-sessions.service';
 
 interface Invoice {
   id: string;
@@ -67,82 +68,91 @@ const SessionDetailPage = () => {
     try {
       setLoading(true);
 
-      // Fetch all invoices
-      const response = await invoicesService.getAllInvoices({});
+      if (!sessionId) return;
+
+      // Fetch actual session data from the API
+      const sessionResponse = await posSessionsService.getSessionById(sessionId);
+      const dbSession = sessionResponse.data;
+
+      if (!dbSession) {
+        setSession(null);
+        return;
+      }
+
+      // Fetch invoices for this session
+      const response = await invoicesService.getAllInvoices({ pos_session_id: sessionId });
+      const payments_breakdown: { [key: string]: number } = {};
+      let cash_total = 0;
+      let ordersCount = 0;
 
       if (response.success && response.data) {
         const invoices: Invoice[] = response.data.invoices || response.data.data || [];
+        ordersCount = invoices.length;
 
-        // Filter POS transactions only (where subject = 'POS')
-        const posInvoices = invoices.filter((inv: any) => inv.subject === 'POS');
-
-        // Calculate payment breakdown from customer_notes
-        const payments_breakdown: { [key: string]: number } = {};
-        let total_sales = 0;
-        let cash_total = 0;
-
-        posInvoices.forEach((invoice: any) => {
+        invoices.forEach((invoice: any) => {
           const amount = invoice.total_amount || 0;
-          total_sales += amount;
-
-          // Extract payment mode from customer_notes
           const notes = invoice.customer_notes || '';
-          const paymentMatch = notes.match(/Payment Mode: ([^\n]+)/);
 
-          if (paymentMatch) {
-            const paymentMode = paymentMatch[1].trim();
-            const normalizedMode = paymentMode.toUpperCase();
+          // Check for split payment format: "Payment 1: MODE - ₹amount"
+          const splitMatches: RegExpMatchArray[] = Array.from(notes.matchAll(/Payment \d+:\s*(.+?)\s*-\s*₹([\d,.]+)/g));
 
-            if (payments_breakdown[normalizedMode]) {
-              payments_breakdown[normalizedMode] += amount;
-            } else {
-              payments_breakdown[normalizedMode] = amount;
+          if (splitMatches.length > 0) {
+            for (const match of splitMatches) {
+              const mode = (match[1] || '').trim().toUpperCase();
+              const splitAmount = parseFloat((match[2] || '0').replace(/,/g, '')) || 0;
+              payments_breakdown[mode] = (payments_breakdown[mode] || 0) + splitAmount;
+              if (mode === 'CASH') cash_total += splitAmount;
             }
-
-            // Track cash specifically
-            if (normalizedMode === 'CASH') {
-              cash_total += amount;
+          } else {
+            // Regular single payment: "Payment Mode: CASH"
+            const paymentMatch = notes.match(/Payment Mode: ([^\n]+)/);
+            if (paymentMatch) {
+              const mode = paymentMatch[1].trim().toUpperCase();
+              payments_breakdown[mode] = (payments_breakdown[mode] || 0) + amount;
+              if (mode === 'CASH') cash_total += amount;
             }
           }
         });
-
-        // Load cash transactions from localStorage
-        const allTransactions = JSON.parse(localStorage.getItem('pos_cash_transactions') || '[]');
-        const sessionTransactions = allTransactions.filter((txn: any) => txn.sessionId === sessionId);
-
-        // Load session data from localStorage
-        const savedSessions = JSON.parse(localStorage.getItem('pos_sessions') || '[]');
-        const savedSession = savedSessions.find((s: any) => s.id === sessionId);
-
-        // Mock session data - you should fetch this from a sessions API endpoint
-        const sessionData: PosSession = {
-          id: sessionId || '1',
-          session_number: savedSession?.session_number || 'SE1-556',
-          register: savedSession?.register || 'billing desk',
-          opened_by: savedSession?.opened_by || 'Admin User',
-          opened_at: savedSession?.opened_at || '2026-01-19T10:24:00',
-          closed_at: savedSession?.closed_at || '2026-01-19T17:04:00',
-          status: savedSession?.status || 'Closed',
-          opening_balance: savedSession?.opening_balance || 0,
-          closing_balance: cash_total,
-          cash_in: savedSession?.cash_in || 0,
-          cash_out: savedSession?.cash_out || 0,
-          total_sales: total_sales,
-          orders_value: total_sales,
-          orders_count: posInvoices.length,
-          returns_value: 0,
-          returns_count: 0,
-          discrepancy: 0,
-          expected_cash_drawer: cash_total + (savedSession?.cash_in || 0) - (savedSession?.cash_out || 0),
-          counted_cash_drawer: cash_total,
-          cash_sales: cash_total,
-          credit_sales: total_sales - cash_total,
-          payments_breakdown: payments_breakdown,
-          cash_transactions: sessionTransactions
-        };
-
-        setSession(sessionData);
       }
+
+      // Load cash transactions from localStorage (until we have a proper API)
+      const allTransactions = JSON.parse(localStorage.getItem('pos_cash_transactions') || '[]');
+      const sessionTransactions = allTransactions.filter((txn: any) => txn.sessionId === sessionId);
+
+      const totalSales = dbSession.total_sales || 0;
+      const cashIn = dbSession.cash_in || 0;
+      const cashOut = dbSession.cash_out || 0;
+      const openingBalance = dbSession.opening_balance || 0;
+      const closingBalance = dbSession.closing_balance || 0;
+      const expectedCash = openingBalance + cash_total + cashIn - cashOut;
+
+      const sessionData: PosSession = {
+        id: dbSession.id,
+        session_number: dbSession.session_number,
+        register: dbSession.register,
+        opened_by: dbSession.opened_by,
+        opened_at: dbSession.opened_at,
+        closed_at: dbSession.closed_at,
+        status: dbSession.status,
+        opening_balance: openingBalance,
+        closing_balance: closingBalance,
+        cash_in: cashIn,
+        cash_out: cashOut,
+        total_sales: totalSales,
+        orders_value: totalSales,
+        orders_count: ordersCount,
+        returns_value: 0,
+        returns_count: 0,
+        discrepancy: closingBalance ? closingBalance - expectedCash : 0,
+        expected_cash_drawer: expectedCash,
+        counted_cash_drawer: closingBalance || expectedCash,
+        cash_sales: cash_total,
+        credit_sales: totalSales - cash_total,
+        payments_breakdown: payments_breakdown,
+        cash_transactions: sessionTransactions
+      };
+
+      setSession(sessionData);
     } catch (error) {
       console.error('Error fetching session details:', error);
     } finally {

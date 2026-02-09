@@ -1,22 +1,31 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { X, Plus, Trash2, RefreshCw, AlertCircle } from 'lucide-react';
-import { transferOrdersService, CreateTransferOrderData, TransferOrderItem } from '../../services/transfer-orders.service';
+import { transferOrdersService, CreateTransferOrderData, TransferOrderItem, ItemLocationStock } from '../../services/transfer-orders.service';
 import { itemsService, Item } from '../../services/items.service';
+import { locationsService, Location } from '../../services/locations.service';
+import { binLocationService, BinLocation } from '../../services/binLocation.service';
 
 const NewTransferOrderForm = () => {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
   const [items, setItems] = useState<Item[]>([]);
+  const [allLocations, setAllLocations] = useState<Location[]>([]);
   const [transferOrderNumber, setTransferOrderNumber] = useState('');
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [showError, setShowError] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
 
-  // Form data
+  // Stock per location for each selected item: { itemId: [{ location_name, available_quantity }] }
+  const [itemLocationStock, setItemLocationStock] = useState<Record<string, ItemLocationStock[]>>({});
+
+  // Destination bin selection
+  const [destinationBins, setDestinationBins] = useState<BinLocation[]>([]);
+  const [selectedDestBinId, setSelectedDestBinId] = useState('');
+
   const [formData, setFormData] = useState({
     transfer_date: new Date().toISOString().split('T')[0],
-    source_location: 'Head Office',
+    source_location: '',
     destination_location: '',
     reason: '',
     notes: '',
@@ -34,12 +43,26 @@ const NewTransferOrderForm = () => {
     },
   ]);
 
-  const locations = ['Head Office', 'Warehouse', 'Branch Office', 'Factory', 'Retail Store'];
-
   useEffect(() => {
     fetchItems();
+    fetchLocations();
     generateTransferOrderNumber();
   }, []);
+
+  // Update source/destination availability when locations or stock data change
+  useEffect(() => {
+    setTransferItems(prev => prev.map(item => {
+      if (!item.item_id) return item;
+      const stocks = itemLocationStock[item.item_id] || [];
+      const sourceStock = stocks.find(s => s.location_name === formData.source_location);
+      const destStock = stocks.find(s => s.location_name === formData.destination_location);
+      return {
+        ...item,
+        source_availability: sourceStock?.available_quantity || 0,
+        destination_availability: destStock?.available_quantity || 0,
+      };
+    }));
+  }, [formData.source_location, formData.destination_location, itemLocationStock]);
 
   const fetchItems = async () => {
     try {
@@ -52,6 +75,17 @@ const NewTransferOrderForm = () => {
     }
   };
 
+  const fetchLocations = async () => {
+    try {
+      const response = await locationsService.getAllLocations({ status: 'active' });
+      if (response.success && response.data) {
+        setAllLocations(response.data);
+      }
+    } catch (error) {
+      console.error('Error fetching locations:', error);
+    }
+  };
+
   const generateTransferOrderNumber = async () => {
     try {
       const response = await transferOrdersService.generateTransferOrderNumber();
@@ -61,7 +95,69 @@ const NewTransferOrderForm = () => {
     }
   };
 
-  const handleItemChange = (index: number, field: string, value: any) => {
+  const fetchItemLocationStock = async (itemId: string) => {
+    try {
+      const response = await transferOrdersService.getItemLocationStock(itemId);
+      if (response.success) {
+        setItemLocationStock(prev => ({
+          ...prev,
+          [itemId]: response.data,
+        }));
+      }
+    } catch (error) {
+      console.error('Error fetching item location stock:', error);
+    }
+  };
+
+  // Source locations: only locations where at least one selected item has stock
+  const sourceLocationOptions = useMemo(() => {
+    const selectedItemIds = transferItems
+      .filter(item => item.item_id)
+      .map(item => item.item_id!);
+
+    if (selectedItemIds.length === 0) {
+      return allLocations.map(l => l.name);
+    }
+
+    const locationSet = new Set<string>();
+    selectedItemIds.forEach(id => {
+      (itemLocationStock[id] || []).forEach(s => locationSet.add(s.location_name));
+    });
+
+    return Array.from(locationSet).sort();
+  }, [transferItems, itemLocationStock, allLocations]);
+
+  // Destination locations: all locations except the selected source
+  const destinationLocationOptions = useMemo(() => {
+    return allLocations
+      .map(l => l.name)
+      .filter(name => name !== formData.source_location);
+  }, [allLocations, formData.source_location]);
+
+  // Fetch bins when destination location changes
+  useEffect(() => {
+    const fetchDestinationBins = async () => {
+      if (!formData.destination_location) {
+        setDestinationBins([]);
+        setSelectedDestBinId('');
+        return;
+      }
+      try {
+        const destLoc = allLocations.find(l => l.name === formData.destination_location);
+        if (!destLoc) return;
+        const response = await binLocationService.getAllBinLocations({ location_id: destLoc.id, status: 'active' });
+        if (response.success && response.data) {
+          setDestinationBins(response.data);
+          setSelectedDestBinId('');
+        }
+      } catch (error) {
+        console.error('Error fetching destination bins:', error);
+      }
+    };
+    fetchDestinationBins();
+  }, [formData.destination_location, allLocations]);
+
+  const handleItemChange = async (index: number, field: string, value: any) => {
     const updatedItems = [...transferItems];
 
     updatedItems[index] = {
@@ -69,27 +165,23 @@ const NewTransferOrderForm = () => {
       [field]: value,
     };
 
-    // If item selected from dropdown, auto-populate fields
     if (field === 'item_id' && value) {
       const selectedItem = items.find(item => item.id === value);
       if (selectedItem) {
         updatedItems[index].item_name = selectedItem.item_name;
         updatedItems[index].description = selectedItem.description || '';
         updatedItems[index].unit_of_measurement = selectedItem.unit_of_measurement || 'Pcs';
-
-        // Simulate availability (in real app, fetch from inventory)
-        updatedItems[index].source_availability = selectedItem.current_stock || 0;
-        updatedItems[index].destination_availability = Math.floor(Math.random() * 50); // Simulated
       }
+      // Fetch stock per location for this item (async - availability updates via useEffect)
+      fetchItemLocationStock(value);
     }
 
-    setTransferItems(updatedItems);
-
-    // Clear zero quantity error when user changes quantity
     if (field === 'transfer_quantity' && value > 0) {
       setShowError(false);
       setErrorMessage('');
     }
+
+    setTransferItems(updatedItems);
   };
 
   const addNewItem = () => {
@@ -117,19 +209,19 @@ const NewTransferOrderForm = () => {
   const validateForm = (): boolean => {
     const newErrors: Record<string, string> = {};
 
-    // Validation 1: Same Location Error
-    if (formData.source_location === formData.destination_location) {
-      setShowError(true);
-      setErrorMessage('Transfers cannot be made within the same location. Please choose a different one and proceed.');
-      return false;
-    }
-
     if (!formData.source_location) {
       newErrors.source = 'Please select a source location';
     }
 
     if (!formData.destination_location) {
       newErrors.destination = 'Please select a destination location';
+    }
+
+    if (formData.source_location && formData.destination_location &&
+        formData.source_location === formData.destination_location) {
+      setShowError(true);
+      setErrorMessage('Transfers cannot be made within the same location. Please choose a different one and proceed.');
+      return false;
     }
 
     if (!transferOrderNumber) {
@@ -141,7 +233,6 @@ const NewTransferOrderForm = () => {
       newErrors.items = 'Please add at least one valid item with quantity';
     }
 
-    // Validation 2: Zero Quantity Error
     const hasZeroQuantity = transferItems.some(item => item.item_name && item.transfer_quantity <= 0);
     if (hasZeroQuantity) {
       setShowError(true);
@@ -168,6 +259,7 @@ const NewTransferOrderForm = () => {
         transfer_date: formData.transfer_date,
         source_location: formData.source_location,
         destination_location: formData.destination_location,
+        destination_bin_id: selectedDestBinId || undefined,
         reason: formData.reason,
         status: saveType,
         notes: formData.notes,
@@ -225,8 +317,8 @@ const NewTransferOrderForm = () => {
       {/* Form */}
       <div className="px-6 py-6">
         <div className="max-w-6xl mx-auto">
+          {/* Transfer Order# and Date */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-            {/* Transfer Order# */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Transfer Order#<span className="text-red-500">*</span>
@@ -251,7 +343,6 @@ const NewTransferOrderForm = () => {
               )}
             </div>
 
-            {/* Date */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Date
@@ -265,74 +356,7 @@ const NewTransferOrderForm = () => {
             </div>
           </div>
 
-          {/* Source & Destination */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Source Location<span className="text-red-500">*</span>
-              </label>
-              <select
-                value={formData.source_location}
-                onChange={(e) => {
-                  setFormData({ ...formData, source_location: e.target.value });
-                  setShowError(false);
-                  setErrorMessage('');
-                }}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                <option value="">Select Source Location</option>
-                {locations.map((loc) => (
-                  <option key={loc} value={loc}>
-                    {loc}
-                  </option>
-                ))}
-              </select>
-              {errors.source && (
-                <p className="mt-1 text-sm text-red-600">{errors.source}</p>
-              )}
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Destination Location<span className="text-red-500">*</span>
-              </label>
-              <select
-                value={formData.destination_location}
-                onChange={(e) => {
-                  setFormData({ ...formData, destination_location: e.target.value });
-                  setShowError(false);
-                  setErrorMessage('');
-                }}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                <option value="">Select Destination Location</option>
-                {locations.map((loc) => (
-                  <option key={loc} value={loc}>
-                    {loc}
-                  </option>
-                ))}
-              </select>
-              {errors.destination && (
-                <p className="mt-1 text-sm text-red-600">{errors.destination}</p>
-              )}
-            </div>
-          </div>
-
-          {/* Reason */}
-          <div className="mb-6">
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Reason for Transfer
-            </label>
-            <input
-              type="text"
-              value={formData.reason}
-              onChange={(e) => setFormData({ ...formData, reason: e.target.value })}
-              placeholder="e.g., Stock replenishment, Customer order, etc."
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-          </div>
-
-          {/* Item Table */}
+          {/* Item Details Table — BEFORE locations */}
           <div className="mb-6">
             <label className="block text-sm font-medium text-gray-700 mb-2">
               Item Details
@@ -375,19 +399,19 @@ const NewTransferOrderForm = () => {
                             <option key={i.id} value={i.id}>{i.item_name}</option>
                           ))}
                         </select>
-                        <input
-                          type="text"
-                          placeholder="Type or click to select an item"
-                          value={item.item_name}
-                          onChange={(e) => handleItemChange(index, 'item_name', e.target.value)}
-                          className="w-full px-2 py-1 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        />
+                        {item.item_name && (
+                          <p className="text-xs text-gray-500 mt-1 px-1">{item.description || ''}</p>
+                        )}
                       </td>
                       <td className="px-4 py-3 text-center">
-                        <span className="text-sm text-gray-900">{item.source_availability}</span>
+                        <span className={`text-sm font-medium ${(item.source_availability || 0) > 0 ? 'text-green-600' : 'text-gray-400'}`}>
+                          {item.item_id ? (item.source_availability || 0) : '-'}
+                        </span>
                       </td>
                       <td className="px-4 py-3 text-center">
-                        <span className="text-sm text-gray-900">{item.destination_availability}</span>
+                        <span className="text-sm text-gray-600">
+                          {item.item_id ? item.destination_availability : '-'}
+                        </span>
                       </td>
                       <td className="px-4 py-3">
                         <input
@@ -427,6 +451,112 @@ const NewTransferOrderForm = () => {
             {errors.items && (
               <p className="mt-1 text-sm text-red-600">{errors.items}</p>
             )}
+          </div>
+
+          {/* Source & Destination Locations — dynamic based on selected items */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Source Location<span className="text-red-500">*</span>
+              </label>
+              <select
+                value={formData.source_location}
+                onChange={(e) => {
+                  setFormData({ ...formData, source_location: e.target.value });
+                  setShowError(false);
+                  setErrorMessage('');
+                }}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="">Select Source Location</option>
+                {sourceLocationOptions.map((loc) => {
+                  // Show stock info for the first selected item as hint
+                  const selectedItemIds = transferItems.filter(ti => ti.item_id).map(ti => ti.item_id!);
+                  let stockHint = '';
+                  if (selectedItemIds.length > 0) {
+                    const totalStock = selectedItemIds.reduce((sum, id) => {
+                      const stocks = itemLocationStock[id] || [];
+                      const stock = stocks.find(s => s.location_name === loc);
+                      return sum + (stock?.available_quantity || 0);
+                    }, 0);
+                    stockHint = ` (${totalStock} total in stock)`;
+                  }
+                  return (
+                    <option key={loc} value={loc}>
+                      {loc}{stockHint}
+                    </option>
+                  );
+                })}
+              </select>
+              {errors.source && (
+                <p className="mt-1 text-sm text-red-600">{errors.source}</p>
+              )}
+              {sourceLocationOptions.length === 0 && transferItems.some(ti => ti.item_id) && (
+                <p className="mt-1 text-sm text-amber-600">
+                  No locations with stock found for selected items
+                </p>
+              )}
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Destination Location<span className="text-red-500">*</span>
+              </label>
+              <select
+                value={formData.destination_location}
+                onChange={(e) => {
+                  setFormData({ ...formData, destination_location: e.target.value });
+                  setShowError(false);
+                  setErrorMessage('');
+                }}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="">Select Destination Location</option>
+                {destinationLocationOptions.map((loc) => (
+                  <option key={loc} value={loc}>
+                    {loc}
+                  </option>
+                ))}
+              </select>
+              {errors.destination && (
+                <p className="mt-1 text-sm text-red-600">{errors.destination}</p>
+              )}
+
+              {/* Destination Bin Selection */}
+              {formData.destination_location && destinationBins.length > 0 && (
+                <div className="mt-3">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Destination Bin
+                  </label>
+                  <select
+                    value={selectedDestBinId}
+                    onChange={(e) => setSelectedDestBinId(e.target.value)}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="">Select Destination Bin</option>
+                    {destinationBins.map((bin) => (
+                      <option key={bin.id} value={bin.id}>
+                        {bin.bin_code}{bin.description ? ` — ${bin.description}` : ''}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Reason */}
+          <div className="mb-6">
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Reason for Transfer
+            </label>
+            <input
+              type="text"
+              value={formData.reason}
+              onChange={(e) => setFormData({ ...formData, reason: e.target.value })}
+              placeholder="e.g., Stock replenishment, Customer order, etc."
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
           </div>
 
           {/* Notes */}

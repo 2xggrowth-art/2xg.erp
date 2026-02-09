@@ -143,14 +143,15 @@ export class PosSessionsService {
    */
   async closeSession(id: string, data: CloseSessionData): Promise<PosSession> {
     try {
+      // Only update closing_balance, closed_at, and status.
+      // Do NOT overwrite cash_in/cash_out — those are accumulated
+      // by recordCashMovement and must be preserved from the DB.
       const { data: session, error } = await supabase
         .from('pos_sessions')
         .update({
           closed_at: new Date().toISOString(),
           status: 'Closed',
           closing_balance: data.closing_balance,
-          cash_in: data.cash_in,
-          cash_out: data.cash_out,
         })
         .eq('id', id)
         .eq('status', 'In-Progress')

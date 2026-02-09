@@ -281,6 +281,15 @@ export const billsService = {
       throw error;
     }
   },
+  getLastSerialNumber: async (itemId: string): Promise<number> => {
+    try {
+      const response = await apiClient.get<APIResponse<{ last_serial: number }>>(`/bills/last-serial/${itemId}`);
+      return response.data?.data?.last_serial || 0;
+    } catch (error) {
+      console.error('Error fetching last serial number:', error);
+      return 0;
+    }
+  },
 };
 
 export default billsService;

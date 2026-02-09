@@ -8,6 +8,11 @@ export interface Item {
   item_name: string;
   sku: string;
   category_id?: string;
+  subcategory_id?: string;
+  item_type?: string;
+  size?: string;
+  color?: string;
+  variant?: string;
   description?: string;
   unit_price: number;
   cost_price: number;
@@ -30,6 +35,8 @@ export interface Item {
   ean?: string;
   isbn?: string;
   is_returnable: boolean;
+  is_premium_tagged?: boolean;
+  incentive_type?: string;
   created_at: string;
   updated_at: string;
 }
@@ -82,7 +89,39 @@ export interface ValidationResult {
   totalRows: number;
 }
 
+export interface ProductCategory {
+  id: string;
+  name: string;
+}
+
+export interface ProductSubcategory {
+  id: string;
+  name: string;
+  category_id: string;
+}
+
 export const itemsService = {
+  getCategories: (): AxiosPromise<APIResponse<ProductCategory[]>> =>
+    apiClient.get('/items/categories'),
+
+  createCategory: (name: string): AxiosPromise<APIResponse<ProductCategory>> =>
+    apiClient.post('/items/categories', { name }),
+
+  deleteCategory: (id: string): AxiosPromise<APIResponse<ProductCategory>> =>
+    apiClient.delete(`/items/categories/${id}`),
+
+  getAllSubcategories: (): AxiosPromise<APIResponse<ProductSubcategory[]>> =>
+    apiClient.get('/items/subcategories'),
+
+  getSubcategories: (categoryId: string): AxiosPromise<APIResponse<ProductSubcategory[]>> =>
+    apiClient.get(`/items/categories/${categoryId}/subcategories`),
+
+  createSubcategory: (categoryId: string, name: string): AxiosPromise<APIResponse<ProductSubcategory>> =>
+    apiClient.post(`/items/categories/${categoryId}/subcategories`, { name }),
+
+  deleteSubcategory: (id: string): AxiosPromise<APIResponse<ProductSubcategory>> =>
+    apiClient.delete(`/items/subcategories/${id}`),
+
   generateSku: (): AxiosPromise<APIResponse<{ sku: string }>> =>
     apiClient.get('/items/generate-sku'),
 

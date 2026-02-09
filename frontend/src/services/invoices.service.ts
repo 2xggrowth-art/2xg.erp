@@ -42,6 +42,7 @@ export interface Invoice {
   customer_notes?: string;
   notes?: string;
   terms_and_conditions?: string;
+  pos_session_id?: string;
   items: InvoiceItem[];
   created_at?: string;
   updated_at?: string;
@@ -52,6 +53,7 @@ export interface InvoiceFilters {
   customer_id?: string;
   from_date?: string;
   to_date?: string;
+  pos_session_id?: string;
 }
 
 class InvoicesService {
@@ -62,6 +64,7 @@ class InvoicesService {
       if (filters?.customer_id) params.append('customer_id', filters.customer_id);
       if (filters?.from_date) params.append('from_date', filters.from_date);
       if (filters?.to_date) params.append('to_date', filters.to_date);
+      if (filters?.pos_session_id) params.append('pos_session_id', filters.pos_session_id);
 
       const response = await apiClient.get(`/invoices?${params.toString()}`);
 

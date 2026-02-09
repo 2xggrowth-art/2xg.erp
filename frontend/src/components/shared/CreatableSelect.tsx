@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { Plus, Upload } from 'lucide-react';
+import { Plus, Upload, Trash2 } from 'lucide-react';
 
 interface Option {
     id: string;
@@ -12,6 +12,8 @@ interface CreatableSelectProps {
     value?: string; // The name of the selected item
     onChange: (value: string) => void;
     onCreateOption: (value: string) => Promise<void>;
+    onDeleteOption?: (id: string) => Promise<void>;
+    onDoubleClickOption?: (option: Option) => void;
     onUploadClick?: () => void;
     placeholder?: string;
     className?: string;
@@ -24,6 +26,8 @@ const CreatableSelect: React.FC<CreatableSelectProps> = ({
     value,
     onChange,
     onCreateOption,
+    onDeleteOption,
+    onDoubleClickOption,
     onUploadClick,
     placeholder = 'Select or type to add...',
     className = '',
@@ -35,6 +39,7 @@ const CreatableSelect: React.FC<CreatableSelectProps> = ({
     const [dropdownPosition, setDropdownPosition] = useState({ top: 0, left: 0, width: 0 });
     const wrapperRef = useRef<HTMLDivElement>(null);
     const [isCreating, setIsCreating] = useState(false);
+    const [deletingId, setDeletingId] = useState<string | null>(null);
 
     useEffect(() => {
         setSearchTerm(value || '');
@@ -97,6 +102,33 @@ const CreatableSelect: React.FC<CreatableSelectProps> = ({
         }
     };
 
+    const handleDelete = async (e: React.MouseEvent, optionId: string) => {
+        e.stopPropagation();
+        if (!onDeleteOption) return;
+        if (!confirm('Are you sure you want to delete this?')) return;
+        setDeletingId(optionId);
+        try {
+            await onDeleteOption(optionId);
+            // If deleted item was selected, clear selection
+            const deletedOption = options.find(o => o.id === optionId);
+            if (deletedOption && deletedOption.name === value) {
+                onChange('');
+                setSearchTerm('');
+            }
+        } catch (error) {
+            console.error('Error deleting option:', error);
+        } finally {
+            setDeletingId(null);
+        }
+    };
+
+    const handleDoubleClick = (option: Option) => {
+        if (onDoubleClickOption) {
+            onDoubleClickOption(option);
+            handleSelect(option.name);
+        }
+    };
+
     return (
         <div className={`relative ${className}`} ref={wrapperRef}>
             <div className="relative">
@@ -143,9 +175,24 @@ const CreatableSelect: React.FC<CreatableSelectProps> = ({
                             <div
                                 key={option.id}
                                 onClick={() => handleSelect(option.name)}
-                                className="px-4 py-2 hover:bg-blue-50 cursor-pointer text-sm text-gray-700"
+                                onDoubleClick={() => handleDoubleClick(option)}
+                                className="px-4 py-2 hover:bg-blue-50 cursor-pointer text-sm text-gray-700 flex items-center justify-between group"
                             >
-                                {option.name}
+                                <span>{option.name}</span>
+                                {onDeleteOption && (
+                                    <button
+                                        type="button"
+                                        onClick={(e) => handleDelete(e, option.id)}
+                                        className="opacity-0 group-hover:opacity-100 p-1 text-gray-400 hover:text-red-500 transition-all"
+                                        title="Delete"
+                                    >
+                                        {deletingId === option.id ? (
+                                            <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-red-500" />
+                                        ) : (
+                                            <Trash2 className="w-3.5 h-3.5" />
+                                        )}
+                                    </button>
+                                )}
                             </div>
                         ))}
 

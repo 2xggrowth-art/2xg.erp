@@ -158,4 +158,20 @@ export class BillsController {
       });
     }
   };
+
+  getLastSerialNumber = async (req: Request, res: Response) => {
+    try {
+      const { itemId } = req.params;
+      const lastSerial = await this.billsService.getLastSerialNumber(itemId);
+      res.json({
+        success: true,
+        data: { last_serial: lastSerial }
+      });
+    } catch (error: any) {
+      res.status(500).json({
+        success: false,
+        error: error.message
+      });
+    }
+  };
 }

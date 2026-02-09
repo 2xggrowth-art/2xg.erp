@@ -595,6 +595,127 @@ export class ItemsService {
   }
 
   /**
+   * Get all product categories
+   */
+  async getCategories() {
+    const { data, error } = await supabaseAdmin
+      .from('product_categories')
+      .select('id, name')
+      .order('name', { ascending: true });
+
+    if (error) throw error;
+    return data;
+  }
+
+  /**
+   * Create a product category
+   */
+  async createCategory(name: string) {
+    const { data, error } = await supabaseAdmin
+      .from('product_categories')
+      .insert({ name })
+      .select('id, name')
+      .single();
+
+    if (error) throw error;
+    return data;
+  }
+
+  /**
+   * Delete a product category
+   */
+  async deleteCategory(id: string) {
+    // Check if any items use this category
+    const { data: items } = await supabaseAdmin
+      .from('items')
+      .select('id')
+      .eq('category_id', id)
+      .limit(1);
+
+    if (items && items.length > 0) {
+      throw new Error('Cannot delete category that has items assigned to it');
+    }
+
+    // Delete subcategories first
+    await supabaseAdmin
+      .from('product_subcategories')
+      .delete()
+      .eq('category_id', id);
+
+    const { data, error } = await supabaseAdmin
+      .from('product_categories')
+      .delete()
+      .eq('id', id)
+      .select('id, name')
+      .single();
+
+    if (error) throw error;
+    return data;
+  }
+
+  /**
+   * Get all subcategories across all categories
+   */
+  async getAllSubcategories() {
+    const { data, error } = await supabaseAdmin
+      .from('product_subcategories')
+      .select('id, name, category_id')
+      .order('name', { ascending: true });
+
+    if (error) throw error;
+    return data;
+  }
+
+  /**
+   * Get subcategories for a category
+   */
+  async getSubcategories(categoryId: string) {
+    const { data, error } = await supabaseAdmin
+      .from('product_subcategories')
+      .select('id, name, category_id')
+      .eq('category_id', categoryId)
+      .order('name', { ascending: true });
+
+    if (error) throw error;
+    return data;
+  }
+
+  /**
+   * Create a subcategory
+   */
+  async createSubcategory(categoryId: string, name: string) {
+    const { data, error } = await supabaseAdmin
+      .from('product_subcategories')
+      .insert({ category_id: categoryId, name })
+      .select('id, name, category_id')
+      .single();
+
+    if (error) throw error;
+    return data;
+  }
+
+  /**
+   * Delete a subcategory
+   */
+  async deleteSubcategory(id: string) {
+    // Clear subcategory_id from items that use it
+    await supabaseAdmin
+      .from('items')
+      .update({ subcategory_id: null })
+      .eq('subcategory_id', id);
+
+    const { data, error } = await supabaseAdmin
+      .from('product_subcategories')
+      .delete()
+      .eq('id', id)
+      .select('id, name')
+      .single();
+
+    if (error) throw error;
+    return data;
+  }
+
+  /**
    * Get all items with optional filters
    */
   async getAllItems(filters?: {
@@ -704,9 +825,14 @@ export class ItemsService {
     const newItem = {
       organization_id: org?.id,
       item_name: itemData.name,
+      item_type: itemData.item_type || 'goods',
+      size: itemData.size || null,
+      color: itemData.color || null,
+      variant: itemData.variant || null,
       sku: itemData.sku,
       unit_of_measurement: itemData.unit,
       category_id: itemData.category || null,
+      subcategory_id: itemData.subcategory || null,
       description: itemData.description || null,
       unit_price: parseFloat(itemData.unit_price) || 0,
       cost_price: parseFloat(itemData.cost_price) || 0,
@@ -744,7 +870,11 @@ export class ItemsService {
       track_bin_location: itemData.track_bin_location || false,
       advanced_tracking_type: itemData.advanced_tracking_type || 'none',
       inventory_account: itemData.inventory_account || null,
-      valuation_method: itemData.valuation_method || null
+      valuation_method: itemData.valuation_method || null,
+
+      // Premium & Incentive
+      is_premium_tagged: itemData.is_premium_tagged || false,
+      incentive_type: itemData.incentive_type || null
     };
 
     const { data, error } = await supabaseAdmin
@@ -769,9 +899,14 @@ export class ItemsService {
       console.log('Updating item name from:', itemData.name);
       updateData.item_name = itemData.name;
     }
+    if (itemData.item_type !== undefined) updateData.item_type = itemData.item_type;
+    if (itemData.size !== undefined) updateData.size = itemData.size || null;
+    if (itemData.color !== undefined) updateData.color = itemData.color || null;
+    if (itemData.variant !== undefined) updateData.variant = itemData.variant || null;
     if (itemData.sku !== undefined) updateData.sku = itemData.sku;
     if (itemData.unit !== undefined) updateData.unit_of_measurement = itemData.unit;
     if (itemData.category !== undefined) updateData.category_id = itemData.category || null;
+    if (itemData.subcategory !== undefined) updateData.subcategory_id = itemData.subcategory || null;
     if (itemData.description !== undefined) updateData.description = itemData.description || null;
     if (itemData.unit_price !== undefined) updateData.unit_price = parseFloat(itemData.unit_price) || 0;
     if (itemData.cost_price !== undefined) updateData.cost_price = parseFloat(itemData.cost_price) || 0;
@@ -810,6 +945,10 @@ export class ItemsService {
     if (itemData.advanced_tracking_type !== undefined) updateData.advanced_tracking_type = itemData.advanced_tracking_type || 'none';
     if (itemData.inventory_account !== undefined) updateData.inventory_account = itemData.inventory_account || null;
     if (itemData.valuation_method !== undefined) updateData.valuation_method = itemData.valuation_method || null;
+
+    // Premium & Incentive
+    if (itemData.is_premium_tagged !== undefined) updateData.is_premium_tagged = itemData.is_premium_tagged;
+    if (itemData.incentive_type !== undefined) updateData.incentive_type = itemData.incentive_type || null;
 
     console.log('Update data being sent:', updateData);
 

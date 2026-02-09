@@ -308,6 +308,58 @@ export class BinLocationsService {
         });
       }
 
+      // Process TRANSFER ORDER ALLOCATIONS (deduct from source, add to destination)
+      const { data: transferAllocations, error: transferError } = await supabaseAdmin
+        .from('transfer_order_allocations')
+        .select(`
+          source_bin_location_id,
+          destination_bin_location_id,
+          item_id,
+          quantity,
+          transfer_order_items (
+            item_name,
+            unit_of_measurement
+          )
+        `);
+
+      if (transferError) console.warn('Transfer allocations query error:', transferError);
+
+      if (transferAllocations) {
+        transferAllocations.forEach((alloc: any) => {
+          const sourceBinId = alloc.source_bin_location_id;
+          const destBinId = alloc.destination_bin_location_id;
+          const itemId = alloc.item_id;
+          const qty = parseFloat(alloc.quantity) || 0;
+          const itemName = alloc.transfer_order_items?.item_name || 'Unknown';
+          const uom = alloc.transfer_order_items?.unit_of_measurement || 'pcs';
+
+          // Deduct from source bin
+          if (binStockMap.has(sourceBinId)) {
+            const binItems = binStockMap.get(sourceBinId);
+            if (binItems.has(itemId)) {
+              binItems.get(itemId).quantity -= qty;
+            }
+          }
+
+          // Add to destination bin
+          if (!binStockMap.has(destBinId)) {
+            binStockMap.set(destBinId, new Map());
+          }
+          const destItems = binStockMap.get(destBinId);
+          if (destItems.has(itemId)) {
+            destItems.get(itemId).quantity += qty;
+          } else {
+            destItems.set(itemId, {
+              item_id: itemId,
+              item_name: itemName,
+              quantity: qty,
+              unit_of_measurement: uom,
+              transactions: [{ type: 'transfer_in', reference: 'Transfer Order', date: null, quantity: qty, created_at: new Date().toISOString() }]
+            });
+          }
+        });
+      }
+
       // Combine bins with their stock information (filter out zero/negative items)
       const binsWithStock = bins?.map(bin => {
         const items = binStockMap.get(bin.id);
@@ -476,6 +528,62 @@ export class BinLocationsService {
             quantity: -allocation.quantity, // Negative to show deduction
             created_at: allocation.created_at
           });
+        });
+      }
+
+      // Process TRANSFER ORDER ALLOCATIONS for this item
+      const { data: transferAllocations, error: transferError } = await supabaseAdmin
+        .from('transfer_order_allocations')
+        .select('source_bin_location_id, destination_bin_location_id, quantity')
+        .eq('item_id', itemId);
+
+      if (transferError) console.warn('Transfer allocations query error:', transferError);
+
+      if (transferAllocations && transferAllocations.length > 0) {
+        // Deduct from source bins
+        transferAllocations.forEach((alloc: any) => {
+          const binId = alloc.source_bin_location_id;
+          const qty = parseFloat(alloc.quantity) || 0;
+          if (binMap.has(binId)) {
+            binMap.get(binId).quantity -= qty;
+          }
+        });
+
+        // For destination bins not in the map, fetch their info
+        const newDestBinIds = new Set<string>();
+        transferAllocations.forEach((alloc: any) => {
+          if (!binMap.has(alloc.destination_bin_location_id)) {
+            newDestBinIds.add(alloc.destination_bin_location_id);
+          }
+        });
+
+        if (newDestBinIds.size > 0) {
+          const { data: newBins } = await supabaseAdmin
+            .from('bin_locations')
+            .select('id, bin_code, warehouse, description, status, location_id, locations(id, name)')
+            .in('id', Array.from(newDestBinIds));
+
+          newBins?.forEach((bin: any) => {
+            binMap.set(bin.id, {
+              bin_id: bin.id,
+              bin_code: bin.bin_code,
+              location_name: bin.locations?.name || bin.warehouse,
+              description: bin.description,
+              status: bin.status,
+              quantity: 0,
+              unit_of_measurement: 'pcs',
+              transactions: []
+            });
+          });
+        }
+
+        // Add to destination bins
+        transferAllocations.forEach((alloc: any) => {
+          const binId = alloc.destination_bin_location_id;
+          const qty = parseFloat(alloc.quantity) || 0;
+          if (binMap.has(binId)) {
+            binMap.get(binId).quantity += qty;
+          }
         });
       }
 

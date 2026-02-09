@@ -88,6 +88,7 @@ export class InvoicesController {
         customer_id: req.query.customer_id as string,
         from_date: req.query.from_date as string,
         to_date: req.query.to_date as string,
+        pos_session_id: req.query.pos_session_id as string,
         page: req.query.page ? parseInt(req.query.page as string) : 1,
         limit: req.query.limit ? parseInt(req.query.limit as string) : 50
       };

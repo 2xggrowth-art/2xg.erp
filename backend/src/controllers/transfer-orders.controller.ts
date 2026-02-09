@@ -9,6 +9,19 @@ export class TransferOrdersController {
   }
 
   /**
+   * Get item stock grouped by location
+   */
+  getItemLocationStock = async (req: Request, res: Response) => {
+    try {
+      const { itemId } = req.params;
+      const stock = await this.transferOrdersService.getItemStockByLocation(itemId);
+      res.json({ success: true, data: stock });
+    } catch (error: any) {
+      res.status(500).json({ success: false, error: error.message });
+    }
+  };
+
+  /**
    * Generate a new transfer order number
    */
   generateTransferOrderNumber = async (req: Request, res: Response) => {

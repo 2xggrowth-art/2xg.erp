@@ -18,6 +18,7 @@ export interface BillItem {
   discount: number;
   total: number;
   account?: string;
+  serial_numbers?: string[];
   bin_allocations?: BinAllocation[];
 }
 
@@ -140,6 +141,7 @@ export class BillsService {
           discount: item.discount,
           total: item.total,
           account: item.account || null,
+          serial_numbers: item.serial_numbers || [],
         }));
 
         const { data: insertedItems, error: itemsError } = await supabase
@@ -153,7 +155,7 @@ export class BillsService {
           throw itemsError;
         }
 
-        // Insert bin allocations if provided
+        // Insert bin allocations if provided, distributing serial numbers across bins
         if (insertedItems && insertedItems.length > 0) {
           for (const item of data.items) {
             if (item.bin_allocations && item.bin_allocations.length > 0) {
@@ -167,11 +169,22 @@ export class BillsService {
                 continue;
               }
 
-              const binAllocations = item.bin_allocations.map((allocation) => ({
-                bill_item_id: matchedItem.id,
-                bin_location_id: allocation.bin_location_id,
-                quantity: allocation.quantity,
-              }));
+              // Distribute serial numbers across bin allocations in order
+              const allSerials = item.serial_numbers || [];
+              let serialIndex = 0;
+
+              const binAllocations = item.bin_allocations.map((allocation) => {
+                const qty = Math.floor(allocation.quantity);
+                const binSerials = allSerials.slice(serialIndex, serialIndex + qty);
+                serialIndex += qty;
+
+                return {
+                  bill_item_id: matchedItem.id,
+                  bin_location_id: allocation.bin_location_id,
+                  quantity: allocation.quantity,
+                  serial_numbers: binSerials,
+                };
+              });
 
               const { error: binError } = await supabase
                 .from('bill_item_bin_allocations')
@@ -352,6 +365,7 @@ export class BillsService {
             discount: item.discount,
             total: item.total,
             account: item.account || null,
+            serial_numbers: item.serial_numbers || [],
           }));
 
           await supabase.from('bill_items').insert(billItems);
@@ -419,6 +433,41 @@ export class BillsService {
       return summary;
     } catch (error) {
       console.error('Error fetching bills summary:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get the last serial number used for a given item across all bills
+   */
+  async getLastSerialNumber(itemId: string) {
+    try {
+      const { data, error } = await supabase
+        .from('bill_items')
+        .select('serial_numbers')
+        .eq('item_id', itemId)
+        .not('serial_numbers', 'eq', '[]');
+
+      if (error) throw error;
+
+      let maxSerial = 0;
+      if (data) {
+        for (const row of data) {
+          const serials = row.serial_numbers || [];
+          for (const sn of serials) {
+            // Extract the number after the last "/"
+            const parts = String(sn).split('/');
+            const num = parseInt(parts[parts.length - 1]);
+            if (!isNaN(num) && num > maxSerial) {
+              maxSerial = num;
+            }
+          }
+        }
+      }
+
+      return maxSerial;
+    } catch (error) {
+      console.error('Error fetching last serial number:', error);
       throw error;
     }
   }

@@ -7,6 +7,9 @@ const controller = new TransferOrdersController();
 // Generate transfer order number
 router.get('/generate-transfer-order-number', controller.generateTransferOrderNumber);
 
+// Get item stock grouped by location (for transfer order form)
+router.get('/item-stock/:itemId', controller.getItemLocationStock);
+
 // Get transfer orders summary
 router.get('/summary', controller.getTransferOrdersSummary);
 

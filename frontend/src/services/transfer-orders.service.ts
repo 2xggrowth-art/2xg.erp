@@ -1,6 +1,4 @@
-import axios from 'axios';
-
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5002/api';
+import apiClient from './api.client';
 
 export interface TransferOrderItem {
   id?: string;
@@ -37,6 +35,7 @@ export interface CreateTransferOrderData {
   transfer_date: string;
   source_location: string;
   destination_location: string;
+  destination_bin_id?: string;
   reason?: string;
   status?: string;
   notes?: string;
@@ -64,6 +63,11 @@ export interface TransferOrdersSummary {
   total_quantity: number;
 }
 
+export interface ItemLocationStock {
+  location_name: string;
+  available_quantity: number;
+}
+
 interface APIResponse<T> {
   success: boolean;
   data: T;
@@ -71,9 +75,6 @@ interface APIResponse<T> {
 }
 
 export const transferOrdersService = {
-  /**
-   * Get all transfer orders with optional filters
-   */
   getAllTransferOrders: async (filters?: TransferOrdersFilters): Promise<APIResponse<TransferOrder[]>> => {
     try {
       const params = new URLSearchParams();
@@ -84,8 +85,8 @@ export const transferOrdersService = {
       if (filters?.to_date) params.append('to_date', filters.to_date);
       if (filters?.search) params.append('search', filters.search);
 
-      const response = await axios.get<APIResponse<TransferOrder[]>>(
-        `${API_BASE_URL}/transfer-orders?${params.toString()}`
+      const response = await apiClient.get<APIResponse<TransferOrder[]>>(
+        `/transfer-orders?${params.toString()}`
       );
       return response.data;
     } catch (error) {
@@ -94,13 +95,10 @@ export const transferOrdersService = {
     }
   },
 
-  /**
-   * Get a single transfer order by ID
-   */
   getTransferOrderById: async (id: string): Promise<APIResponse<TransferOrder>> => {
     try {
-      const response = await axios.get<APIResponse<TransferOrder>>(
-        `${API_BASE_URL}/transfer-orders/${id}`
+      const response = await apiClient.get<APIResponse<TransferOrder>>(
+        `/transfer-orders/${id}`
       );
       return response.data;
     } catch (error) {
@@ -109,13 +107,10 @@ export const transferOrdersService = {
     }
   },
 
-  /**
-   * Generate a new transfer order number
-   */
   generateTransferOrderNumber: async (): Promise<APIResponse<{ transfer_order_number: string }>> => {
     try {
-      const response = await axios.get<APIResponse<{ transfer_order_number: string }>>(
-        `${API_BASE_URL}/transfer-orders/generate-transfer-order-number`
+      const response = await apiClient.get<APIResponse<{ transfer_order_number: string }>>(
+        `/transfer-orders/generate-transfer-order-number`
       );
       return response.data;
     } catch (error) {
@@ -124,19 +119,15 @@ export const transferOrdersService = {
     }
   },
 
-  /**
-   * Create a new transfer order
-   */
   createTransferOrder: async (data: CreateTransferOrderData): Promise<APIResponse<TransferOrder>> => {
     try {
-      const response = await axios.post<APIResponse<TransferOrder>>(
-        `${API_BASE_URL}/transfer-orders`,
+      const response = await apiClient.post<APIResponse<TransferOrder>>(
+        `/transfer-orders`,
         data
       );
       return response.data;
     } catch (error: any) {
       console.error('Error creating transfer order:', error);
-      // Re-throw with the backend error message
       if (error.response?.data?.message) {
         throw new Error(error.response.data.message);
       }
@@ -144,13 +135,10 @@ export const transferOrdersService = {
     }
   },
 
-  /**
-   * Update an existing transfer order
-   */
   updateTransferOrder: async (id: string, data: Partial<CreateTransferOrderData>): Promise<APIResponse<TransferOrder>> => {
     try {
-      const response = await axios.put<APIResponse<TransferOrder>>(
-        `${API_BASE_URL}/transfer-orders/${id}`,
+      const response = await apiClient.put<APIResponse<TransferOrder>>(
+        `/transfer-orders/${id}`,
         data
       );
       return response.data;
@@ -163,13 +151,10 @@ export const transferOrdersService = {
     }
   },
 
-  /**
-   * Update transfer order status
-   */
   updateTransferOrderStatus: async (id: string, status: string): Promise<APIResponse<TransferOrder>> => {
     try {
-      const response = await axios.patch<APIResponse<TransferOrder>>(
-        `${API_BASE_URL}/transfer-orders/${id}/status`,
+      const response = await apiClient.patch<APIResponse<TransferOrder>>(
+        `/transfer-orders/${id}/status`,
         { status }
       );
       return response.data;
@@ -179,13 +164,10 @@ export const transferOrdersService = {
     }
   },
 
-  /**
-   * Delete a transfer order
-   */
   deleteTransferOrder: async (id: string): Promise<APIResponse<TransferOrder>> => {
     try {
-      const response = await axios.delete<APIResponse<TransferOrder>>(
-        `${API_BASE_URL}/transfer-orders/${id}`
+      const response = await apiClient.delete<APIResponse<TransferOrder>>(
+        `/transfer-orders/${id}`
       );
       return response.data;
     } catch (error) {
@@ -194,17 +176,26 @@ export const transferOrdersService = {
     }
   },
 
-  /**
-   * Get transfer orders summary/statistics
-   */
   getTransferOrdersSummary: async (): Promise<APIResponse<TransferOrdersSummary>> => {
     try {
-      const response = await axios.get<APIResponse<TransferOrdersSummary>>(
-        `${API_BASE_URL}/transfer-orders/summary`
+      const response = await apiClient.get<APIResponse<TransferOrdersSummary>>(
+        `/transfer-orders/summary`
       );
       return response.data;
     } catch (error) {
       console.error('Error fetching transfer orders summary:', error);
+      throw error;
+    }
+  },
+
+  getItemLocationStock: async (itemId: string): Promise<APIResponse<ItemLocationStock[]>> => {
+    try {
+      const response = await apiClient.get<APIResponse<ItemLocationStock[]>>(
+        `/transfer-orders/item-stock/${itemId}`
+      );
+      return response.data;
+    } catch (error) {
+      console.error('Error fetching item location stock:', error);
       throw error;
     }
   },

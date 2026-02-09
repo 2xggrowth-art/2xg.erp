@@ -17,6 +17,7 @@ interface SelectBinsModalProps {
   totalQuantity: number;
   unitOfMeasurement: string;
   currentAllocations?: BinAllocation[];
+  serialNumbers?: string[];
   onSave: (allocations: BinAllocation[]) => void;
 }
 
@@ -28,6 +29,7 @@ const SelectBinsModal = ({
   totalQuantity,
   unitOfMeasurement,
   currentAllocations = [],
+  serialNumbers = [],
   onSave
 }: SelectBinsModalProps) => {
   const [binLocations, setBinLocations] = useState<BinLocation[]>([]);
@@ -192,58 +194,88 @@ const SelectBinsModal = ({
           {/* Bin Allocations Table */}
           <div className="mb-4">
             <div className="grid grid-cols-12 gap-4 mb-3">
-              <div className="col-span-6">
+              <div className="col-span-5">
                 <label className="block text-sm font-medium text-slate-700 mb-1">
                   BIN LOCATION<span className="text-red-500">*</span>
                 </label>
               </div>
-              <div className="col-span-4">
+              <div className="col-span-2">
                 <label className="block text-sm font-medium text-slate-700 mb-1">
                   QUANTITY<span className="text-red-500">*</span>
                 </label>
               </div>
-              <div className="col-span-2"></div>
+              <div className="col-span-4">
+                {serialNumbers.length > 0 && (
+                  <label className="block text-sm font-medium text-slate-700 mb-1">
+                    SERIAL NUMBERS
+                  </label>
+                )}
+              </div>
+              <div className="col-span-1"></div>
             </div>
 
-            {allocations.map((allocation, index) => (
-              <div key={index} className="grid grid-cols-12 gap-4 mb-3">
-                <div className="col-span-6">
-                  <select
-                    value={allocation.bin_location_id}
-                    onChange={(e) => handleBinChange(index, e.target.value)}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
-                  >
-                    <option value="">Select Bin</option>
-                    {filteredBins.map(bin => (
-                      <option key={bin.id} value={bin.id}>
-                        {bin.bin_code} - {bin.locations?.name || bin.warehouse}
-                      </option>
-                    ))}
-                  </select>
+            {allocations.map((allocation, index) => {
+              // Compute which serial numbers go to this bin row
+              let serialStart = 0;
+              for (let i = 0; i < index; i++) {
+                serialStart += Math.floor(allocations[i].quantity || 0);
+              }
+              const binQty = Math.floor(allocation.quantity || 0);
+              const binSerials = serialNumbers.slice(serialStart, serialStart + binQty);
+
+              return (
+                <div key={index} className="mb-3">
+                  <div className="grid grid-cols-12 gap-4">
+                    <div className="col-span-5">
+                      <select
+                        value={allocation.bin_location_id}
+                        onChange={(e) => handleBinChange(index, e.target.value)}
+                        className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
+                      >
+                        <option value="">Select Bin</option>
+                        {filteredBins.map(bin => (
+                          <option key={bin.id} value={bin.id}>
+                            {bin.bin_code} - {bin.locations?.name || bin.warehouse}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="col-span-2">
+                      <input
+                        type="number"
+                        value={allocation.quantity || ''}
+                        onChange={(e) => handleQuantityChange(index, parseFloat(e.target.value) || 0)}
+                        min="0"
+                        step="0.01"
+                        className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
+                      />
+                    </div>
+                    <div className="col-span-4">
+                      {binSerials.length > 0 && (
+                        <div className="px-2 py-1.5 text-xs text-blue-700 bg-blue-50 rounded-lg border border-blue-200 max-h-16 overflow-y-auto">
+                          {binSerials.length === 1
+                            ? binSerials[0]
+                            : `${binSerials[0]} → ${binSerials[binSerials.length - 1]}`
+                          }
+                          <span className="ml-1 text-blue-400">({binSerials.length})</span>
+                        </div>
+                      )}
+                    </div>
+                    <div className="col-span-1 flex items-center">
+                      {allocations.length > 1 && (
+                        <button
+                          onClick={() => removeRow(index)}
+                          className="p-2 text-red-600 hover:bg-red-50 rounded"
+                          title="Remove"
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      )}
+                    </div>
+                  </div>
                 </div>
-                <div className="col-span-4">
-                  <input
-                    type="number"
-                    value={allocation.quantity || ''}
-                    onChange={(e) => handleQuantityChange(index, parseFloat(e.target.value) || 0)}
-                    min="0"
-                    step="0.01"
-                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
-                  />
-                </div>
-                <div className="col-span-2 flex items-center">
-                  {allocations.length > 1 && (
-                    <button
-                      onClick={() => removeRow(index)}
-                      className="p-2 text-red-600 hover:bg-red-50 rounded"
-                      title="Remove"
-                    >
-                      <Trash2 size={16} />
-                    </button>
-                  )}
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
 
           {/* Add New Row Button */}

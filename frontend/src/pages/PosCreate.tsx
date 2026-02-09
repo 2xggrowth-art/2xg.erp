@@ -279,13 +279,24 @@ const PosCreate: React.FC = () => {
     let itemBins: AvailableBin[] = [];
     try {
       const binResponse = await binLocationService.getBinLocationsForItem(item.id);
-      if (binResponse.success && binResponse.data) {
+      if (binResponse.success && binResponse.data && binResponse.data.length > 0) {
         itemBins = binResponse.data.map((b: any) => ({
           bin_id: b.bin_id,
           bin_code: b.bin_code,
           location_name: b.location_name,
-          stock: b.stock
+          stock: b.quantity
         }));
+      } else {
+        // Fallback: fetch all active bin locations so user can select which bin to sell from
+        const allBinsResponse = await binLocationService.getAllBinLocations({ status: 'active' });
+        if (allBinsResponse.success && allBinsResponse.data && allBinsResponse.data.length > 0) {
+          itemBins = allBinsResponse.data.map((b: any) => ({
+            bin_id: b.id,
+            bin_code: b.bin_code,
+            location_name: b.locations?.name || b.warehouse || '',
+            stock: 0
+          }));
+        }
       }
     } catch (error) {
       console.error('Error fetching bin locations:', error);
@@ -544,6 +555,7 @@ const PosCreate: React.FC = () => {
         status: invoiceStatus,
         payment_status: paymentStatus,
         subject: 'POS',  // Mark this as a POS transaction
+        pos_session_id: activeSession?.id || null,
         customer_notes: `Payment Mode: ${mode}${refNumber ? `\nReference Number: ${refNumber}` : ''}${mode === 'CREDIT SALE' ? `\nAmount Paid: ₹${amountPaid.toFixed(2)}\nBalance Due: ₹${balanceDue.toFixed(2)}` : ''}`,
         terms_and_conditions: null,
         items: cart.map(item => ({
@@ -664,6 +676,7 @@ const PosCreate: React.FC = () => {
         status: invoiceStatus,
         payment_status: paymentStatus,
         subject: 'POS',  // Mark this as a POS transaction
+        pos_session_id: activeSession?.id || null,
         customer_notes: `SPLIT PAYMENT (${payments.length} payments)\n${paymentDetails}${balanceDue > 0 ? `\n\nAmount Paid: ₹${totalPaid.toFixed(2)}\nBalance Due: ₹${balanceDue.toFixed(2)}` : ''}`,
         terms_and_conditions: null,
         items: cart.map(item => ({
@@ -1090,7 +1103,7 @@ const PosCreate: React.FC = () => {
                                   <option value="">Select Bin</option>
                                   {item.available_bins.map(b => (
                                     <option key={b.bin_id} value={b.bin_id}>
-                                      {b.bin_code} - {b.location_name} ({b.stock} pcs)
+                                      {b.bin_code} - {b.location_name}{b.stock > 0 ? ` (${b.stock} pcs)` : ''}
                                     </option>
                                   ))}
                                 </select>

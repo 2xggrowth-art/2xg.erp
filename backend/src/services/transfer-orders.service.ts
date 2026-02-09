@@ -19,6 +19,7 @@ export interface TransferOrder {
   transfer_date: string;
   source_location: string;
   destination_location: string;
+  destination_bin_id?: string;
   reason?: string;
   status?: string;
   total_items?: number;
@@ -30,6 +31,113 @@ export interface TransferOrder {
 
 export class TransferOrdersService {
   private organizationId = '00000000-0000-0000-0000-000000000000';
+
+  /**
+   * Get item stock grouped by location (for transfer order form)
+   */
+  async getItemStockByLocation(itemId: string): Promise<{ location_name: string; available_quantity: number }[]> {
+    try {
+      // Get purchase allocations for this item (adds stock)
+      const { data: purchaseAllocations, error: purchaseError } = await supabaseAdmin
+        .from('bill_item_bin_allocations')
+        .select(`
+          quantity,
+          bin_locations!inner (
+            location_id,
+            warehouse,
+            locations(name)
+          ),
+          bill_items!inner (
+            item_id
+          )
+        `)
+        .eq('bill_items.item_id', itemId);
+
+      if (purchaseError) throw purchaseError;
+
+      // Get sale allocations for this item (deducts stock)
+      const { data: salesAllocations, error: salesError } = await supabaseAdmin
+        .from('invoice_item_bin_allocations')
+        .select(`
+          quantity,
+          bin_locations!inner (
+            location_id,
+            warehouse,
+            locations(name)
+          ),
+          invoice_items!inner (
+            item_id
+          )
+        `)
+        .eq('invoice_items.item_id', itemId);
+
+      if (salesError) throw salesError;
+
+      // Aggregate by location
+      const locationMap = new Map<string, number>();
+
+      purchaseAllocations?.forEach((alloc: any) => {
+        const locationName = alloc.bin_locations?.locations?.name || alloc.bin_locations?.warehouse || 'Unknown';
+        const qty = parseFloat(alloc.quantity) || 0;
+        locationMap.set(locationName, (locationMap.get(locationName) || 0) + qty);
+      });
+
+      salesAllocations?.forEach((alloc: any) => {
+        const locationName = alloc.bin_locations?.locations?.name || alloc.bin_locations?.warehouse || 'Unknown';
+        const qty = parseFloat(alloc.quantity) || 0;
+        locationMap.set(locationName, (locationMap.get(locationName) || 0) - qty);
+      });
+
+      // Get transfer allocations for this item
+      const { data: transferAllocations } = await supabaseAdmin
+        .from('transfer_order_allocations')
+        .select('source_bin_location_id, destination_bin_location_id, quantity')
+        .eq('item_id', itemId);
+
+      if (transferAllocations && transferAllocations.length > 0) {
+        // Get all bin IDs involved in transfers
+        const binIds = new Set<string>();
+        transferAllocations.forEach((a: any) => {
+          binIds.add(a.source_bin_location_id);
+          binIds.add(a.destination_bin_location_id);
+        });
+
+        // Fetch bin → location mapping
+        const { data: bins } = await supabaseAdmin
+          .from('bin_locations')
+          .select('id, location_id, warehouse, locations(name)')
+          .in('id', Array.from(binIds));
+
+        const binLocationMap = new Map<string, string>();
+        bins?.forEach((bin: any) => {
+          binLocationMap.set(bin.id, bin.locations?.name || bin.warehouse || 'Unknown');
+        });
+
+        // Deduct from source locations
+        transferAllocations.forEach((alloc: any) => {
+          const locationName = binLocationMap.get(alloc.source_bin_location_id) || 'Unknown';
+          const qty = parseFloat(alloc.quantity) || 0;
+          locationMap.set(locationName, (locationMap.get(locationName) || 0) - qty);
+        });
+
+        // Add to destination locations
+        transferAllocations.forEach((alloc: any) => {
+          const locationName = binLocationMap.get(alloc.destination_bin_location_id) || 'Unknown';
+          const qty = parseFloat(alloc.quantity) || 0;
+          locationMap.set(locationName, (locationMap.get(locationName) || 0) + qty);
+        });
+      }
+
+      // Return locations with positive stock
+      return Array.from(locationMap.entries())
+        .filter(([_, qty]) => qty > 0)
+        .map(([name, qty]) => ({ location_name: name, available_quantity: qty }))
+        .sort((a, b) => b.available_quantity - a.available_quantity);
+    } catch (error) {
+      console.error('Error fetching item stock by location:', error);
+      throw error;
+    }
+  }
 
   /**
    * Generate a new transfer order number
@@ -68,7 +176,7 @@ export class TransferOrdersService {
    */
   async createTransferOrder(orderData: TransferOrder): Promise<any> {
     try {
-      const { items, ...mainData } = orderData;
+      const { items, destination_bin_id, ...mainData } = orderData;
 
       // Validate: source and destination cannot be the same
       if (mainData.source_location === mainData.destination_location) {
@@ -122,6 +230,11 @@ export class TransferOrdersService {
           .insert(itemsToInsert);
 
         if (itemsError) throw itemsError;
+      }
+
+      // If created with 'initiated' status, process stock movement
+      if ((mainData.status || 'draft') === 'initiated') {
+        await this.processTransferStockMovement(order.id, destination_bin_id);
       }
 
       return order;
@@ -339,6 +452,19 @@ export class TransferOrdersService {
    */
   async updateTransferOrderStatus(id: string, status: string): Promise<any> {
     try {
+      // If initiating, process stock movement
+      if (status === 'initiated') {
+        await this.processTransferStockMovement(id);
+      }
+
+      // If cancelling, reverse stock movement (delete allocations)
+      if (status === 'cancelled') {
+        await supabaseAdmin
+          .from('transfer_order_allocations')
+          .delete()
+          .eq('transfer_order_id', id);
+      }
+
       const { data, error } = await supabaseAdmin
         .from('transfer_orders')
         .update({ status })
@@ -352,6 +478,133 @@ export class TransferOrdersService {
     } catch (error) {
       console.error('Error updating transfer order status:', error);
       throw error;
+    }
+  }
+
+  /**
+   * Process stock movement for a transfer order.
+   * Creates allocation records that move stock from source bins to destination bins.
+   */
+  private async processTransferStockMovement(transferOrderId: string, destinationBinId?: string): Promise<void> {
+    const order = await this.getTransferOrderById(transferOrderId);
+
+    if (!order.items || order.items.length === 0) {
+      throw new Error('Transfer order has no items');
+    }
+
+    // Find location records by name
+    const { data: sourceLocation } = await supabaseAdmin
+      .from('locations')
+      .select('id')
+      .eq('name', order.source_location)
+      .single();
+
+    const { data: destLocation } = await supabaseAdmin
+      .from('locations')
+      .select('id')
+      .eq('name', order.destination_location)
+      .single();
+
+    if (!sourceLocation) throw new Error(`Source location '${order.source_location}' not found`);
+    if (!destLocation) throw new Error(`Destination location '${order.destination_location}' not found`);
+
+    // Get active bins at source location
+    const { data: sourceBins } = await supabaseAdmin
+      .from('bin_locations')
+      .select('id, bin_code')
+      .eq('location_id', sourceLocation.id)
+      .eq('status', 'active');
+
+    if (!sourceBins || sourceBins.length === 0) {
+      throw new Error(`No active bins at source location '${order.source_location}'`);
+    }
+
+    // Get active bins at destination location
+    const { data: destBins } = await supabaseAdmin
+      .from('bin_locations')
+      .select('id, bin_code')
+      .eq('location_id', destLocation.id)
+      .eq('status', 'active');
+
+    if (!destBins || destBins.length === 0) {
+      throw new Error(`No active bins at destination location '${order.destination_location}'`);
+    }
+
+    // Use the user-selected destination bin if provided and valid, otherwise fall back to first bin
+    let destBinId = destBins[0].id;
+    if (destinationBinId) {
+      const validBin = destBins.find((b: any) => b.id === destinationBinId);
+      if (validBin) {
+        destBinId = validBin.id;
+      }
+    }
+
+    for (const item of order.items) {
+      if (!item.item_id || !item.transfer_quantity) continue;
+
+      // Find which source bin has stock for this item
+      // Check bill_item_bin_allocations for each source bin
+      let bestSourceBinId = sourceBins[0].id;
+      let bestStock = 0;
+
+      for (const bin of sourceBins) {
+        // Sum purchases for this item in this bin
+        const { data: purchases } = await supabaseAdmin
+          .from('bill_item_bin_allocations')
+          .select('quantity, bill_items!inner(item_id)')
+          .eq('bin_location_id', bin.id)
+          .eq('bill_items.item_id', item.item_id);
+
+        const purchaseQty = purchases?.reduce((sum: number, p: any) => sum + (parseFloat(p.quantity) || 0), 0) || 0;
+
+        // Sum sales for this item in this bin
+        const { data: sales } = await supabaseAdmin
+          .from('invoice_item_bin_allocations')
+          .select('quantity, invoice_items!inner(item_id)')
+          .eq('bin_location_id', bin.id)
+          .eq('invoice_items.item_id', item.item_id);
+
+        const salesQty = sales?.reduce((sum: number, s: any) => sum + (parseFloat(s.quantity) || 0), 0) || 0;
+
+        // Sum existing transfer deductions from this bin
+        const { data: transfersOut } = await supabaseAdmin
+          .from('transfer_order_allocations')
+          .select('quantity')
+          .eq('source_bin_location_id', bin.id)
+          .eq('item_id', item.item_id);
+
+        const transferOutQty = transfersOut?.reduce((sum: number, t: any) => sum + (parseFloat(t.quantity) || 0), 0) || 0;
+
+        // Sum existing transfer additions to this bin
+        const { data: transfersIn } = await supabaseAdmin
+          .from('transfer_order_allocations')
+          .select('quantity')
+          .eq('destination_bin_location_id', bin.id)
+          .eq('item_id', item.item_id);
+
+        const transferInQty = transfersIn?.reduce((sum: number, t: any) => sum + (parseFloat(t.quantity) || 0), 0) || 0;
+
+        const netStock = purchaseQty - salesQty - transferOutQty + transferInQty;
+
+        if (netStock > bestStock) {
+          bestStock = netStock;
+          bestSourceBinId = bin.id;
+        }
+      }
+
+      // Create the allocation record
+      const { error: allocError } = await supabaseAdmin
+        .from('transfer_order_allocations')
+        .insert({
+          transfer_order_id: transferOrderId,
+          transfer_order_item_id: item.id,
+          item_id: item.item_id,
+          source_bin_location_id: bestSourceBinId,
+          destination_bin_location_id: destBinId,
+          quantity: item.transfer_quantity,
+        });
+
+      if (allocError) throw allocError;
     }
   }
 }

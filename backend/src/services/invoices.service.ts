@@ -46,6 +46,7 @@ export interface CreateInvoiceData {
   total_amount: number;
   customer_notes?: string;
   terms_and_conditions?: string;
+  pos_session_id?: string;
   items: InvoiceItem[];
 }
 
@@ -159,7 +160,8 @@ export class InvoicesService {
         total_amount: Number(invoiceData.total_amount) || 0,
         balance_due: Number(invoiceData.total_amount) || 0,
         customer_notes: invoiceData.customer_notes || null,
-        terms_and_conditions: invoiceData.terms_and_conditions || null
+        terms_and_conditions: invoiceData.terms_and_conditions || null,
+        pos_session_id: invoiceData.pos_session_id || null
       };
 
       console.log('InvoicesService: Cleaned invoice data:', JSON.stringify(cleanInvoiceData, null, 2));
@@ -307,6 +309,7 @@ export class InvoicesService {
     customer_id?: string;
     from_date?: string;
     to_date?: string;
+    pos_session_id?: string;
     page?: number;
     limit?: number;
   }) {
@@ -328,6 +331,9 @@ export class InvoicesService {
       }
       if (filters?.to_date) {
         query = query.lte('invoice_date', filters.to_date);
+      }
+      if (filters?.pos_session_id) {
+        query = query.eq('pos_session_id', filters.pos_session_id);
       }
 
       // Apply pagination

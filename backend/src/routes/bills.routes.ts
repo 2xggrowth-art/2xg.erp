@@ -10,6 +10,9 @@ router.get('/generate-bill-number', billsController.generateBillNumber);
 // Get bills summary
 router.get('/summary', billsController.getBillsSummary);
 
+// Get last serial number for an item
+router.get('/last-serial/:itemId', billsController.getLastSerialNumber);
+
 // CRUD operations
 router.post('/', billsController.createBill);
 router.get('/', billsController.getAllBills);

@@ -52,6 +52,19 @@ After DDL changes, always reload PostgREST cache:
 NOTIFY pgrst, 'reload schema';
 ```
 
+**Running migrations via pg-meta** (from a Node.js script in `/backend`):
+```js
+const response = await fetch(`${SUPABASE_URL}/pg/query`, {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json',
+    'Authorization': `Bearer ${SERVICE_ROLE_KEY}`,
+    'apikey': SERVICE_ROLE_KEY,
+  },
+  body: JSON.stringify({ query: sql }),
+});
+```
+
 ## Development Commands
 
 ```bash
@@ -79,17 +92,35 @@ backend/src/
 ├── server.ts              # Express app, CORS, route registration
 ├── config/supabase.ts     # Supabase admin client (service role key)
 ├── middleware/             # Auth middleware
-├── routes/                # 24 route files
-├── controllers/           # 23 controller files
-├── services/              # 25 service files
+├── routes/                # 30 route files
+├── controllers/           # 29 controller files
+├── services/              # 31 service files
 ├── types/index.ts
 └── utils/
     ├── database-schema.sql
+    ├── create-transfer-orders-table.sql
     └── seedData.ts
 ```
 
-**24 API route prefixes:**
-`/api/auth`, `/api/erp`, `/api/logistics`, `/api/care`, `/api/crm`, `/api/items`, `/api/purchases`, `/api/vendors`, `/api/purchase-orders`, `/api/bills`, `/api/sales`, `/api/expenses`, `/api/tasks`, `/api/reports`, `/api/search`, `/api/ai`, `/api/payments`, `/api/vendor-credits`, `/api/transfer-orders`, `/api/invoices`, `/api/customers`, `/api/sales-orders`, `/api/payments-received`, `/api/delivery-challans`
+**30 API route prefixes** (registered in `server.ts`):
+
+Public:
+`/api/auth`, `/api/mobile-auth`
+
+Protected (require JWT):
+`/api/erp`, `/api/logistics`, `/api/care`, `/api/crm`, `/api/items`, `/api/purchases`, `/api/vendors`, `/api/purchase-orders`, `/api/bills`, `/api/sales`, `/api/expenses`, `/api/tasks`, `/api/reports`, `/api/search`, `/api/ai`, `/api/payments`, `/api/vendor-credits`, `/api/transfer-orders`, `/api/invoices`, `/api/customers`, `/api/sales-orders`, `/api/payments-received`, `/api/delivery-challans`, `/api/bin-locations`, `/api/locations`, `/api/brands`, `/api/manufacturers`, `/api/pos-sessions`
+
+### Backend Migrations
+
+Located in `backend/migrations/`. Each file exports `up` and `down` SQL strings. Run via Supabase pg-meta endpoint.
+
+| Migration | Purpose |
+|-----------|---------|
+| `005_add_serial_numbers.js` | Add serial number tracking to bill/invoice items |
+| `006_add_item_type_size_color_variant.js` | Add item_type, size, color, variant columns to items |
+| `007_add_subcategories.js` | Create `product_subcategories` table, add `subcategory_id` to items |
+| `008_recreate_transfer_orders.js` | Drop/recreate `transfer_orders` + `transfer_order_items` tables |
+| `009_create_transfer_order_allocations.js` | Create `transfer_order_allocations` for stock movement tracking |
 
 ### Frontend — Components → Services (axios) → Backend API
 
@@ -115,12 +146,13 @@ frontend/src/
 │   ├── payments/           # Payments made
 │   ├── payments-received/  # Payments received
 │   ├── pos/                # Point of sale
-│   ├── shared/             # Shared components
+│   ├── reports/            # Report components
+│   ├── shared/             # CategoryPicker, CreatableSelect, ItemSelector
 │   └── modules/            # ERP, Logistics, CARE, CRM
 ├── contexts/               # Auth, DateFilter contexts
 ├── hooks/
-├── pages/                  # 42 page components
-├── services/               # 21 API service files
+├── pages/                  # 50 page components
+├── services/               # 27 API service files (incl. api.client.ts)
 ├── types/
 └── utils/
     ├── csvParser.ts
@@ -140,6 +172,8 @@ Custom JWT auth (NOT Supabase Auth):
 - `PUT /api/auth/users/:id` — update user
 - `DELETE /api/auth/users/:id` — delete user
 
+Mobile auth (`/api/mobile-auth`) — separate routes for mobile app authentication.
+
 ## CORS
 
 Configured in `backend/src/server.ts`. Allowed origins:
@@ -149,7 +183,7 @@ Configured in `backend/src/server.ts`. Allowed origins:
 - `https://2xg-dashboard-pi.vercel.app` (legacy)
 - `process.env.FRONTEND_URL`
 
-## Database Schema — Actual Column Names (Verified Jan 2026)
+## Database Schema — Actual Column Names (Verified Feb 2026)
 
 > **CRITICAL**: The actual deployed database has extra columns added via migrations beyond what's
 > in the base schema files. Always verify against PostgREST before adding new queries.
@@ -169,8 +203,28 @@ Configured in `backend/src/server.ts`. Allowed origins:
 | `unit_of_measurement` | TEXT | Added later — backend uses this (not `unit`) |
 | `is_active` | BOOLEAN | Added later |
 | `category_id` | UUID | FK → `product_categories` |
+| `subcategory_id` | UUID | FK → `product_subcategories` (migration 007) |
+| `item_type` | TEXT | e.g. 'goods', 'service' (migration 006) |
+| `size` | TEXT | Product size (migration 006) |
+| `color` | TEXT | Product color (migration 006) |
+| `variant` | TEXT | Product variant (migration 006) |
 | **NO** `organization_id` | — | This table has NO org column |
 | **NO** `tax_rate` | — | Not in table |
+
+### `product_categories` table
+| Column | Type | Notes |
+|--------|------|-------|
+| `id` | UUID PK | |
+| `name` | TEXT NOT NULL UNIQUE | Category name |
+| `organization_id` | UUID | |
+
+### `product_subcategories` table (migration 007)
+| Column | Type | Notes |
+|--------|------|-------|
+| `id` | UUID PK | |
+| `category_id` | UUID NOT NULL | FK → `product_categories(id)` ON DELETE CASCADE |
+| `name` | TEXT NOT NULL | Subcategory name |
+| | | UNIQUE constraint on (`category_id`, `name`) |
 
 ### `suppliers` table (queried by vendors service)
 | Column | Type | Notes |
@@ -225,13 +279,107 @@ Configured in `backend/src/server.ts`. Allowed origins:
 | `vendor_id`, `vendor_name` | — | Optional vendor link |
 | `payment_method` | TEXT | |
 
+### `locations` table
+| Column | Type | Notes |
+|--------|------|-------|
+| `id` | UUID PK | |
+| `name` | TEXT NOT NULL UNIQUE | Location name (e.g. 'Warehouse', 'Head Office') |
+| `description` | TEXT | |
+| `status` | TEXT | Default: `active` |
+
+### `bin_locations` table
+| Column | Type | Notes |
+|--------|------|-------|
+| `id` | UUID PK | |
+| `bin_code` | VARCHAR(50) UNIQUE | e.g. 'BIN-001', 'A-01-01' |
+| `warehouse` | VARCHAR(100) | Legacy text field |
+| `location_id` | UUID | FK → `locations(id)` ON DELETE RESTRICT |
+| `description` | TEXT | |
+| `status` | VARCHAR(20) | Default: `active` |
+
+### `bill_item_bin_allocations` table (tracks incoming stock per bin)
+| Column | Type | Notes |
+|--------|------|-------|
+| `id` | UUID PK | |
+| `bill_item_id` | UUID | FK → `bill_items(id)` ON DELETE CASCADE |
+| `bin_location_id` | UUID | FK → `bin_locations(id)` ON DELETE RESTRICT |
+| `quantity` | DECIMAL(15,2) | CHECK (quantity > 0) |
+
+### `invoice_item_bin_allocations` table (tracks outgoing stock per bin)
+| Column | Type | Notes |
+|--------|------|-------|
+| `id` | UUID PK | |
+| `invoice_item_id` | UUID | FK → `invoice_items(id)` ON DELETE CASCADE |
+| `bin_location_id` | UUID | FK → `bin_locations(id)` ON DELETE RESTRICT |
+| `quantity` | DECIMAL(15,2) | CHECK (quantity > 0) |
+
+### `transfer_orders` table
+| Column | Type | Notes |
+|--------|------|-------|
+| `id` | UUID PK | |
+| `organization_id` | UUID NOT NULL | Default: `00000000-...` |
+| `transfer_order_number` | VARCHAR(50) UNIQUE NOT NULL | e.g. 'TO-0001' |
+| `transfer_date` | DATE NOT NULL | |
+| `source_location` | VARCHAR(255) NOT NULL | Location name string |
+| `destination_location` | VARCHAR(255) NOT NULL | Location name string |
+| `reason` | TEXT | |
+| `status` | VARCHAR(50) | `draft`, `initiated`, `in_transit`, `received`, `cancelled` |
+| `total_items` | INT | |
+| `total_quantity` | DECIMAL(15,2) | |
+| `notes` | TEXT | |
+| | | CHECK: source_location <> destination_location |
+
+### `transfer_order_items` table
+| Column | Type | Notes |
+|--------|------|-------|
+| `id` | UUID PK | |
+| `transfer_order_id` | UUID NOT NULL | FK → `transfer_orders(id)` ON DELETE CASCADE |
+| `item_id` | UUID | |
+| `item_name` | VARCHAR(255) NOT NULL | |
+| `source_availability` | DECIMAL(15,2) | Stock at source when order was created |
+| `destination_availability` | DECIMAL(15,2) | Stock at destination when order was created |
+| `transfer_quantity` | DECIMAL(15,2) NOT NULL | CHECK (> 0) |
+| `unit_of_measurement` | VARCHAR(50) | |
+
+### `transfer_order_allocations` table (tracks stock movements)
+| Column | Type | Notes |
+|--------|------|-------|
+| `id` | UUID PK | |
+| `transfer_order_id` | UUID NOT NULL | FK → `transfer_orders(id)` ON DELETE CASCADE |
+| `transfer_order_item_id` | UUID | FK → `transfer_order_items(id)` ON DELETE CASCADE |
+| `item_id` | UUID NOT NULL | |
+| `source_bin_location_id` | UUID NOT NULL | FK → `bin_locations(id)` — stock deducted from here |
+| `destination_bin_location_id` | UUID NOT NULL | FK → `bin_locations(id)` — stock added here |
+| `quantity` | DECIMAL(15,2) NOT NULL | CHECK (> 0) |
+
 ### Other schema quirks
 | Detail | Notes |
 |--------|-------|
 | Expenses FK constraint | Named `fk_category` (NOT auto-generated) |
 | Vendor credits | Has `vendor_credit_items` child table |
-| `product_categories` | Has `organization_id` column |
 | `sales_transactions` | Has `organization_id` column |
+
+## Stock Tracking System
+
+Stock is tracked at the **bin location** level. Net stock per bin is calculated dynamically:
+
+```
+bin_stock = Σ(bill_item_bin_allocations.quantity)        # purchases IN
+           - Σ(invoice_item_bin_allocations.quantity)    # sales OUT
+           - Σ(transfer_order_allocations.quantity WHERE source_bin = this_bin)     # transfers OUT
+           + Σ(transfer_order_allocations.quantity WHERE dest_bin = this_bin)       # transfers IN
+```
+
+**Key services:**
+- `binLocations.service.ts` → `getBinLocationsWithStock()` — all bins with calculated stock
+- `binLocations.service.ts` → `getBinLocationsForItem(itemId)` — specific item's distribution across bins
+- `transfer-orders.service.ts` → `getItemStockByLocation(itemId)` — item stock aggregated by location (for transfer form)
+
+**Transfer order stock flow:**
+1. Transfer created as **draft** → no stock movement
+2. Transfer status → **initiated** → `processTransferStockMovement()` creates allocation records (stock moves)
+3. Transfer status → **cancelled** → allocation records deleted (stock reverts)
+4. `items.current_stock` = global aggregate (not per-location)
 
 ## API Patterns
 
@@ -294,7 +442,7 @@ CORS in `backend/src/server.ts` controls which domains can call the API. Do not:
 - Remove the `credentials: true` setting
 
 ### 11. NEVER delete or restructure existing API routes
-All 24 API route prefixes are consumed by the deployed frontend. Renaming `/api/items` to `/api/inventory` will break the frontend immediately. Add new routes alongside existing ones if needed.
+All 30 API route prefixes are consumed by the deployed frontend. Renaming `/api/items` to `/api/inventory` will break the frontend immediately. Add new routes alongside existing ones if needed.
 
 ### 12. NEVER push directly to main without building first
 `main` branch auto-deploys via Coolify. Always verify before pushing:
@@ -316,6 +464,9 @@ These column-to-table mappings are sacred — changing them breaks the API:
 - `expense_categories.category_name` — used by expenses service
 - `expenses.expense_number` / `expenses.total_amount` — required fields
 
+### 15. Frontend services MUST use `apiClient` (not raw `axios`)
+All frontend API calls must go through `frontend/src/services/api.client.ts` which adds the auth Bearer token via interceptor. Using raw `axios` will result in 401 errors.
+
 ## PR Review Checklist
 
 Before merging:
@@ -329,6 +480,7 @@ Before merging:
 - [ ] `cd backend && npm run build` succeeds
 - [ ] `cd frontend && npm run build` succeeds
 - [ ] Service file column names match DB columns
+- [ ] Frontend services use `apiClient`, not raw `axios`
 
 ## Adding a New Module
 
@@ -355,7 +507,14 @@ cd backend && npm run test-connection                                 # Supabase
 | `backend/src/server.ts` | Express entry, CORS, route registration |
 | `backend/src/config/supabase.ts` | Supabase admin client |
 | `backend/src/routes/auth.routes.ts` | All auth endpoints |
+| `backend/src/services/binLocations.service.ts` | Bin stock tracking (purchases - sales - transfers) |
+| `backend/src/services/transfer-orders.service.ts` | Transfer orders with stock movement processing |
+| `backend/src/services/locations.service.ts` | Location CRUD |
+| `backend/src/services/items.service.ts` | Items, categories, subcategories |
 | `backend/src/utils/database-schema.sql` | Base DB schema |
+| `backend/migrations/` | SQL migration files (005-009) |
 | `frontend/.env.production` | API URL (overridden by Coolify env) |
-| `frontend/src/services/api.client.ts` | Axios base config |
+| `frontend/src/services/api.client.ts` | Axios base config with auth interceptor |
 | `frontend/src/App.tsx` | All frontend routes |
+| `frontend/src/components/shared/CategoryPicker.tsx` | Category/subcategory picker (double-click expand) |
+| `frontend/src/components/shared/CreatableSelect.tsx` | Dropdown with create-new option |

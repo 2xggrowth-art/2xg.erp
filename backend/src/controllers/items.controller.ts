@@ -3,6 +3,81 @@ import { ItemsService } from '../services/items.service';
 
 const itemsService = new ItemsService();
 
+export const getCategories = async (req: Request, res: Response) => {
+  try {
+    const categories = await itemsService.getCategories();
+    res.json({ success: true, data: categories });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+};
+
+export const createCategory = async (req: Request, res: Response) => {
+  try {
+    const { name } = req.body;
+    if (!name) {
+      return res.status(400).json({ success: false, error: 'Category name is required' });
+    }
+    const category = await itemsService.createCategory(name);
+    res.status(201).json({ success: true, data: category });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+};
+
+export const deleteCategory = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const category = await itemsService.deleteCategory(id);
+    res.json({ success: true, data: category });
+  } catch (error: any) {
+    res.status(400).json({ success: false, error: error.message });
+  }
+};
+
+export const getAllSubcategories = async (req: Request, res: Response) => {
+  try {
+    const subcategories = await itemsService.getAllSubcategories();
+    res.json({ success: true, data: subcategories });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+};
+
+export const getSubcategories = async (req: Request, res: Response) => {
+  try {
+    const { categoryId } = req.params;
+    const subcategories = await itemsService.getSubcategories(categoryId);
+    res.json({ success: true, data: subcategories });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+};
+
+export const createSubcategory = async (req: Request, res: Response) => {
+  try {
+    const { categoryId } = req.params;
+    const { name } = req.body;
+    if (!name) {
+      return res.status(400).json({ success: false, error: 'Subcategory name is required' });
+    }
+    const subcategory = await itemsService.createSubcategory(categoryId, name);
+    res.status(201).json({ success: true, data: subcategory });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+};
+
+export const deleteSubcategory = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const subcategory = await itemsService.deleteSubcategory(id);
+    res.json({ success: true, data: subcategory });
+  } catch (error: any) {
+    res.status(400).json({ success: false, error: error.message });
+  }
+};
+
 export const generateSku = async (req: Request, res: Response) => {
   try {
     const sku = await itemsService.generateSku();

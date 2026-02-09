@@ -1,12 +1,13 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect } from 'react';
 import { ArrowLeft, Package, Save, Upload } from 'lucide-react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { itemsService } from '../../services/items.service';
+import { itemsService, ProductCategory, ProductSubcategory } from '../../services/items.service';
 import { vendorsService, Vendor } from '../../services/vendors.service';
 import { brandsService, Brand } from '../../services/brands.service';
 import { manufacturersService, Manufacturer } from '../../services/manufacturers.service';
 import { useAuth } from '../../contexts/AuthContext';
 import CreatableSelect from '../shared/CreatableSelect';
+import CategoryPicker from '../shared/CategoryPicker';
 import BrandManufacturerUploadModal from './BrandManufacturerUploadModal';
 
 const NewItemForm = () => {
@@ -22,17 +23,26 @@ const NewItemForm = () => {
   const [fetching, setFetching] = useState(false);
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [vendors, setVendors] = useState<Vendor[]>([]);
+  const [categories, setCategories] = useState<ProductCategory[]>([]);
+  const [allSubcategories, setAllSubcategories] = useState<ProductSubcategory[]>([]);
   const [brands, setBrands] = useState<Brand[]>([]);
   const [manufacturers, setManufacturers] = useState<Manufacturer[]>([]);
   const [formData, setFormData] = useState({
-    type: 'goods',
+    type: ['goods'] as string[],
     name: '',
+    size: '',
+    color: '',
+    variant: '',
     sku: '',
     unit: '',
     category: '',
+    subcategory: '',
     returnableItem: false,
     hsnCode: '',
     taxPreference: 'taxable',
+    cgst_rate: 9,
+    sgst_rate: 9,
+    igst_rate: 0,
     manufacturer: '',
     brand: '',
 
@@ -54,7 +64,8 @@ const NewItemForm = () => {
     inventoryAccount: '',
     valuationMethod: '',
     reorderPoint: '',
-    quantity: '0' // Added quantity field
+    isPremiumTagged: false,
+    incentiveType: '',
   });
 
   // Fetch items for SKU validation
@@ -63,7 +74,9 @@ const NewItemForm = () => {
 
   useEffect(() => {
     fetchVendors();
-    fetchItems(); // Fetch items for SKU validation
+    fetchItems();
+    fetchCategories();
+    fetchAllSubcategories();
     fetchBrands();
     fetchManufacturers();
     if (isEditMode && id) {
@@ -73,54 +86,6 @@ const NewItemForm = () => {
       generateNewSku();
     }
   }, [id, isEditMode]);
-
-  // Filter brands based on selected manufacturer
-  const filteredBrands = useMemo(() => {
-    if (!formData.manufacturer || brands.length === 0) {
-      return brands; // Show all brands if no manufacturer selected
-    }
-
-    const selectedManufacturer = manufacturers.find(
-      m => m.name === formData.manufacturer
-    );
-
-    if (!selectedManufacturer) {
-      return brands;
-    }
-
-    // Filter brands that belong to this manufacturer
-    const relatedBrands = brands.filter(
-      b => b.manufacturer_id === selectedManufacturer.id
-    );
-
-    return relatedBrands.length > 0 ? relatedBrands : brands;
-  }, [formData.manufacturer, brands, manufacturers]);
-
-  // Auto-populate brand when manufacturer is selected
-  useEffect(() => {
-    if (formData.manufacturer && brands.length > 0) {
-      // Find the selected manufacturer's ID
-      const selectedManufacturer = manufacturers.find(
-        m => m.name === formData.manufacturer
-      );
-
-      if (selectedManufacturer) {
-        // Filter brands that belong to this manufacturer
-        const relatedBrands = brands.filter(
-          b => b.manufacturer_id === selectedManufacturer.id
-        );
-
-        // If there's exactly one brand for this manufacturer, auto-select it
-        if (relatedBrands.length === 1) {
-          setFormData(prev => ({ ...prev, brand: relatedBrands[0].name }));
-        } else if (relatedBrands.length === 0) {
-          // Clear brand if manufacturer has no brands
-          setFormData(prev => ({ ...prev, brand: '' }));
-        }
-        // If there are multiple brands, don't auto-select
-      }
-    }
-  }, [formData.manufacturer, brands, manufacturers]);
 
   const generateNewSku = async () => {
     try {
@@ -150,6 +115,28 @@ const NewItemForm = () => {
       }
     } catch (error) {
       console.error('Error fetching items:', error);
+    }
+  };
+
+  const fetchCategories = async () => {
+    try {
+      const response = await itemsService.getCategories();
+      if (response.data.success && response.data.data) {
+        setCategories(response.data.data);
+      }
+    } catch (error) {
+      console.error('Error fetching categories:', error);
+    }
+  };
+
+  const fetchAllSubcategories = async () => {
+    try {
+      const response = await itemsService.getAllSubcategories();
+      if (response.data.success && response.data.data) {
+        setAllSubcategories(response.data.data);
+      }
+    } catch (error) {
+      console.error('Error fetching subcategories:', error);
     }
   };
 
@@ -187,16 +174,60 @@ const NewItemForm = () => {
     }
   };
 
-  const handleCreateBrand = async (name: string) => {
+  const handleCreateCategory = async (name: string) => {
     try {
-      const response = await brandsService.createBrand({ name });
+      const response = await itemsService.createCategory(name);
       if (response.data.success) {
-        setBrands([...brands, response.data.data]);
-        setFormData(prev => ({ ...prev, brand: name }));
+        setCategories([...categories, response.data.data]);
+        setFormData(prev => ({ ...prev, category: name, subcategory: '' }));
       }
     } catch (error) {
-      console.error('Error creating brand:', error);
-      alert('Failed to create brand');
+      console.error('Error creating category:', error);
+      alert('Failed to create category');
+    }
+  };
+
+  const handleDeleteCategory = async (id: string) => {
+    try {
+      const response = await itemsService.deleteCategory(id);
+      if (response.data.success) {
+        setCategories(categories.filter(c => c.id !== id));
+        // Remove subcategories that belonged to this category
+        setAllSubcategories(allSubcategories.filter(s => s.category_id !== id));
+        const deleted = categories.find(c => c.id === id);
+        if (deleted && deleted.name === formData.category) {
+          setFormData(prev => ({ ...prev, category: '', subcategory: '' }));
+        }
+      }
+    } catch (error: any) {
+      alert(error.response?.data?.error || 'Failed to delete category');
+    }
+  };
+
+  const handleCreateSubcategory = async (categoryId: string, name: string) => {
+    try {
+      const response = await itemsService.createSubcategory(categoryId, name);
+      if (response.data.success) {
+        setAllSubcategories(prev => [...prev, response.data.data]);
+      }
+    } catch (error) {
+      console.error('Error creating subcategory:', error);
+      alert('Failed to create subcategory');
+    }
+  };
+
+  const handleDeleteSubcategory = async (id: string) => {
+    try {
+      const response = await itemsService.deleteSubcategory(id);
+      if (response.data.success) {
+        const deleted = allSubcategories.find(s => s.id === id);
+        setAllSubcategories(allSubcategories.filter(s => s.id !== id));
+        if (deleted && deleted.name === formData.subcategory) {
+          setFormData(prev => ({ ...prev, subcategory: '' }));
+        }
+      }
+    } catch (error: any) {
+      alert(error.response?.data?.error || 'Failed to delete subcategory');
     }
   };
 
@@ -269,14 +300,21 @@ const NewItemForm = () => {
         const item = apiResponse.data;
 
         setFormData({
-          type: 'goods', // Default as usually not stored directly or derived from other fields
+          type: item.item_type ? item.item_type.split(',') : ['goods'],
           name: item.item_name,
+          size: item.size || '',
+          color: item.color || '',
+          variant: item.variant || '',
           sku: item.sku,
           unit: item.unit_of_measurement,
-          category: item.category_id || '',
+          category: categories.find(c => c.id === item.category_id)?.name || '',
+          subcategory: '',
           returnableItem: item.is_returnable,
           hsnCode: item.hsn_code || '',
           taxPreference: item.tax_rate > 0 ? 'taxable' : 'non-taxable',
+          cgst_rate: item.tax_rate > 0 ? item.tax_rate / 2 : 0,
+          sgst_rate: item.tax_rate > 0 ? item.tax_rate / 2 : 0,
+          igst_rate: 0,
           // Removed dimension and weight fields
           manufacturer: item.manufacturer || '',
           brand: item.brand || '',
@@ -302,9 +340,17 @@ const NewItemForm = () => {
           inventoryAccount: '',
           valuationMethod: '',
           reorderPoint: item.reorder_point ? item.reorder_point.toString() : '',
-          // Add quantity if editing? Usually stock is separate, but we can set initial if needed or separate field
-          quantity: item.current_stock ? item.current_stock.toString() : '0'
+          isPremiumTagged: item.is_premium_tagged || false,
+          incentiveType: item.incentive_type || '',
         });
+
+        // Load subcategory name if item has one
+        if (item.subcategory_id && allSubcategories.length > 0) {
+          const sub = allSubcategories.find(s => s.id === item.subcategory_id);
+          if (sub) {
+            setFormData(prev => ({ ...prev, subcategory: sub.name }));
+          }
+        }
       }
     } catch (error) {
       console.error('Error fetching item details:', error);
@@ -345,16 +391,23 @@ const NewItemForm = () => {
       // Prepare item data for API
       const itemData: any = {
         name: formData.name,
+        item_type: formData.type.join(','),
+        size: formData.size || undefined,
+        color: formData.color || undefined,
+        variant: formData.variant || undefined,
         sku: formData.sku,
         unit: formData.unit,
-        // category: formData.category || undefined, // TODO: Implement category dropdown with UUID selection
+        category: categories.find(c => c.name === formData.category)?.id || undefined,
+        subcategory: allSubcategories.find(s => s.name === formData.subcategory)?.id || undefined,
         hsn_code: formData.hsnCode || undefined,
         manufacturer: formData.manufacturer || undefined,
         brand: formData.brand || undefined,
         // Removed UPC, MPN, EAN, ISBN fields
         is_returnable: formData.returnableItem,
         // Removed weight and dimensions
-        tax_rate: formData.taxPreference === 'taxable' ? 18 : 0, // Default 18% GST for taxable items
+        tax_rate: formData.taxPreference === 'taxable'
+          ? (formData.igst_rate || (formData.cgst_rate + formData.sgst_rate))
+          : 0,
 
         // Sales Information
         is_sellable: formData.sellable,
@@ -377,7 +430,10 @@ const NewItemForm = () => {
         inventory_account: formData.inventoryAccount || undefined,
         valuation_method: formData.valuationMethod || undefined,
         reorder_point: formData.reorderPoint ? parseInt(formData.reorderPoint) : 10,
-        current_stock: formData.quantity ? parseFloat(formData.quantity) : 0, // Include quantity as current_stock
+
+        // Premium & Incentive
+        is_premium_tagged: formData.isPremiumTagged,
+        incentive_type: formData.incentiveType || null,
       };
 
       // Call API to create or update item
@@ -470,35 +526,33 @@ const NewItemForm = () => {
       <div className="max-w-5xl mx-auto p-6">
         <form onSubmit={handleSubmit} className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 space-y-6">
 
-          {/* Type Selection */}
+          {/* Type Selection - Checklist */}
           <div className="grid grid-cols-4 gap-4 items-center">
             <label className="text-sm font-medium text-gray-700 flex items-center gap-1">
               Type
               <span className="text-gray-400 cursor-help">ⓘ</span>
             </label>
-            <div className="col-span-3 flex gap-4">
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="radio"
-                  name="type"
-                  value="goods"
-                  checked={formData.type === 'goods'}
-                  onChange={handleInputChange}
-                  className="w-4 h-4 text-blue-600"
-                />
-                <span className="text-sm text-gray-700">Goods</span>
-              </label>
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="radio"
-                  name="type"
-                  value="service"
-                  checked={formData.type === 'service'}
-                  onChange={handleInputChange}
-                  className="w-4 h-4 text-blue-600"
-                />
-                <span className="text-sm text-gray-700">Service</span>
-              </label>
+            <div className="col-span-3 flex gap-6">
+              {['goods', 'service', 'free_accessories', 'offers'].map((t) => (
+                <label key={t} className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={formData.type.includes(t)}
+                    onChange={(e) => {
+                      setFormData(prev => ({
+                        ...prev,
+                        type: e.target.checked
+                          ? [...prev.type, t]
+                          : prev.type.filter(v => v !== t)
+                      }));
+                    }}
+                    className="w-4 h-4 text-blue-600 rounded"
+                  />
+                  <span className="text-sm text-gray-700">
+                    {t === 'goods' ? 'Goods' : t === 'service' ? 'Service' : t === 'free_accessories' ? 'Free Accessories' : 'Offers'}
+                  </span>
+                </label>
+              ))}
             </div>
           </div>
 
@@ -517,6 +571,43 @@ const NewItemForm = () => {
                 placeholder="Enter item name"
                 required
               />
+            </div>
+          </div>
+
+          {/* Size, Color, Variant */}
+          <div className="grid grid-cols-4 gap-4 items-center">
+            <label className="text-sm font-medium text-gray-700">Size</label>
+            <div className="col-span-3 grid grid-cols-3 gap-4">
+              <input
+                type="text"
+                name="size"
+                value={formData.size}
+                onChange={handleInputChange}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                placeholder="e.g. S, M, L, XL"
+              />
+              <div>
+                <label className="text-sm font-medium text-gray-700 block mb-1">Color</label>
+                <input
+                  type="text"
+                  name="color"
+                  value={formData.color}
+                  onChange={handleInputChange}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  placeholder="e.g. Red, Blue"
+                />
+              </div>
+              <div>
+                <label className="text-sm font-medium text-gray-700 block mb-1">Variant</label>
+                <input
+                  type="text"
+                  name="variant"
+                  value={formData.variant}
+                  onChange={handleInputChange}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  placeholder="e.g. 128GB, Cotton"
+                />
+              </div>
             </div>
           </div>
 
@@ -569,19 +660,24 @@ const NewItemForm = () => {
             </div>
           </div>
 
-          {/* Quantity */}
+          {/* Category & Sub Category - single drill-down picker */}
           <div className="grid grid-cols-4 gap-4 items-center">
             <label className="text-sm font-medium text-gray-700 flex items-center gap-1">
-              Quantity
+              Category
             </label>
             <div className="col-span-3">
-              <input
-                type="number"
-                name="quantity"
-                value={formData.quantity}
-                onChange={handleInputChange}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                placeholder="0"
+              <CategoryPicker
+                categories={categories}
+                allSubcategories={allSubcategories}
+                categoryValue={formData.category}
+                subcategoryValue={formData.subcategory}
+                onCategoryChange={(val) => setFormData(prev => ({ ...prev, category: val, subcategory: '' }))}
+                onSubcategoryChange={(val) => setFormData(prev => ({ ...prev, subcategory: val }))}
+                onCreateCategory={handleCreateCategory}
+                onDeleteCategory={handleDeleteCategory}
+                onCreateSubcategory={handleCreateSubcategory}
+                onDeleteSubcategory={handleDeleteSubcategory}
+                placeholder="Search or add category"
               />
             </div>
           </div>
@@ -603,6 +699,42 @@ const NewItemForm = () => {
                   <span className="text-gray-400 cursor-help">ⓘ</span>
                 </span>
               </label>
+            </div>
+          </div>
+
+          {/* Is Premium Tagged Item */}
+          <div className="grid grid-cols-4 gap-4 items-center">
+            <label className="text-sm font-medium text-gray-700"></label>
+            <div className="col-span-3">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  name="isPremiumTagged"
+                  checked={formData.isPremiumTagged}
+                  onChange={handleInputChange}
+                  className="w-4 h-4 text-blue-600 rounded"
+                />
+                <span className="text-sm text-gray-700">
+                  Is a Premium Tagged Item
+                </span>
+              </label>
+            </div>
+          </div>
+
+          {/* Incentive Type */}
+          <div className="grid grid-cols-4 gap-4 items-center">
+            <label className="text-sm font-medium text-gray-700">
+              Incentive Type
+            </label>
+            <div className="col-span-3">
+              <input
+                type="text"
+                name="incentiveType"
+                value={formData.incentiveType}
+                onChange={handleInputChange}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                placeholder="Enter incentive type"
+              />
             </div>
           </div>
 
@@ -645,10 +777,66 @@ const NewItemForm = () => {
             </div>
           </div>
 
-          {/* Manufacturer and Brand */}
+          {/* GST Rates - only shown when Taxable */}
+          {formData.taxPreference === 'taxable' && (
+            <div className="grid grid-cols-4 gap-4 items-center">
+              <label className="text-sm font-medium text-gray-700">
+                GST Rates
+              </label>
+              <div className="col-span-3 space-y-3">
+                <div className="flex items-center gap-3">
+                  <span className={`text-sm w-12 ${formData.igst_rate ? 'text-gray-400' : 'text-gray-700'}`}>CGST</span>
+                  <select
+                    value={formData.cgst_rate}
+                    onChange={(e) => setFormData({ ...formData, cgst_rate: parseFloat(e.target.value) || 0, igst_rate: 0 })}
+                    disabled={!!formData.igst_rate}
+                    className={`px-2 py-1.5 border border-gray-300 rounded-lg text-sm w-24 ${formData.igst_rate ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : 'bg-white'}`}
+                  >
+                    <option value={0}>0%</option>
+                    <option value={2.5}>2.5%</option>
+                    <option value={6}>6%</option>
+                    <option value={9}>9%</option>
+                    <option value={14}>14%</option>
+                  </select>
+                </div>
+                <div className="flex items-center gap-3">
+                  <span className={`text-sm w-12 ${formData.igst_rate ? 'text-gray-400' : 'text-gray-700'}`}>SGST</span>
+                  <select
+                    value={formData.sgst_rate}
+                    onChange={(e) => setFormData({ ...formData, sgst_rate: parseFloat(e.target.value) || 0, igst_rate: 0 })}
+                    disabled={!!formData.igst_rate}
+                    className={`px-2 py-1.5 border border-gray-300 rounded-lg text-sm w-24 ${formData.igst_rate ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : 'bg-white'}`}
+                  >
+                    <option value={0}>0%</option>
+                    <option value={2.5}>2.5%</option>
+                    <option value={6}>6%</option>
+                    <option value={9}>9%</option>
+                    <option value={14}>14%</option>
+                  </select>
+                </div>
+                <div className="flex items-center gap-3">
+                  <span className={`text-sm w-12 ${(formData.cgst_rate || formData.sgst_rate) ? 'text-gray-400' : 'text-gray-700'}`}>IGST</span>
+                  <select
+                    value={formData.igst_rate}
+                    onChange={(e) => setFormData({ ...formData, igst_rate: parseFloat(e.target.value) || 0, cgst_rate: 0, sgst_rate: 0 })}
+                    disabled={!!(formData.cgst_rate || formData.sgst_rate)}
+                    className={`px-2 py-1.5 border border-gray-300 rounded-lg text-sm w-24 ${(formData.cgst_rate || formData.sgst_rate) ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : 'bg-white'}`}
+                  >
+                    <option value={0}>0%</option>
+                    <option value={5}>5%</option>
+                    <option value={12}>12%</option>
+                    <option value={18}>18%</option>
+                    <option value={28}>28%</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Manufacturer/Brand */}
           <div className="grid grid-cols-4 gap-4 items-center">
             <label className="text-sm font-medium text-gray-700">
-              Manufacturer
+              Manufacturer/Brand
             </label>
             <div className="col-span-3">
               <div className="flex justify-end mb-2">
@@ -661,28 +849,13 @@ const NewItemForm = () => {
                   Import from Excel
                 </button>
               </div>
-              <div className="grid grid-cols-2 gap-6">
-                <div>
-                  <CreatableSelect
-                    options={manufacturers.map(m => ({ id: m.id, name: m.name }))}
-                    value={formData.manufacturer}
-                    onChange={(val) => setFormData(prev => ({ ...prev, manufacturer: val }))}
-                    onCreateOption={handleCreateManufacturer}
-                    placeholder="Select or add manufacturer"
-                  />
-                </div>
-
-                <div>
-                  <label className="text-sm font-medium text-gray-700 block mb-2">Brand</label>
-                  <CreatableSelect
-                    options={filteredBrands.map(b => ({ id: b.id, name: b.name }))}
-                    value={formData.brand}
-                    onChange={(val) => setFormData(prev => ({ ...prev, brand: val }))}
-                    onCreateOption={handleCreateBrand}
-                    placeholder={formData.manufacturer && filteredBrands.length === 0 ? "No brands for this manufacturer - add new" : "Select or add brand"}
-                  />
-                </div>
-              </div>
+              <CreatableSelect
+                options={manufacturers.map(m => ({ id: m.id, name: m.name }))}
+                value={formData.manufacturer}
+                onChange={(val) => setFormData(prev => ({ ...prev, manufacturer: val }))}
+                onCreateOption={handleCreateManufacturer}
+                placeholder="Select or add manufacturer/brand"
+              />
             </div>
           </div>
 
