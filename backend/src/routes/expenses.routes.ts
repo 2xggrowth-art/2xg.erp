@@ -11,6 +11,7 @@ router.get('/categories', expensesController.getExpenseCategories);
 router.post('/categories', expensesController.createExpenseCategory);
 router.delete('/categories/:id', expensesController.deleteExpenseCategory);
 router.get('/:id', expensesController.getExpenseById);
+router.delete('/:id', expensesController.deleteExpense);
 router.post('/', ...uploadExpenseVoucher.single('voucher'), expensesController.createExpense);
 
 export default router;

@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { FileText, Send, Eye, CreditCard, CheckCircle, Plus, Filter, Download, Mail, Printer, MoreVertical, Edit, Trash2, Copy } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
+import { FileText, Send, Eye, CreditCard, CheckCircle, Plus, Filter, Download, Mail, Printer, MoreVertical, Edit, Trash2, Copy, ArrowUp, ArrowDown, Calendar, Upload } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import ProcessFlow from '../components/common/ProcessFlow';
 import { invoicesService } from '../services/invoices.service';
@@ -29,7 +29,13 @@ const InvoicesPage = () => {
   const [loading, setLoading] = useState(true);
   const [selectedInvoices, setSelectedInvoices] = useState<string[]>([]);
   const [filterStatus, setFilterStatus] = useState<string>('all');
+  const [filterDate, setFilterDate] = useState<string>('');
+  const [filterMonth, setFilterMonth] = useState<string>('');
+  const [filterYear, setFilterYear] = useState<string>('');
+  const [sortOrder, setSortOrder] = useState<'desc' | 'asc'>('desc');
   const [showActionMenu, setShowActionMenu] = useState<string | null>(null);
+  const [importLoading, setImportLoading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const invoiceSteps = [
     {
@@ -63,16 +69,46 @@ const InvoicesPage = () => {
 
   useEffect(() => {
     fetchInvoices();
-  }, [filterStatus]);
+  }, [filterStatus, filterDate, filterMonth, filterYear]);
 
   const fetchInvoices = async () => {
     try {
       setLoading(true);
-      const filters = filterStatus !== 'all' ? { status: filterStatus } : {};
+      const filters: Record<string, string> = {};
+      if (filterStatus !== 'all') filters.status = filterStatus;
+
+      // Specific date overrides month/year
+      if (filterDate) {
+        filters.from_date = filterDate;
+        filters.to_date = filterDate;
+      } else if (filterYear) {
+        const year = parseInt(filterYear);
+        if (filterMonth) {
+          const month = parseInt(filterMonth);
+          const from = `${year}-${String(month).padStart(2, '0')}-01`;
+          const lastDay = new Date(year, month, 0).getDate();
+          const to = `${year}-${String(month).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
+          filters.from_date = from;
+          filters.to_date = to;
+        } else {
+          filters.from_date = `${year}-01-01`;
+          filters.to_date = `${year}-12-31`;
+        }
+      } else if (filterMonth) {
+        const year = new Date().getFullYear();
+        const month = parseInt(filterMonth);
+        const from = `${year}-${String(month).padStart(2, '0')}-01`;
+        const lastDay = new Date(year, month, 0).getDate();
+        const to = `${year}-${String(month).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
+        filters.from_date = from;
+        filters.to_date = to;
+      }
+
       const response = await invoicesService.getAllInvoices(filters);
 
       if (response.success && response.data) {
-        setInvoices(response.data.invoices || response.data);
+        const data = response.data.invoices || response.data;
+        setInvoices(data);
       }
     } catch (error) {
       console.error('Error fetching invoices:', error);
@@ -80,6 +116,21 @@ const InvoicesPage = () => {
       setLoading(false);
     }
   };
+
+  // Sort invoices by invoice_date
+  const sortedInvoices = [...invoices].sort((a, b) => {
+    const dateA = new Date(a.invoice_date).getTime();
+    const dateB = new Date(b.invoice_date).getTime();
+    return sortOrder === 'desc' ? dateB - dateA : dateA - dateB;
+  });
+
+  const toggleSortOrder = () => {
+    setSortOrder(prev => prev === 'desc' ? 'asc' : 'desc');
+  };
+
+  // Generate year options (current year down to 5 years ago)
+  const currentYear = new Date().getFullYear();
+  const yearOptions = Array.from({ length: 6 }, (_, i) => currentYear - i);
 
   const handleSelectInvoice = (invoiceId: string) => {
     setSelectedInvoices(prev =>
@@ -161,6 +212,92 @@ const InvoicesPage = () => {
     createBulkPrintAction(handleBulkPrint),
     createBulkDeleteAction(handleBulkDelete)
   ];
+
+  const handleExportAll = () => {
+    const dataToExport = selectedInvoices.length > 0
+      ? sortedInvoices.filter(inv => selectedInvoices.includes(inv.id))
+      : sortedInvoices;
+
+    const csv = [
+      ['Date', 'Invoice#', 'Order#', 'Customer Name', 'Status', 'Due Date', 'Amount', 'Balance Due'].join(','),
+      ...dataToExport.map(invoice => [
+        invoice.invoice_date,
+        invoice.invoice_number,
+        invoice.order_number || '',
+        `"${invoice.customer_name}"`,
+        invoice.status,
+        invoice.due_date || '',
+        invoice.total_amount.toFixed(2),
+        invoice.balance_due.toFixed(2)
+      ].join(','))
+    ].join('\n');
+
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `invoices_export_${new Date().toISOString().split('T')[0]}.csv`;
+    a.click();
+  };
+
+  const handleImportCSV = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = async (event) => {
+      try {
+        setImportLoading(true);
+        const text = event.target?.result as string;
+        const lines = text.split('\n').filter(line => line.trim());
+        if (lines.length < 2) {
+          alert('CSV file must have a header row and at least one data row.');
+          return;
+        }
+
+        const headers = lines[0].split(',').map(h => h.trim().toLowerCase());
+        const invoicesData = [];
+
+        for (let i = 1; i < lines.length; i++) {
+          const values = lines[i].split(',').map(v => v.trim());
+          const row: Record<string, any> = {};
+          headers.forEach((header, idx) => {
+            row[header] = values[idx] || '';
+          });
+
+          invoicesData.push({
+            customer_name: row['customer name'] || row['customer_name'] || row['customer'] || '',
+            customer_email: row['customer email'] || row['customer_email'] || '',
+            invoice_date: row['date'] || row['invoice_date'] || new Date().toISOString().split('T')[0],
+            due_date: row['due date'] || row['due_date'] || '',
+            order_number: row['order#'] || row['order number'] || row['order_number'] || '',
+            status: row['status'] || 'draft',
+            sub_total: parseFloat(row['amount'] || row['sub_total'] || '0'),
+            total_amount: parseFloat(row['amount'] || row['total_amount'] || '0'),
+            items: [{
+              item_name: row['item'] || row['item_name'] || 'Imported Item',
+              quantity: parseFloat(row['quantity'] || '1'),
+              rate: parseFloat(row['rate'] || row['amount'] || '0'),
+              amount: parseFloat(row['amount'] || '0'),
+              account: 'Sales',
+              unit_of_measurement: row['unit'] || 'pcs',
+            }]
+          });
+        }
+
+        await invoicesService.importInvoices(invoicesData);
+        alert(`Successfully imported ${invoicesData.length} invoice(s).`);
+        fetchInvoices();
+      } catch (error) {
+        console.error('Error importing invoices:', error);
+        alert('Failed to import invoices. Please check the CSV format.');
+      } finally {
+        setImportLoading(false);
+        if (fileInputRef.current) fileInputRef.current.value = '';
+      }
+    };
+    reader.readAsText(file);
+  };
 
   const handleViewInvoice = (invoiceId: string) => {
     navigate(`/sales/invoices/${invoiceId}`);
@@ -305,19 +442,43 @@ const InvoicesPage = () => {
               {invoices.length} invoice{invoices.length !== 1 ? 's' : ''} found
             </p>
           </div>
-          <button
-            onClick={() => navigate('/sales/invoices/new')}
-            className="flex items-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors shadow-md"
-          >
-            <Plus size={20} />
-            <span className="font-medium">New</span>
-          </button>
+          <div className="flex items-center gap-2">
+            <input
+              type="file"
+              ref={fileInputRef}
+              accept=".csv"
+              onChange={handleImportCSV}
+              className="hidden"
+            />
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              disabled={importLoading}
+              className="flex items-center gap-2 px-4 py-3 border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50 transition-colors text-sm"
+            >
+              <Upload size={18} />
+              <span>{importLoading ? 'Importing...' : 'Import'}</span>
+            </button>
+            <button
+              onClick={handleExportAll}
+              className="flex items-center gap-2 px-4 py-3 border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50 transition-colors text-sm"
+            >
+              <Download size={18} />
+              <span>Export</span>
+            </button>
+            <button
+              onClick={() => navigate('/sales/invoices/new')}
+              className="flex items-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors shadow-md"
+            >
+              <Plus size={20} />
+              <span className="font-medium">New</span>
+            </button>
+          </div>
         </div>
 
         {/* Filters and Actions */}
         <div className="bg-white rounded-lg shadow-md p-4">
           <div className="flex items-center justify-between gap-4">
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-3 flex-wrap">
               <Filter size={18} className="text-slate-500" />
               <select
                 value={filterStatus}
@@ -332,6 +493,63 @@ const InvoicesPage = () => {
                 <option value="overdue">Overdue</option>
                 <option value="cancelled">Cancelled</option>
               </select>
+
+              <input
+                type="date"
+                value={filterDate}
+                onChange={(e) => {
+                  setFilterDate(e.target.value);
+                  if (e.target.value) {
+                    // Clear month/year when a specific date is picked
+                    setFilterMonth('');
+                    setFilterYear('');
+                  }
+                }}
+                className="px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+              />
+
+              <div className="flex items-center gap-2">
+                <Calendar size={18} className="text-slate-500" />
+                <select
+                  value={filterMonth}
+                  onChange={(e) => { setFilterMonth(e.target.value); setFilterDate(''); }}
+                  className="px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+                >
+                  <option value="">All Months</option>
+                  <option value="1">January</option>
+                  <option value="2">February</option>
+                  <option value="3">March</option>
+                  <option value="4">April</option>
+                  <option value="5">May</option>
+                  <option value="6">June</option>
+                  <option value="7">July</option>
+                  <option value="8">August</option>
+                  <option value="9">September</option>
+                  <option value="10">October</option>
+                  <option value="11">November</option>
+                  <option value="12">December</option>
+                </select>
+
+                <select
+                  value={filterYear}
+                  onChange={(e) => { setFilterYear(e.target.value); setFilterDate(''); }}
+                  className="px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+                >
+                  <option value="">All Years</option>
+                  {yearOptions.map(year => (
+                    <option key={year} value={String(year)}>{year}</option>
+                  ))}
+                </select>
+              </div>
+
+              <button
+                onClick={toggleSortOrder}
+                className="flex items-center gap-1 px-3 py-2 border border-slate-300 rounded-lg hover:bg-slate-50 transition-colors text-sm text-slate-700"
+                title={sortOrder === 'desc' ? 'Showing newest first' : 'Showing oldest first'}
+              >
+                {sortOrder === 'desc' ? <ArrowDown size={16} /> : <ArrowUp size={16} />}
+                {sortOrder === 'desc' ? 'Newest First' : 'Oldest First'}
+              </button>
             </div>
 
             <div className="flex items-center gap-2">
@@ -362,7 +580,16 @@ const InvoicesPage = () => {
                       className="rounded"
                     />
                   </th>
-                  <th className="px-4 py-3 text-left text-sm font-semibold text-slate-700">DATE</th>
+                  <th
+                    className="px-4 py-3 text-left text-sm font-semibold text-slate-700 cursor-pointer select-none hover:bg-slate-100 transition-colors"
+                    onClick={toggleSortOrder}
+                    title={sortOrder === 'desc' ? 'Sorted newest first — click to reverse' : 'Sorted oldest first — click to reverse'}
+                  >
+                    <span className="flex items-center gap-1">
+                      DATE
+                      {sortOrder === 'desc' ? <ArrowDown size={14} /> : <ArrowUp size={14} />}
+                    </span>
+                  </th>
                   <th className="px-4 py-3 text-left text-sm font-semibold text-slate-700">INVOICE#</th>
                   <th className="px-4 py-3 text-left text-sm font-semibold text-slate-700">ORDER NUMBER</th>
                   <th className="px-4 py-3 text-left text-sm font-semibold text-slate-700">CUSTOMER NAME</th>
@@ -375,7 +602,7 @@ const InvoicesPage = () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-200">
-                {invoices.map((invoice) => (
+                {sortedInvoices.map((invoice) => (
                   <tr
                     key={invoice.id}
                     className="hover:bg-slate-50 transition-colors cursor-pointer"

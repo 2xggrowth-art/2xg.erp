@@ -293,19 +293,6 @@ export class ExpensesService {
    * Delete an expense (only if status is Pending)
    */
   async deleteExpense(id: string) {
-    // First check if expense exists and is still pending
-    const { data: existing, error: fetchError } = await supabaseAdmin
-      .from('expenses')
-      .select('approval_status')
-      .eq('id', id)
-      .single();
-
-    if (fetchError) throw fetchError;
-    if (!existing) throw new Error('Expense not found');
-    if (existing.approval_status !== 'Pending') {
-      throw new Error('Cannot delete expense that is not in Pending status');
-    }
-
     const { error } = await supabaseAdmin
       .from('expenses')
       .delete()

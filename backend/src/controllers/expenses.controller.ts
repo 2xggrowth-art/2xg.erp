@@ -78,6 +78,17 @@ export const createExpense = async (req: Request, res: Response) => {
   }
 };
 
+export const deleteExpense = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const result = await expensesService.deleteExpense(id);
+    res.json({ success: true, data: result });
+  } catch (error: any) {
+    const status = error.message === 'Expense not found' ? 404 : 400;
+    res.status(status).json({ success: false, error: error.message });
+  }
+};
+
 export const createExpenseCategory = async (req: Request, res: Response) => {
   try {
     const { category_name } = req.body;

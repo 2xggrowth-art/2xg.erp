@@ -117,6 +117,32 @@ export const expensesService = {
     return response.data;
   },
 
+  // Delete expense
+  deleteExpense: async (id: string) => {
+    try {
+      const response = await apiClient.delete(`/expenses/${id}`);
+      return response.data;
+    } catch (error) {
+      console.error('Error deleting expense:', error);
+      throw error;
+    }
+  },
+
+  // Import expenses from CSV data
+  importExpenses: async (expensesData: Array<Omit<Expense, 'id' | 'expense_number' | 'created_at' | 'updated_at'>>) => {
+    try {
+      const results = [];
+      for (const expense of expensesData) {
+        const response = await apiClient.post('/expenses', expense);
+        results.push(response.data);
+      }
+      return { success: true, data: results, imported: results.length };
+    } catch (error) {
+      console.error('Error importing expenses:', error);
+      throw error;
+    }
+  },
+
   // Create new expense
   createExpense: async (
     expense: Omit<Expense, 'id' | 'expense_number' | 'created_at' | 'updated_at'>,

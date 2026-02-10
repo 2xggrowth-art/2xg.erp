@@ -1,6 +1,6 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, DollarSign, TrendingUp, CheckCircle, Clock, X, FileText, Calendar, User, Eye, Edit, Trash2 } from 'lucide-react';
+import { Plus, DollarSign, TrendingUp, CheckCircle, Clock, X, FileText, Calendar, User, Eye, Edit, Trash2, Upload, Download } from 'lucide-react';
 import { expensesService, Expense } from '../services/expenses.service';
 
 interface ExpenseSummary {
@@ -18,8 +18,11 @@ const ExpensesPage = () => {
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [filteredExpenses, setFilteredExpenses] = useState<Expense[]>([]);
   const [selectedStatus, setSelectedStatus] = useState<string>('All');
+  const [selectedExpenses, setSelectedExpenses] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [importing, setImporting] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     fetchData();
@@ -90,14 +93,128 @@ const ExpensesPage = () => {
   const handleDelete = async (expenseId: string) => {
     if (window.confirm('Are you sure you want to delete this expense?')) {
       try {
-        // await expensesService.deleteExpense(expenseId);
-        console.log('Delete expense:', expenseId);
-        // Refresh data after deletion
-        // fetchData();
-      } catch (error) {
+        await expensesService.deleteExpense(expenseId);
+        fetchData();
+      } catch (error: any) {
         console.error('Error deleting expense:', error);
+        alert(error.response?.data?.error || 'Failed to delete expense. Only pending expenses can be deleted.');
       }
     }
+  };
+
+  const handleSelectExpense = (expenseId: string) => {
+    setSelectedExpenses(prev =>
+      prev.includes(expenseId)
+        ? prev.filter(id => id !== expenseId)
+        : [...prev, expenseId]
+    );
+  };
+
+  const handleSelectAll = () => {
+    if (selectedExpenses.length === filteredExpenses.length) {
+      setSelectedExpenses([]);
+    } else {
+      setSelectedExpenses(filteredExpenses.map(e => e.id!));
+    }
+  };
+
+  const handleBulkDelete = async () => {
+    if (window.confirm(`Are you sure you want to delete ${selectedExpenses.length} expense(s)? Only pending expenses will be deleted.`)) {
+      try {
+        const results = await Promise.allSettled(
+          selectedExpenses.map(id => expensesService.deleteExpense(id))
+        );
+        const failed = results.filter(r => r.status === 'rejected').length;
+        if (failed > 0) {
+          alert(`${results.length - failed} deleted successfully. ${failed} failed (only pending expenses can be deleted).`);
+        }
+        setSelectedExpenses([]);
+        fetchData();
+      } catch (error) {
+        console.error('Error bulk deleting expenses:', error);
+      }
+    }
+  };
+
+  const handleImportCSV = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = async (event) => {
+      try {
+        setImporting(true);
+        const text = event.target?.result as string;
+        const lines = text.split('\n').filter(line => line.trim());
+        if (lines.length < 2) {
+          alert('CSV file must have a header row and at least one data row.');
+          return;
+        }
+
+        const headers = lines[0].split(',').map(h => h.trim().toLowerCase());
+        const expensesData = [];
+
+        for (let i = 1; i < lines.length; i++) {
+          const values = lines[i].split(',').map(v => v.trim());
+          const row: Record<string, any> = {};
+          headers.forEach((header, idx) => {
+            row[header] = values[idx] || '';
+          });
+
+          expensesData.push({
+            expense_date: row['date'] || row['expense_date'] || new Date().toISOString().split('T')[0],
+            category_name: row['category'] || row['category_name'] || '',
+            expense_item: row['item'] || row['expense_item'] || '',
+            description: row['description'] || '',
+            amount: parseFloat(row['amount']) || 0,
+            total_amount: parseFloat(row['total_amount'] || row['amount']) || 0,
+            payment_mode: row['payment_mode'] || row['payment_method'] || 'Cash',
+            paid_by_name: row['paid_by'] || row['paid_by_name'] || 'Admin User',
+            paid_by_id: row['paid_by_id'] || '',
+            remarks: row['remarks'] || row['notes'] || '',
+          });
+        }
+
+        await expensesService.importExpenses(expensesData as any);
+        alert(`Successfully imported ${expensesData.length} expense(s).`);
+        fetchData();
+      } catch (error) {
+        console.error('Error importing CSV:', error);
+        alert('Failed to import expenses. Please check the CSV format.');
+      } finally {
+        setImporting(false);
+        if (fileInputRef.current) fileInputRef.current.value = '';
+      }
+    };
+    reader.readAsText(file);
+  };
+
+  const handleExportCSV = () => {
+    const dataToExport = selectedExpenses.length > 0
+      ? filteredExpenses.filter(e => selectedExpenses.includes(e.id!))
+      : filteredExpenses;
+
+    const csv = [
+      ['Date', 'Expense#', 'Category', 'Item', 'Description', 'Amount', 'Payment Mode', 'Paid By', 'Status'].join(','),
+      ...dataToExport.map(e => [
+        e.expense_date,
+        e.expense_number || '',
+        (e as any).expense_categories?.category_name || e.category_name || '',
+        e.expense_item,
+        `"${(e.description || '').replace(/"/g, '""')}"`,
+        e.amount,
+        e.payment_mode,
+        e.paid_by_name,
+        e.approval_status || 'Pending'
+      ].join(','))
+    ].join('\n');
+
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `expenses_export_${new Date().toISOString().split('T')[0]}.csv`;
+    a.click();
   };
 
   const handleStatusChange = async (expenseId: string, newStatus: string) => {
@@ -153,13 +270,37 @@ const ExpensesPage = () => {
           <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Expense Management</h1>
           <p className="text-gray-600 mt-1">Track and manage all business expenses</p>
         </div>
-        <button
-          onClick={() => navigate('/expenses/new')}
-          className="w-full sm:w-auto flex items-center justify-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-        >
-          <Plus size={20} />
-          <span>Add Expense</span>
-        </button>
+        <div className="flex items-center gap-2">
+          <input
+            type="file"
+            ref={fileInputRef}
+            accept=".csv"
+            onChange={handleImportCSV}
+            className="hidden"
+          />
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            disabled={importing}
+            className="flex items-center gap-2 px-4 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors text-sm"
+          >
+            <Upload size={18} />
+            <span>{importing ? 'Importing...' : 'Import'}</span>
+          </button>
+          <button
+            onClick={handleExportCSV}
+            className="flex items-center gap-2 px-4 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors text-sm"
+          >
+            <Download size={18} />
+            <span>Export</span>
+          </button>
+          <button
+            onClick={() => navigate('/expenses/new')}
+            className="flex items-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+          >
+            <Plus size={20} />
+            <span>Add Expense</span>
+          </button>
+        </div>
       </div>
 
       {/* Summary Cards */}
@@ -270,6 +411,14 @@ const ExpensesPage = () => {
           <table className="w-full min-w-[1000px]">
             <thead className="bg-gray-50 border-b border-gray-200">
               <tr>
+                <th className="px-4 py-3 w-12">
+                  <input
+                    type="checkbox"
+                    checked={selectedExpenses.length === filteredExpenses.length && filteredExpenses.length > 0}
+                    onChange={handleSelectAll}
+                    className="rounded"
+                  />
+                </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Expense #
                 </th>
@@ -303,6 +452,14 @@ const ExpensesPage = () => {
                     key={expense.id}
                     className="hover:bg-gray-50 transition-colors"
                   >
+                    <td className="px-4 py-4" onClick={(e) => e.stopPropagation()}>
+                      <input
+                        type="checkbox"
+                        checked={selectedExpenses.includes(expense.id!)}
+                        onChange={() => handleSelectExpense(expense.id!)}
+                        className="rounded"
+                      />
+                    </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div
                         className="flex items-center gap-2 cursor-pointer"
@@ -414,7 +571,7 @@ const ExpensesPage = () => {
                 ))
               ) : (
                 <tr>
-                  <td colSpan={8} className="px-6 py-12 text-center">
+                  <td colSpan={9} className="px-6 py-12 text-center">
                     <div className="flex flex-col items-center gap-3">
                       <FileText size={48} className="text-gray-300" />
                       <p className="text-gray-500 font-medium">
@@ -435,6 +592,35 @@ const ExpensesPage = () => {
           </table>
         </div>
       </div>
+
+      {/* Bulk Action Bar */}
+      {selectedExpenses.length > 0 && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 bg-slate-800 text-white px-6 py-3 rounded-lg shadow-xl flex items-center gap-4 z-50">
+          <span className="text-sm font-medium">
+            {selectedExpenses.length} expense{selectedExpenses.length !== 1 ? 's' : ''} selected
+          </span>
+          <button
+            onClick={handleExportCSV}
+            className="flex items-center gap-1 px-3 py-1.5 bg-slate-700 hover:bg-slate-600 rounded text-sm transition-colors"
+          >
+            <Download size={14} />
+            Export
+          </button>
+          <button
+            onClick={handleBulkDelete}
+            className="flex items-center gap-1 px-3 py-1.5 bg-red-600 hover:bg-red-700 rounded text-sm transition-colors"
+          >
+            <Trash2 size={14} />
+            Delete
+          </button>
+          <button
+            onClick={() => setSelectedExpenses([])}
+            className="ml-2 p-1 hover:bg-slate-700 rounded transition-colors"
+          >
+            <X size={16} />
+          </button>
+        </div>
+      )}
     </div>
   );
 };
