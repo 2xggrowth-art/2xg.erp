@@ -207,17 +207,22 @@ const NewBillForm = () => {
           updatedItems[index].quantity = 1;
         }
 
-        // Fetch last serial number from DB if not cached
-        if (!(value in serialOffsets)) {
-          try {
-            const lastSerial = await billsService.getLastSerialNumber(value);
-            setSerialOffsets(prev => ({ ...prev, [value]: lastSerial }));
-            regenerateSerials(updatedItems, value, lastSerial);
-          } catch {
-            regenerateSerials(updatedItems, value, 0);
+        // Only generate serials for serial-tracked items
+        if (selectedItem.advanced_tracking_type === 'serial') {
+          if (!(value in serialOffsets)) {
+            try {
+              const lastSerial = await billsService.getLastSerialNumber(value);
+              setSerialOffsets(prev => ({ ...prev, [value]: lastSerial }));
+              regenerateSerials(updatedItems, value, lastSerial);
+            } catch {
+              regenerateSerials(updatedItems, value, 0);
+            }
+          } else {
+            regenerateSerials(updatedItems, value, serialOffsets[value]);
           }
         } else {
-          regenerateSerials(updatedItems, value, serialOffsets[value]);
+          // Clear serial numbers for non-serial items (batches or none)
+          updatedItems[index].serial_numbers = [];
         }
       }
     }
@@ -234,12 +239,15 @@ const NewBillForm = () => {
       const tax = (afterDiscount * taxRate) / 100;
       updatedItems[index].total = afterDiscount + tax;
 
-      // Regenerate serial numbers for all rows with same item
+      // Regenerate serial numbers for all rows with same item (only for serial-tracked items)
       if (field === 'quantity') {
         const currentItemId = updatedItems[index].item_id;
         if (currentItemId) {
-          const offset = serialOffsets[currentItemId] || 0;
-          regenerateSerials(updatedItems, currentItemId, offset);
+          const selectedItem = items.find(i => i.id === currentItemId);
+          if (selectedItem?.advanced_tracking_type === 'serial') {
+            const offset = serialOffsets[currentItemId] || 0;
+            regenerateSerials(updatedItems, currentItemId, offset);
+          }
         }
       }
     }
@@ -642,7 +650,9 @@ const NewBillForm = () => {
                             )}
                           </button>
                         )}
-                        {item.serial_numbers && item.serial_numbers.length > 0 && (
+                        {/* Serial numbers - only for serial-tracked items */}
+                        {item.serial_numbers && item.serial_numbers.length > 0 &&
+                         items.find(i => i.id === item.item_id)?.advanced_tracking_type === 'serial' && (
                           <div className="mt-2 text-center">
                             <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium bg-blue-100 text-blue-800">
                               {item.serial_numbers.length === 1
@@ -652,6 +662,15 @@ const NewBillForm = () => {
                               {item.serial_numbers.length > 1 && (
                                 <span className="ml-1 text-blue-500">({item.serial_numbers.length})</span>
                               )}
+                            </span>
+                          </div>
+                        )}
+                        {/* Batch tracking badge */}
+                        {item.item_id && item.quantity > 0 &&
+                         items.find(i => i.id === item.item_id)?.advanced_tracking_type === 'batches' && (
+                          <div className="mt-2 text-center">
+                            <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium bg-green-100 text-green-800">
+                              Batch Tracked
                             </span>
                           </div>
                         )}

@@ -2,15 +2,18 @@ import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { itemsService, Item } from '../services/items.service';
 import { binLocationService } from '../services/binLocation.service';
-import { ArrowLeft, Edit2, Trash2, Package, DollarSign, TrendingUp, AlertCircle, MapPin } from 'lucide-react';
+import { batchesService, ItemBatch } from '../services/batches.service';
+import { ArrowLeft, Edit2, Trash2, Package, DollarSign, TrendingUp, AlertCircle, MapPin, Layers } from 'lucide-react';
 
 const ItemDetailPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const [item, setItem] = useState<Item | null>(null);
   const [binLocations, setBinLocations] = useState<any[]>([]);
+  const [batches, setBatches] = useState<ItemBatch[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadingBins, setLoadingBins] = useState(true);
+  const [loadingBatches, setLoadingBatches] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -19,6 +22,13 @@ const ItemDetailPage: React.FC = () => {
       fetchBinLocations(id);
     }
   }, [id]);
+
+  // Fetch batches when item is loaded and is batch-tracked
+  useEffect(() => {
+    if (item?.advanced_tracking_type === 'batches' && id) {
+      fetchBatches(id);
+    }
+  }, [item?.advanced_tracking_type, id]);
 
   const fetchItemDetails = async (itemId: string) => {
     try {
@@ -49,6 +59,20 @@ const ItemDetailPage: React.FC = () => {
       console.error('Error fetching bin locations:', err);
     } finally {
       setLoadingBins(false);
+    }
+  };
+
+  const fetchBatches = async (itemId: string) => {
+    try {
+      setLoadingBatches(true);
+      const response = await batchesService.getBatchesForItem(itemId);
+      if (response.success && response.data) {
+        setBatches(response.data);
+      }
+    } catch (err: any) {
+      console.error('Error fetching batches:', err);
+    } finally {
+      setLoadingBatches(false);
     }
   };
 
@@ -337,6 +361,102 @@ const ItemDetailPage: React.FC = () => {
             )}
           </div>
         </div>
+
+        {/* Batches Section - only for batch-tracked items */}
+        {item.advanced_tracking_type === 'batches' && (
+          <div className="mt-6 bg-white rounded-lg shadow">
+            <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <Layers className="h-5 w-5 text-green-600" />
+                <h2 className="text-lg font-semibold text-gray-900">Batches</h2>
+              </div>
+              <span className="text-sm text-gray-600">
+                {batches.length} batch{batches.length !== 1 ? 'es' : ''}
+              </span>
+            </div>
+
+            <div className="p-6">
+              {loadingBatches ? (
+                <div className="flex items-center justify-center py-8">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-green-600"></div>
+                </div>
+              ) : batches.length > 0 ? (
+                <div className="overflow-x-auto">
+                  <table className="min-w-full divide-y divide-gray-200">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Batch #
+                        </th>
+                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Bill #
+                        </th>
+                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Bin
+                        </th>
+                        <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Initial Qty
+                        </th>
+                        <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Remaining Qty
+                        </th>
+                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Status
+                        </th>
+                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Created
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody className="bg-white divide-y divide-gray-200">
+                      {batches.map((batch) => (
+                        <tr key={batch.id} className="hover:bg-gray-50 transition-colors">
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <span className="text-sm font-medium text-gray-900">{batch.batch_number}</span>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <span className="text-sm text-blue-600">{batch.bill_number || '-'}</span>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <span className="text-sm text-gray-700">{batch.bin_code || '-'}</span>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-right">
+                            <span className="text-sm text-gray-900">{batch.initial_quantity}</span>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-right">
+                            <span className={`text-sm font-semibold ${Number(batch.remaining_quantity) > 0 ? 'text-green-600' : 'text-gray-400'}`}>
+                              {batch.remaining_quantity}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                              batch.status === 'active'
+                                ? 'bg-green-100 text-green-800'
+                                : 'bg-gray-100 text-gray-600'
+                            }`}>
+                              {batch.status}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <span className="text-sm text-gray-600">
+                              {new Date(batch.created_at).toLocaleDateString()}
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <div className="text-center py-12">
+                  <Layers className="mx-auto h-16 w-16 text-gray-300 mb-3" />
+                  <h3 className="text-lg font-medium text-gray-900 mb-1">No Batches</h3>
+                  <p className="text-gray-600">Batches will appear here when items are purchased through bills.</p>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

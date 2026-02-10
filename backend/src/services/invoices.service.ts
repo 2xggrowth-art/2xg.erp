@@ -1,4 +1,7 @@
 import { supabaseAdmin as supabase } from '../config/supabase';
+import { BatchesService } from './batches.service';
+
+const batchesService = new BatchesService();
 
 export interface BinAllocation {
   bin_location_id: string;
@@ -283,6 +286,35 @@ export class InvoicesService {
               }
             } catch (error) {
               console.error(`InvoicesService: Exception updating stock for item ${item.item_id}:`, error);
+            }
+          }
+        }
+
+        // Deduct from batches for batch-tracked items
+        for (const item of items) {
+          if (item.item_id && this.isValidUUID(item.item_id)) {
+            try {
+              const { data: itemRecord } = await supabase
+                .from('items')
+                .select('advanced_tracking_type')
+                .eq('id', item.item_id)
+                .single();
+
+              if (itemRecord?.advanced_tracking_type === 'batches') {
+                const matchedItem = insertedItems?.find(
+                  (inserted: any) => inserted.item_name === item.item_name && inserted.item_id === (item.item_id || null)
+                );
+
+                await batchesService.deductFromBatches({
+                  item_id: item.item_id,
+                  quantity: Number(item.quantity),
+                  invoice_id: invoice.id,
+                  invoice_item_id: matchedItem?.id,
+                  deduction_type: 'sale',
+                });
+              }
+            } catch (batchError) {
+              console.error(`InvoicesService: Error deducting from batches for item ${item.item_id}:`, batchError);
             }
           }
         }

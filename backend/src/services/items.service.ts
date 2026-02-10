@@ -735,6 +735,7 @@ export class ItemsService {
         reorder_point,
         unit_of_measurement,
         is_active,
+        advanced_tracking_type,
         product_categories (name)
       `)
       .order('created_at', { ascending: false });

@@ -37,6 +37,7 @@ export interface Item {
   is_returnable: boolean;
   is_premium_tagged?: boolean;
   incentive_type?: string;
+  advanced_tracking_type?: 'none' | 'serial' | 'batches';
   created_at: string;
   updated_at: string;
 }

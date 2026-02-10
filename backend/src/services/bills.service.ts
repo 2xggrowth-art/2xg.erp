@@ -1,4 +1,7 @@
 import { supabaseAdmin as supabase } from '../config/supabase';
+import { BatchesService } from './batches.service';
+
+const batchesService = new BatchesService();
 
 export interface BinAllocation {
   bin_location_id: string;
@@ -214,6 +217,54 @@ export class BillsService {
                 .from('items')
                 .update({ current_stock: newStock })
                 .eq('id', item.item_id);
+            }
+          }
+        }
+
+        // Create batch records for batch-tracked items
+        for (const item of data.items) {
+          if (item.item_id && item.quantity > 0) {
+            const { data: itemRecord } = await supabase
+              .from('items')
+              .select('advanced_tracking_type')
+              .eq('id', item.item_id)
+              .single();
+
+            if (itemRecord?.advanced_tracking_type === 'batches') {
+              const matchedItem = insertedItems?.find(
+                (inserted: any) => inserted.item_name === item.item_name && inserted.item_id === (item.item_id || null)
+              );
+
+              if (matchedItem) {
+                // If bin allocations exist, create one batch per bin allocation
+                if (item.bin_allocations && item.bin_allocations.length > 0) {
+                  for (const allocation of item.bin_allocations) {
+                    try {
+                      await batchesService.createBatch({
+                        item_id: item.item_id,
+                        bill_id: bill.id,
+                        bill_item_id: matchedItem.id,
+                        quantity: allocation.quantity,
+                        bin_location_id: allocation.bin_location_id,
+                      });
+                    } catch (batchErr) {
+                      console.error('Error creating batch for bin allocation:', batchErr);
+                    }
+                  }
+                } else {
+                  // Single batch for the entire quantity
+                  try {
+                    await batchesService.createBatch({
+                      item_id: item.item_id,
+                      bill_id: bill.id,
+                      bill_item_id: matchedItem.id,
+                      quantity: item.quantity,
+                    });
+                  } catch (batchErr) {
+                    console.error('Error creating batch:', batchErr);
+                  }
+                }
+              }
             }
           }
         }
