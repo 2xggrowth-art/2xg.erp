@@ -13,7 +13,7 @@ CREATE TABLE IF NOT EXISTS stock_counts (
   location_name VARCHAR(255),
   assigned_to_user_id UUID REFERENCES users(id) ON DELETE SET NULL,
   assigned_to_name VARCHAR(255),
-  status VARCHAR(30) DEFAULT 'draft' CHECK (status IN ('draft', 'in_progress', 'submitted', 'approved', 'rejected')),
+  status VARCHAR(30) DEFAULT 'draft' CHECK (status IN ('draft', 'in_progress', 'submitted', 'approved', 'rejected', 'completed')),
   notes TEXT,
   approved_by_user_id UUID REFERENCES users(id) ON DELETE SET NULL,
   approved_at TIMESTAMPTZ,
