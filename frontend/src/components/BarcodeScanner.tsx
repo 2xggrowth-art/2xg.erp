@@ -7,6 +7,20 @@ interface BarcodeScannerProps {
   onError?: (err: string) => void;
 }
 
+const FORMATS = [
+  Html5QrcodeSupportedFormats.EAN_13,
+  Html5QrcodeSupportedFormats.EAN_8,
+  Html5QrcodeSupportedFormats.UPC_A,
+  Html5QrcodeSupportedFormats.UPC_E,
+  Html5QrcodeSupportedFormats.CODE_128,
+  Html5QrcodeSupportedFormats.CODE_39,
+  Html5QrcodeSupportedFormats.CODE_93,
+  Html5QrcodeSupportedFormats.CODABAR,
+  Html5QrcodeSupportedFormats.ITF,
+  Html5QrcodeSupportedFormats.QR_CODE,
+  Html5QrcodeSupportedFormats.DATA_MATRIX,
+];
+
 let scannerCounter = 0;
 
 export default function BarcodeScanner({ onScan, isActive, onError }: BarcodeScannerProps) {
@@ -30,91 +44,78 @@ export default function BarcodeScanner({ onScan, isActive, onError }: BarcodeSca
         await scanner.stop();
       }
     } catch {
-      // ignore stop errors
+      // ignore
     }
-
     try {
       scanner.clear();
     } catch {
-      // ignore clear errors
+      // ignore
     }
   }, []);
+
+  // Try to enable continuous autofocus on the active video track
+  const enableAutofocus = useCallback(() => {
+    try {
+      const videoEl = document.querySelector(`#${containerId} video`) as HTMLVideoElement | null;
+      if (!videoEl?.srcObject) return;
+      const stream = videoEl.srcObject as MediaStream;
+      const track = stream.getVideoTracks()[0];
+      if (!track) return;
+      const capabilities = track.getCapabilities?.();
+      if (capabilities && 'focusMode' in capabilities) {
+        const focusModes = (capabilities as any).focusMode as string[];
+        if (focusModes?.includes('continuous')) {
+          track.applyConstraints({ advanced: [{ focusMode: 'continuous' } as any] });
+        }
+      }
+    } catch {
+      // Not all browsers support this — ignore
+    }
+  }, [containerId]);
 
   const startScanner = useCallback(async () => {
     if (startingRef.current) return;
     startingRef.current = true;
 
     try {
-      // First ensure any existing scanner is fully stopped
       await stopScanner();
-
       if (!mountedRef.current) return;
 
-      // Wait for DOM element to be ready
-      await new Promise(r => setTimeout(r, 400));
+      await new Promise(r => setTimeout(r, 300));
       if (!mountedRef.current) return;
 
       const el = document.getElementById(containerId);
       if (!el) return;
 
-      // Get available cameras to pick the best one
-      let cameraId: string | undefined;
-      try {
-        const devices = await Html5Qrcode.getCameras();
-        if (devices && devices.length > 0) {
-          // Prefer back/environment camera
-          const backCam = devices.find(d =>
-            d.label.toLowerCase().includes('back') ||
-            d.label.toLowerCase().includes('rear') ||
-            d.label.toLowerCase().includes('environment')
-          );
-          cameraId = backCam ? backCam.id : devices[devices.length - 1].id;
-        }
-      } catch {
-        // getCameras failed — will try facingMode fallback
-      }
-
-      if (!mountedRef.current) return;
-
-      const formatsToSupport = [
-        Html5QrcodeSupportedFormats.EAN_13,
-        Html5QrcodeSupportedFormats.EAN_8,
-        Html5QrcodeSupportedFormats.UPC_A,
-        Html5QrcodeSupportedFormats.UPC_E,
-        Html5QrcodeSupportedFormats.CODE_128,
-        Html5QrcodeSupportedFormats.CODE_39,
-        Html5QrcodeSupportedFormats.CODE_93,
-        Html5QrcodeSupportedFormats.CODABAR,
-        Html5QrcodeSupportedFormats.ITF,
-        Html5QrcodeSupportedFormats.QR_CODE,
-        Html5QrcodeSupportedFormats.DATA_MATRIX,
-      ];
-
+      // Don't use native BarcodeDetector — ZXing is more reliable for 1D barcodes
       const scanner = new Html5Qrcode(containerId, {
-        formatsToSupport,
-        useBarCodeDetectorIfSupported: true,
+        formatsToSupport: FORMATS,
+        useBarCodeDetectorIfSupported: false,
       });
       scannerRef.current = scanner;
 
-      // Use percentage-based scan region for better phone compatibility
-      const qrboxFunction = (viewfinderWidth: number, viewfinderHeight: number) => {
-        const minEdge = Math.min(viewfinderWidth, viewfinderHeight);
-        return {
-          width: Math.floor(viewfinderWidth * 0.85),
-          height: Math.floor(minEdge * 0.35),
-        };
-      };
+      // Responsive scan box — wide for 1D barcodes
+      const qrboxFunction = (vw: number, vh: number) => ({
+        width: Math.floor(vw * 0.9),
+        height: Math.floor(Math.min(vw, vh) * 0.3),
+      });
 
-      const config = {
-        fps: 15,
+      const config: any = {
+        fps: 20,
         qrbox: qrboxFunction,
+        disableFlip: true,
+        // Request high resolution + autofocus for barcode scanning
+        videoConstraints: {
+          facingMode: 'environment',
+          width: { ideal: 1920, min: 1280 },
+          height: { ideal: 1080, min: 720 },
+          advanced: [{ focusMode: 'continuous' }] as any,
+        },
       };
 
       const onSuccess = (decodedText: string) => {
         const now = Date.now();
-        if (decodedText === lastScanRef.current && now - lastScanTimeRef.current < 2000) {
-          return;
-        }
+        if (decodedText === lastScanRef.current && now - lastScanTimeRef.current < 2000) return;
         lastScanRef.current = decodedText;
         lastScanTimeRef.current = now;
         if (navigator.vibrate) navigator.vibrate(100);
@@ -125,50 +126,52 @@ export default function BarcodeScanner({ onScan, isActive, onError }: BarcodeSca
         // No barcode in frame — ignore
       };
 
-      // Try starting with specific camera ID first, fallback to facingMode
-      try {
-        if (cameraId) {
-          await scanner.start(cameraId, config, onSuccess, onFailure);
-        } else {
-          await scanner.start({ facingMode: 'environment' }, config, onSuccess, onFailure);
-        }
-      } catch {
-        // If specific camera failed, try facingMode as fallback
-        if (cameraId) {
-          try {
-            // Need fresh scanner instance after a failed start
+      // Strategy: try facingMode environment directly (most reliable on mobile)
+      // Skip getCameras() — it's unreliable on mobile and adds latency
+      const attempts = [
+        { facingMode: { exact: 'environment' } },
+        { facingMode: 'environment' },
+        { facingMode: 'user' },
+      ];
+
+      let started = false;
+      for (const cameraConfig of attempts) {
+        if (!mountedRef.current) return;
+        try {
+          // Need a fresh scanner instance for each attempt after the first
+          if (started === false && scannerRef.current === scanner) {
+            await scanner.start(cameraConfig as any, config, onSuccess, onFailure);
+          } else {
+            // Create fresh instance
             scannerRef.current = null;
             try { scanner.clear(); } catch { /* ignore */ }
-
-            const scanner2 = new Html5Qrcode(containerId, { formatsToSupport, useBarCodeDetectorIfSupported: true });
-            scannerRef.current = scanner2;
-            await scanner2.start({ facingMode: 'environment' }, config, onSuccess, onFailure);
-          } catch (err2: any) {
-            throw err2;
+            const fresh = new Html5Qrcode(containerId, {
+              formatsToSupport: FORMATS,
+              useBarCodeDetectorIfSupported: false,
+            });
+            scannerRef.current = fresh;
+            await fresh.start(cameraConfig as any, config, onSuccess, onFailure);
           }
-        } else {
-          // Try with facingMode 'user' (front camera) as last resort
-          try {
-            scannerRef.current = null;
-            try { scanner.clear(); } catch { /* ignore */ }
-
-            const scanner3 = new Html5Qrcode(containerId, { formatsToSupport, useBarCodeDetectorIfSupported: true });
-            scannerRef.current = scanner3;
-            await scanner3.start({ facingMode: 'user' }, config, onSuccess, onFailure);
-          } catch (err3: any) {
-            throw err3;
-          }
+          started = true;
+          break;
+        } catch {
+          // Try next camera config
         }
+      }
+
+      if (!started) {
+        throw new Error('Could not start any camera. Please check camera permissions.');
       }
 
       if (mountedRef.current) {
         setCameraReady(true);
         setError('');
+        // Enable autofocus after camera is running
+        setTimeout(enableAutofocus, 500);
       }
     } catch (err: any) {
       if (!mountedRef.current) return;
       const msg = err?.message || String(err);
-      // Provide user-friendly messages
       let displayMsg = msg;
       if (msg.includes('NotAllowedError') || msg.includes('Permission')) {
         displayMsg = 'Camera permission denied. Please allow camera access in browser settings.';
@@ -182,7 +185,7 @@ export default function BarcodeScanner({ onScan, isActive, onError }: BarcodeSca
     } finally {
       startingRef.current = false;
     }
-  }, [containerId, onScan, onError, stopScanner]);
+  }, [containerId, onScan, onError, stopScanner, enableAutofocus]);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -214,7 +217,7 @@ export default function BarcodeScanner({ onScan, isActive, onError }: BarcodeSca
           borderRadius: 12,
           overflow: 'hidden',
           backgroundColor: '#000',
-          minHeight: 200,
+          minHeight: 250,
         }}
       />
 
@@ -230,6 +233,21 @@ export default function BarcodeScanner({ onScan, isActive, onError }: BarcodeSca
           textAlign: 'center',
         }}>
           Starting camera...
+        </div>
+      )}
+
+      {cameraReady && (
+        <div style={{
+          marginTop: 8,
+          padding: '8px 14px',
+          backgroundColor: '#F0FDF4',
+          border: '1px solid #BBF7D0',
+          borderRadius: 8,
+          fontSize: 12,
+          color: '#15803D',
+          textAlign: 'center',
+        }}>
+          Point camera at barcode — hold steady and close
         </div>
       )}
 
