@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
-import { Html5Qrcode, Html5QrcodeScannerState } from 'html5-qrcode';
+import { Html5Qrcode, Html5QrcodeScannerState, Html5QrcodeSupportedFormats } from 'html5-qrcode';
 
 interface BarcodeScannerProps {
   onScan: (code: string) => void;
@@ -76,13 +76,38 @@ export default function BarcodeScanner({ onScan, isActive, onError }: BarcodeSca
 
       if (!mountedRef.current) return;
 
-      const scanner = new Html5Qrcode(containerId);
+      const formatsToSupport = [
+        Html5QrcodeSupportedFormats.EAN_13,
+        Html5QrcodeSupportedFormats.EAN_8,
+        Html5QrcodeSupportedFormats.UPC_A,
+        Html5QrcodeSupportedFormats.UPC_E,
+        Html5QrcodeSupportedFormats.CODE_128,
+        Html5QrcodeSupportedFormats.CODE_39,
+        Html5QrcodeSupportedFormats.CODE_93,
+        Html5QrcodeSupportedFormats.CODABAR,
+        Html5QrcodeSupportedFormats.ITF,
+        Html5QrcodeSupportedFormats.QR_CODE,
+        Html5QrcodeSupportedFormats.DATA_MATRIX,
+      ];
+
+      const scanner = new Html5Qrcode(containerId, {
+        formatsToSupport,
+        useBarCodeDetectorIfSupported: true,
+      });
       scannerRef.current = scanner;
 
+      // Use percentage-based scan region for better phone compatibility
+      const qrboxFunction = (viewfinderWidth: number, viewfinderHeight: number) => {
+        const minEdge = Math.min(viewfinderWidth, viewfinderHeight);
+        return {
+          width: Math.floor(viewfinderWidth * 0.85),
+          height: Math.floor(minEdge * 0.35),
+        };
+      };
+
       const config = {
-        fps: 10,
-        qrbox: { width: 280, height: 150 },
-        aspectRatio: 1.5,
+        fps: 15,
+        qrbox: qrboxFunction,
       };
 
       const onSuccess = (decodedText: string) => {
@@ -115,7 +140,7 @@ export default function BarcodeScanner({ onScan, isActive, onError }: BarcodeSca
             scannerRef.current = null;
             try { scanner.clear(); } catch { /* ignore */ }
 
-            const scanner2 = new Html5Qrcode(containerId);
+            const scanner2 = new Html5Qrcode(containerId, { formatsToSupport, useBarCodeDetectorIfSupported: true });
             scannerRef.current = scanner2;
             await scanner2.start({ facingMode: 'environment' }, config, onSuccess, onFailure);
           } catch (err2: any) {
@@ -127,7 +152,7 @@ export default function BarcodeScanner({ onScan, isActive, onError }: BarcodeSca
             scannerRef.current = null;
             try { scanner.clear(); } catch { /* ignore */ }
 
-            const scanner3 = new Html5Qrcode(containerId);
+            const scanner3 = new Html5Qrcode(containerId, { formatsToSupport, useBarCodeDetectorIfSupported: true });
             scannerRef.current = scanner3;
             await scanner3.start({ facingMode: 'user' }, config, onSuccess, onFailure);
           } catch (err3: any) {
