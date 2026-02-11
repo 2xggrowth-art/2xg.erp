@@ -1,293 +1,234 @@
-import { Plus, Eye, Edit2, Trash2 } from 'lucide-react';
+import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useState, useEffect } from 'react';
-import StockCountWorkflow from '../components/common/StockCountWorkflow';
+import { Plus } from 'lucide-react';
 import { stockCountService, StockCount } from '../services/stockCount.service';
-import BulkActionBar, { createBulkDeleteAction } from '../components/common/BulkActionBar';
 
-const StockCountPage = () => {
-  const navigate = useNavigate();
-  const [stockCounts, setStockCounts] = useState<StockCount[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [selectedCounts, setSelectedCounts] = useState<string[]>([]);
-
-  useEffect(() => {
-    loadStockCounts();
-  }, []);
-
-  const loadStockCounts = async () => {
-    setIsLoading(true);
-    try {
-      const counts = await stockCountService.getAllStockCounts();
-      setStockCounts(counts);
-    } catch (error) {
-      console.error('Error loading stock counts:', error);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const handleNewStockCount = () => {
-    navigate('/items/stock-count/new');
-  };
-
-  const handleDelete = async (id: string) => {
-    if (window.confirm('Are you sure you want to delete this stock count?')) {
-      try {
-        await stockCountService.deleteStockCount(id);
-        loadStockCounts(); // Reload the list
-        setSelectedCounts(prev => prev.filter(countId => countId !== id)); // Remove from selection if deleted
-      } catch (error) {
-        console.error('Error deleting stock count:', error);
-        alert('Failed to delete stock count. Please try again.');
-      }
-    }
-  };
-
-  // Bulk Selection Handlers
-  const handleSelectCount = (id: string) => {
-    setSelectedCounts(prev =>
-      prev.includes(id)
-        ? prev.filter(countId => countId !== id)
-        : [...prev, id]
-    );
-  };
-
-  const handleSelectAll = () => {
-    if (selectedCounts.length === stockCounts.length) {
-      setSelectedCounts([]);
-    } else {
-      setSelectedCounts(stockCounts.map(count => count.id));
-    }
-  };
-
-  const handleBulkDelete = async () => {
-    if (window.confirm(`Are you sure you want to delete ${selectedCounts.length} stock counts?`)) {
-      try {
-        // Delete sequentially or parallel
-        await Promise.all(selectedCounts.map(id => stockCountService.deleteStockCount(id)));
-        setSelectedCounts([]);
-        loadStockCounts();
-      } catch (error) {
-        console.error('Error bulk deleting stock counts:', error);
-        alert('Failed to delete some stock counts. Please try again.');
-      }
-    }
-  };
-
-  const formatDate = (dateString: string) => {
-    const date = new Date(dateString);
-    return date.toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric'
-    });
-  };
-
-  const getStatusBadgeClass = (status: StockCount['status']) => {
-    switch (status) {
-      case 'Draft':
-        return 'bg-gray-100 text-gray-700';
-      case 'In Progress':
-        return 'bg-blue-100 text-blue-700';
-      case 'Completed':
-        return 'bg-green-100 text-green-700';
-      default:
-        return 'bg-gray-100 text-gray-700';
-    }
-  };
-
-  return (
-    <div className="max-w-7xl mx-auto w-full p-6">
-      <div className="space-y-8">
-        {/* Header */}
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-3xl font-bold text-slate-800">Stock Counts</h1>
-            <p className="text-slate-600 mt-2">
-              Create, count, submit, and make inventory adjustments.
-            </p>
-          </div>
-          <button
-            onClick={handleNewStockCount}
-            className="flex items-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors shadow-md"
-          >
-            <Plus size={20} />
-            <span className="font-medium">New Stock Count</span>
-          </button>
-        </div>
-
-        {/* Content */}
-        {isLoading ? (
-          <div className="bg-white rounded-lg shadow-md p-12 text-center">
-            <div className="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-            <p className="text-slate-600">Loading stock counts...</p>
-          </div>
-        ) : stockCounts.length === 0 ? (
-          <div className="bg-white rounded-lg shadow-md p-12 text-center">
-            <h2 className="text-xl font-semibold text-slate-800 mb-4">
-              Start Your Stock Counting Process
-            </h2>
-            <p className="text-slate-600 mb-6">
-              Create, count, submit, and make inventory adjustments.
-            </p>
-            <button
-              onClick={handleNewStockCount}
-              className="px-8 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium shadow-md"
-            >
-              NEW STOCK COUNT
-            </button>
-          </div>
-        ) : (
-          <div className="bg-white rounded-lg shadow-md overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead className="bg-slate-50 border-b border-slate-200">
-                  <tr>
-                    <th className="px-6 py-3 text-left">
-                      <input
-                        type="checkbox"
-                        checked={selectedCounts.length === stockCounts.length && stockCounts.length > 0}
-                        onChange={handleSelectAll}
-                        className="rounded"
-                      />
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-slate-600 uppercase tracking-wider">
-                      Stock Count #
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-slate-600 uppercase tracking-wider">
-                      Description
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-slate-600 uppercase tracking-wider">
-                      Date Created
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-slate-600 uppercase tracking-wider">
-                      Location
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-slate-600 uppercase tracking-wider">
-                      Assigned To
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-slate-600 uppercase tracking-wider">
-                      Items
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-slate-600 uppercase tracking-wider">
-                      Status
-                    </th>
-                    <th className="px-6 py-3 text-center text-xs font-medium text-slate-600 uppercase tracking-wider">
-                      Actions
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-200">
-                  {stockCounts.map((stockCount) => (
-                    <tr key={stockCount.id} className="hover:bg-slate-50 transition-colors cursor-pointer" onClick={() => navigate(`/items/stock-count/${stockCount.id}`)}>
-                      <td className="px-6 py-4 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
-                        <input
-                          type="checkbox"
-                          checked={selectedCounts.includes(stockCount.id)}
-                          onChange={() => handleSelectCount(stockCount.id)}
-                          className="rounded"
-                        />
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <span className="text-sm font-medium text-blue-600">
-                          {stockCount.stockCountNumber}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4">
-                        <span className="text-sm text-slate-800">
-                          {stockCount.description || '-'}
-                        </span>
-                      </td>
-
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <span className="text-sm text-slate-600">
-                          {formatDate(stockCount.createdAt)}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <span className="text-sm text-slate-600">
-                          {stockCount.location}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <span className="text-sm text-slate-600">
-                          {stockCount.assignTo}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <span className="text-sm text-slate-600">
-                          {stockCount.items.length} items
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusBadgeClass(stockCount.status)}`}>
-                          {stockCount.status}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-center" onClick={(e) => e.stopPropagation()}>
-                        <div className="flex items-center justify-center gap-2">
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              navigate(`/items/stock-count/${stockCount.id}`);
-                            }}
-                            className="p-1.5 text-blue-600 hover:bg-blue-50 rounded transition-colors"
-                            title="View"
-                          >
-                            <Eye size={18} />
-                          </button>
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              navigate(`/items/stock-count/edit/${stockCount.id}`);
-                            }}
-                            className="p-1.5 text-green-600 hover:bg-green-50 rounded transition-colors"
-                            title="Edit"
-                          >
-                            <Edit2 size={18} />
-                          </button>
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleDelete(stockCount.id);
-                            }}
-                            className="p-1.5 text-red-600 hover:bg-red-50 rounded transition-colors"
-                            title="Delete"
-                          >
-                            <Trash2 size={18} />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        )}
-
-        {/* Stock Count Workflow */}
-        <StockCountWorkflow />
-      </div>
-
-      {/* Bulk Action Bar */}
-      {
-        selectedCounts.length > 0 && (
-          <BulkActionBar
-            selectedCount={selectedCounts.length}
-            totalCount={stockCounts.length}
-            onClearSelection={() => setSelectedCounts([])}
-            onSelectAll={handleSelectAll}
-            actions={[
-              createBulkDeleteAction(handleBulkDelete),
-            ]}
-            entityName="stock count"
-          />
-        )
-      }
-    </div >
-  );
+const statusColors: Record<string, { bg: string; text: string }> = {
+  draft: { bg: '#F3F4F6', text: '#6B7280' },
+  in_progress: { bg: '#DBEAFE', text: '#2563EB' },
+  submitted: { bg: '#FEF3C7', text: '#D97706' },
+  approved: { bg: '#D1FAE5', text: '#059669' },
+  rejected: { bg: '#FEE2E2', text: '#DC2626' },
 };
 
-export default StockCountPage;
+const STATUS_TABS = ['', 'draft', 'in_progress', 'submitted', 'approved', 'rejected'];
+const STATUS_LABELS: Record<string, string> = {
+  '': 'All',
+  draft: 'Draft',
+  in_progress: 'Active',
+  submitted: 'Submitted',
+  approved: 'Approved',
+  rejected: 'Rejected',
+};
+
+function timeAgo(dateStr: string): string {
+  const diff = Date.now() - new Date(dateStr).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return 'just now';
+  if (mins < 60) return `${mins}m ago`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  return `${days}d ago`;
+}
+
+export default function StockCountPage() {
+  const navigate = useNavigate();
+  const [counts, setCounts] = useState<StockCount[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [statusFilter, setStatusFilter] = useState('');
+
+  const fetchCounts = useCallback(async () => {
+    setLoading(true);
+    try {
+      const filters: any = {};
+      if (statusFilter) filters.status = statusFilter;
+      const data = await stockCountService.getAllStockCounts(filters);
+      setCounts(data);
+    } catch {
+      // Silent fail
+    } finally {
+      setLoading(false);
+    }
+  }, [statusFilter]);
+
+  useEffect(() => {
+    fetchCounts();
+  }, [fetchCounts]);
+
+  const formatStatus = (status: string) =>
+    status.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+
+  const totalActive = counts.filter((c) => c.status === 'draft' || c.status === 'in_progress').length;
+  const totalSubmitted = counts.filter((c) => c.status === 'submitted').length;
+
+  return (
+    <div style={{ maxWidth: 900, margin: '0 auto', padding: '24px 16px' }}>
+      {/* Header */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
+        <div>
+          <h1 style={{ fontSize: 24, fontWeight: 700, color: '#111827', margin: 0 }}>Stock Counts</h1>
+          <p style={{ fontSize: 14, color: '#6B7280', margin: '4px 0 0 0' }}>
+            {totalActive} active · {totalSubmitted} awaiting review
+          </p>
+        </div>
+        <button
+          onClick={() => navigate('/items/stock-count/new')}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 8,
+            padding: '12px 24px',
+            backgroundColor: '#2563EB',
+            color: '#FFFFFF',
+            border: 'none',
+            borderRadius: 12,
+            fontSize: 15,
+            fontWeight: 600,
+            cursor: 'pointer',
+            boxShadow: '0 2px 8px rgba(37,99,235,0.3)',
+          }}
+        >
+          <Plus size={20} />
+          New Stock Count
+        </button>
+      </div>
+
+      {/* Status Tabs */}
+      <div style={{
+        display: 'flex',
+        gap: 6,
+        marginBottom: 20,
+        overflowX: 'auto',
+        WebkitOverflowScrolling: 'touch' as any,
+      }}>
+        {STATUS_TABS.map((tab) => (
+          <button
+            key={tab}
+            onClick={() => setStatusFilter(tab)}
+            style={{
+              padding: '8px 16px',
+              borderRadius: 20,
+              border: 'none',
+              fontSize: 13,
+              fontWeight: 500,
+              whiteSpace: 'nowrap',
+              cursor: 'pointer',
+              backgroundColor: statusFilter === tab ? '#2563EB' : '#F3F4F6',
+              color: statusFilter === tab ? '#FFFFFF' : '#6B7280',
+              transition: 'all 0.2s',
+            }}
+          >
+            {STATUS_LABELS[tab]}
+          </button>
+        ))}
+      </div>
+
+      {/* Content */}
+      {loading ? (
+        <div style={{ textAlign: 'center', padding: 60, color: '#9CA3AF' }}>Loading stock counts...</div>
+      ) : counts.length === 0 ? (
+        <div style={{ textAlign: 'center', padding: 60, backgroundColor: '#FFFFFF', borderRadius: 16, boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
+          <div style={{ fontSize: 48, marginBottom: 12 }}>📋</div>
+          <div style={{ fontSize: 18, fontWeight: 600, color: '#374151', marginBottom: 8 }}>
+            {statusFilter ? `No ${formatStatus(statusFilter)} stock counts` : 'No Stock Counts Yet'}
+          </div>
+          <p style={{ fontSize: 14, color: '#9CA3AF', marginBottom: 20 }}>
+            Create your first stock count to start tracking inventory.
+          </p>
+          {!statusFilter && (
+            <button
+              onClick={() => navigate('/items/stock-count/new')}
+              style={{ padding: '12px 32px', backgroundColor: '#2563EB', color: '#FFF', border: 'none', borderRadius: 12, fontWeight: 600, cursor: 'pointer' }}
+            >
+              New Stock Count
+            </button>
+          )}
+        </div>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          {counts.map((sc) => {
+            const colors = statusColors[sc.status] || statusColors.draft;
+            const itemCount = sc.items?.length || 0;
+            const countedCount = sc.items?.filter(
+              (i) => i.counted_quantity !== null && i.counted_quantity !== undefined
+            ).length || 0;
+
+            return (
+              <div
+                key={sc.id}
+                onClick={() => navigate(`/items/stock-count/${sc.id}`)}
+                style={{
+                  backgroundColor: '#FFFFFF',
+                  border: '1px solid #E5E7EB',
+                  borderRadius: 16,
+                  padding: 20,
+                  cursor: 'pointer',
+                  transition: 'all 0.15s',
+                  boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
+                }}
+              >
+                {/* Header row */}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                  <span style={{ fontSize: 15, fontWeight: 600, color: '#2563EB' }}>
+                    {sc.stock_count_number}
+                  </span>
+                  <span style={{
+                    fontSize: 12,
+                    fontWeight: 600,
+                    color: colors.text,
+                    backgroundColor: colors.bg,
+                    padding: '4px 12px',
+                    borderRadius: 20,
+                  }}>
+                    {formatStatus(sc.status)}
+                  </span>
+                </div>
+
+                {/* Description */}
+                {sc.description && (
+                  <div style={{ fontSize: 15, color: '#374151', marginBottom: 8, fontWeight: 500 }}>
+                    {sc.description}
+                  </div>
+                )}
+
+                {/* Info row */}
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 16, fontSize: 13, color: '#6B7280', marginBottom: 12 }}>
+                  {sc.location_name && <span>📍 {sc.location_name}</span>}
+                  {sc.assigned_to_name && <span>👤 {sc.assigned_to_name}</span>}
+                  <span>📦 {itemCount} items</span>
+                </div>
+
+                {/* Progress bar + footer */}
+                {itemCount > 0 && (
+                  <div style={{ marginBottom: 8 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+                      <span style={{ fontSize: 12, color: '#6B7280' }}>
+                        {countedCount}/{itemCount} items counted
+                      </span>
+                      <span style={{ fontSize: 12, color: '#6B7280' }}>
+                        {Math.round((countedCount / itemCount) * 100)}%
+                      </span>
+                    </div>
+                    <div style={{ height: 5, backgroundColor: '#F3F4F6', borderRadius: 3, overflow: 'hidden' }}>
+                      <div style={{
+                        height: '100%',
+                        width: `${(countedCount / itemCount) * 100}%`,
+                        backgroundColor: countedCount === itemCount ? '#10B981' : '#3B82F6',
+                        borderRadius: 3,
+                        transition: 'width 0.3s',
+                      }} />
+                    </div>
+                  </div>
+                )}
+
+                {/* Time */}
+                <div style={{ fontSize: 12, color: '#9CA3AF' }}>{timeAgo(sc.created_at)}</div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}

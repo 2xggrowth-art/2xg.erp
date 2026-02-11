@@ -36,6 +36,9 @@ import brandsRoutes from './routes/brands.routes';
 import manufacturersRoutes from './routes/manufacturers.routes';
 import posSessionsRoutes from './routes/pos-sessions.routes';
 import batchesRoutes from './routes/batches.routes';
+import stockCountsRoutes from './routes/stockCounts.routes';
+import damageReportsRoutes from './routes/damageReports.routes';
+import putawayRoutes from './routes/putaway.routes';
 import mobileAuthRoutes from './routes/mobile-auth.routes';
 import { readOnlyGuard } from './middleware/readOnly.middleware';
 import { authMiddleware } from './middleware/auth.middleware';
@@ -66,15 +69,15 @@ app.use(cors({
       process.env.FRONTEND_URL
     ];
 
-    // Check if origin is in the list OR is any localhost port
-    if (allowedOrigins.indexOf(origin) !== -1 || origin.startsWith('http://localhost:')) {
+    // Check if origin is in the list OR is any localhost port OR local network
+    if (allowedOrigins.indexOf(origin) !== -1 || origin.startsWith('http://localhost:') || origin.startsWith('http://192.168.')) {
       callback(null, true);
     } else {
       callback(new Error('Not allowed by CORS'));
     }
   },
   credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'Cache-Control', 'cache-control', 'X-Requested-With'],
   exposedHeaders: ['Content-Length', 'Content-Type']
 }));
@@ -137,6 +140,9 @@ app.use('/api/brands', brandsRoutes);
 app.use('/api/manufacturers', manufacturersRoutes);
 app.use('/api/pos-sessions', posSessionsRoutes);
 app.use('/api/batches', batchesRoutes);
+app.use('/api/stock-counts', stockCountsRoutes);
+app.use('/api/damage-reports', damageReportsRoutes);
+app.use('/api/putaway', putawayRoutes);
 
 // Health check endpoint for deployment platforms
 app.get('/health', (_req: Request, res: Response) => {

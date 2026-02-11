@@ -105,4 +105,57 @@ export const expenseService = {
   },
 };
 
-export default { authService, expenseService };
+// Stock Count Service
+export const stockCountService = {
+  getAssigned: async (userId: string) => {
+    return apiRequest(`/stock-counts/assigned/${userId}`);
+  },
+
+  getById: async (id: string) => {
+    return apiRequest(`/stock-counts/${id}`);
+  },
+
+  updateCounted: async (id: string, items: Array<{ id: string; counted_quantity: number; notes?: string }>) => {
+    return apiRequest(`/stock-counts/${id}/items`, {
+      method: 'PATCH',
+      body: JSON.stringify({ items }),
+    });
+  },
+
+  updateStatus: async (id: string, status: string, notes?: string) => {
+    return apiRequest(`/stock-counts/${id}/status`, {
+      method: 'PATCH',
+      body: JSON.stringify({ status, notes }),
+    });
+  },
+};
+
+// Item Lookup Service
+export const itemLookupService = {
+  lookupByBarcode: async (barcode: string) => {
+    return apiRequest(`/items/barcode/${encodeURIComponent(barcode)}`);
+  },
+
+  getItemBins: async (itemId: string) => {
+    return apiRequest(`/bin-locations/item/${itemId}`);
+  },
+};
+
+// Damage Report Service
+export const damageReportService = {
+  create: async (data: {
+    item_id: string;
+    item_name?: string;
+    bin_location_id?: string;
+    quantity: number;
+    damage_type?: string;
+    description?: string;
+  }) => {
+    return apiRequest('/damage-reports', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+};
+
+export default { authService, expenseService, stockCountService, itemLookupService, damageReportService };

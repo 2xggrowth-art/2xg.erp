@@ -8,9 +8,7 @@ import DashboardPage from './pages/DashboardPage';
 import ItemsPage from './pages/ItemsPage';
 import ItemDetailPage from './pages/ItemDetailPage';
 import NewItemForm from './components/items/NewItemForm';
-import StockCountPage from './pages/StockCountPage';
-import StockCountDetailPage from './pages/StockCountDetailPage';
-import NewStockCountPage from './pages/NewStockCountPage';
+// Desktop stock count pages replaced by mobile PWA versions (MobileStockCountListPage, MobileStockCountDetailPage)
 import TransferOrderPage from './pages/TransferOrderPage';
 import PurchasesPage from './pages/PurchasesPage';
 import VendorManagementPage from './pages/VendorManagementPage';
@@ -66,6 +64,23 @@ import ComingSoonPage from './pages/ComingSoonPage';
 import TransferOrderDetailPage from './pages/TransferOrderDetailPage';
 import BinLocationsPage from './pages/BinLocationsPage';
 import BrandManufacturerManagementPage from './pages/BrandManufacturerManagementPage';
+import DamageReportsPage from './pages/DamageReportsPage';
+import DamageReportDetailPage from './pages/DamageReportDetailPage';
+
+// Mobile PWA Pages
+import MobileLayout from './components/mobile/MobileLayout';
+import MobileHomePage from './pages/mobile/MobileHomePage';
+import PutawayPage from './pages/mobile/PutawayPage';
+import PutawayHistoryPage from './pages/mobile/PutawayHistoryPage';
+import ScanAndPlacePage from './pages/mobile/ScanAndPlacePage';
+import MobileLookupPage from './pages/mobile/MobileLookupPage';
+import MobileAdminPage from './pages/mobile/MobileAdminPage';
+import ProfilePage from './pages/mobile/ProfilePage';
+import MobileStockCountListPage from './pages/mobile/MobileStockCountListPage';
+import MobileStockCountDetailPage from './pages/mobile/MobileStockCountDetailPage';
+import MobileDamageReportPage from './pages/mobile/MobileDamageReportPage';
+import MobileTransfersPage from './pages/mobile/MobileTransfersPage';
+// MobileNewStockCountPage removed — replaced by bin scanner flow
 
 function App() {
   return (
@@ -90,10 +105,19 @@ function App() {
             <Route path="/items/:id" element={<ProtectedRoute><DashboardLayout><ItemDetailPage /></DashboardLayout></ProtectedRoute>} />
             <Route path="/items/:id/edit" element={<ProtectedRoute><DashboardLayout><NewItemForm /></DashboardLayout></ProtectedRoute>} />
             <Route path="/items/new-category" element={<ProtectedRoute><DashboardLayout><ComingSoonPage /></DashboardLayout></ProtectedRoute>} />
-            <Route path="/items/stock-count" element={<ProtectedRoute><DashboardLayout><StockCountPage /></DashboardLayout></ProtectedRoute>} />
-            <Route path="/items/stock-count/new" element={<ProtectedRoute><DashboardLayout><NewStockCountPage /></DashboardLayout></ProtectedRoute>} />
-            <Route path="/items/stock-count/:id" element={<ProtectedRoute><DashboardLayout><StockCountDetailPage /></DashboardLayout></ProtectedRoute>} />
-            <Route path="/items/stock-count/edit/:id" element={<ProtectedRoute><DashboardLayout><NewStockCountPage /></DashboardLayout></ProtectedRoute>} />
+            {/* Stock Count */}
+            <Route path="/items/stock-count" element={<ProtectedRoute><DashboardLayout><MobileStockCountListPage /></DashboardLayout></ProtectedRoute>} />
+            <Route path="/items/stock-count/tasks" element={<ProtectedRoute><DashboardLayout><MobileStockCountListPage /></DashboardLayout></ProtectedRoute>} />
+            <Route path="/items/stock-count/tasks/scan/:binId" element={<ProtectedRoute><DashboardLayout><MobileStockCountDetailPage /></DashboardLayout></ProtectedRoute>} />
+            <Route path="/items/stock-count/tasks/:id" element={<ProtectedRoute><DashboardLayout><MobileStockCountDetailPage /></DashboardLayout></ProtectedRoute>} />
+            <Route path="/items/stock-count/placement" element={<ProtectedRoute><DashboardLayout><PutawayPage /></DashboardLayout></ProtectedRoute>} />
+            <Route path="/items/stock-count/placement/scan" element={<ProtectedRoute><DashboardLayout><ScanAndPlacePage /></DashboardLayout></ProtectedRoute>} />
+            <Route path="/items/stock-count/placement/history" element={<ProtectedRoute><DashboardLayout><PutawayHistoryPage /></DashboardLayout></ProtectedRoute>} />
+            <Route path="/items/stock-count/placement/:taskId" element={<ProtectedRoute><DashboardLayout><ScanAndPlacePage /></DashboardLayout></ProtectedRoute>} />
+            <Route path="/items/stock-count/lookup" element={<ProtectedRoute><DashboardLayout><MobileLookupPage /></DashboardLayout></ProtectedRoute>} />
+            <Route path="/items/stock-count/admin" element={<ProtectedRoute><DashboardLayout><MobileAdminPage /></DashboardLayout></ProtectedRoute>} />
+            <Route path="/items/stock-count/damage-report" element={<ProtectedRoute><DashboardLayout><MobileDamageReportPage /></DashboardLayout></ProtectedRoute>} />
+            <Route path="/items/stock-count/transfers" element={<ProtectedRoute><DashboardLayout><MobileTransfersPage /></DashboardLayout></ProtectedRoute>} />
             <Route path="/items/transfer-order" element={<ProtectedRoute><DashboardLayout><TransferOrderPage /></DashboardLayout></ProtectedRoute>} />
             <Route path="/items/bin-locations" element={<ProtectedRoute><DashboardLayout><BinLocationsPage /></DashboardLayout></ProtectedRoute>} />
 
@@ -176,6 +200,25 @@ function App() {
             <Route path="/search" element={<ProtectedRoute><DashboardLayout><SearchPage /></DashboardLayout></ProtectedRoute>} />
             <Route path="/ai-reporting" element={<ProtectedRoute><DashboardLayout><AIReportingPage /></DashboardLayout></ProtectedRoute>} />
             <Route path="/settings" element={<ProtectedRoute><DashboardLayout><SettingsPage /></DashboardLayout></ProtectedRoute>} />
+
+            {/* Damage Reports */}
+            <Route path="/damage-reports" element={<ProtectedRoute><DashboardLayout><DamageReportsPage /></DashboardLayout></ProtectedRoute>} />
+            <Route path="/damage-reports/:id" element={<ProtectedRoute><DashboardLayout><DamageReportDetailPage /></DashboardLayout></ProtectedRoute>} />
+
+            {/* Mobile PWA Routes */}
+            <Route path="/home" element={<ProtectedRoute><MobileLayout><MobileHomePage /></MobileLayout></ProtectedRoute>} />
+            <Route path="/placement" element={<ProtectedRoute><MobileLayout><PutawayPage /></MobileLayout></ProtectedRoute>} />
+            <Route path="/placement/scan" element={<ProtectedRoute><MobileLayout><ScanAndPlacePage /></MobileLayout></ProtectedRoute>} />
+            <Route path="/placement/history" element={<ProtectedRoute><MobileLayout><PutawayHistoryPage /></MobileLayout></ProtectedRoute>} />
+            <Route path="/placement/:taskId" element={<ProtectedRoute><MobileLayout><ScanAndPlacePage /></MobileLayout></ProtectedRoute>} />
+            <Route path="/lookup" element={<ProtectedRoute><MobileLayout><MobileLookupPage /></MobileLayout></ProtectedRoute>} />
+            <Route path="/admin" element={<ProtectedRoute><MobileLayout><MobileAdminPage /></MobileLayout></ProtectedRoute>} />
+            <Route path="/profile" element={<ProtectedRoute><MobileLayout><ProfilePage /></MobileLayout></ProtectedRoute>} />
+            <Route path="/stock-counts" element={<ProtectedRoute><MobileLayout><MobileStockCountListPage /></MobileLayout></ProtectedRoute>} />
+            <Route path="/stock-counts/scan/:binId" element={<ProtectedRoute><MobileLayout><MobileStockCountDetailPage /></MobileLayout></ProtectedRoute>} />
+            <Route path="/stock-counts/:id" element={<ProtectedRoute><MobileLayout><MobileStockCountDetailPage /></MobileLayout></ProtectedRoute>} />
+            <Route path="/m/damage-report" element={<ProtectedRoute><MobileLayout><MobileDamageReportPage /></MobileLayout></ProtectedRoute>} />
+            <Route path="/m/transfers" element={<ProtectedRoute><MobileLayout><MobileTransfersPage /></MobileLayout></ProtectedRoute>} />
           </Routes>
         </DateFilterProvider>
       </AuthProvider>

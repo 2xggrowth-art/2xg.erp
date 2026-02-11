@@ -288,6 +288,19 @@ export const exportItems = async (req: Request, res: Response) => {
   }
 };
 
+export const getItemByBarcode = async (req: Request, res: Response) => {
+  try {
+    const { barcode } = req.params;
+    const item = await itemsService.getItemByBarcode(barcode);
+    if (!item) {
+      return res.status(404).json({ success: false, error: 'Item not found for this barcode' });
+    }
+    res.json({ success: true, data: item });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+};
+
 export const importFromGoogleSheets = async (req: Request, res: Response) => {
   try {
     const { sheetUrl, mode } = req.body;

@@ -6,16 +6,22 @@ import * as SecureStore from 'expo-secure-store';
 
 // Screens
 import LoginScreen from './src/screens/LoginScreen';
+import HomeScreen from './src/screens/HomeScreen';
 import CaptureScreen from './src/screens/CaptureScreen';
 import AmountScreen from './src/screens/AmountScreen';
 import CategoryScreen from './src/screens/CategoryScreen';
 import PaymentScreen from './src/screens/PaymentScreen';
 import ReviewScreen from './src/screens/ReviewScreen';
 import SuccessScreen from './src/screens/SuccessScreen';
+import StockCountListScreen from './src/screens/StockCountListScreen';
+import StockCountDetailScreen from './src/screens/StockCountDetailScreen';
+import ItemLookupScreen from './src/screens/ItemLookupScreen';
+import DamageReportScreen from './src/screens/DamageReportScreen';
 
 // Types
 export type RootStackParamList = {
   Login: undefined;
+  Home: undefined;
   Capture: undefined;
   Amount: { imageUri?: string };
   Category: { imageUri?: string; amount: number };
@@ -33,6 +39,10 @@ export type RootStackParamList = {
     amount: number;
     isAutoApproved: boolean;
   };
+  StockCountList: undefined;
+  StockCountDetail: { stockCountId: string };
+  ItemLookup: undefined;
+  DamageReport: undefined;
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -108,6 +118,10 @@ export default function App() {
             <Stack.Screen name="Login" component={LoginScreen} />
           ) : (
             <>
+              {/* Home is the new landing page */}
+              <Stack.Screen name="Home" component={HomeScreen} />
+
+              {/* Expense Flow */}
               <Stack.Screen name="Capture" component={CaptureScreen} />
               <Stack.Screen name="Amount" component={AmountScreen} />
               <Stack.Screen name="Category" component={CategoryScreen} />
@@ -118,6 +132,16 @@ export default function App() {
                 component={SuccessScreen}
                 options={{ gestureEnabled: false }}
               />
+
+              {/* Stock Count Flow */}
+              <Stack.Screen name="StockCountList" component={StockCountListScreen} />
+              <Stack.Screen name="StockCountDetail" component={StockCountDetailScreen} />
+
+              {/* Item Lookup */}
+              <Stack.Screen name="ItemLookup" component={ItemLookupScreen} />
+
+              {/* Damage Report */}
+              <Stack.Screen name="DamageReport" component={DamageReportScreen} />
             </>
           )}
         </Stack.Navigator>

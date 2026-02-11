@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Test Barcodes - 2XG ERP</title>
+  <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"></script>
+  <style>
+    body { font-family: Arial, sans-serif; padding: 20px; background: #fff; }
+    h1 { text-align: center; margin-bottom: 8px; }
+    p.subtitle { text-align: center; color: #666; margin-bottom: 10px; }
+    .info { text-align: center; color: #2563EB; margin-bottom: 30px; font-size: 14px; background: #EFF6FF; padding: 12px; border-radius: 10px; max-width: 600px; margin-left: auto; margin-right: auto; }
+    .info b { display: block; font-size: 16px; margin-bottom: 4px; }
+    .section { margin-bottom: 30px; }
+    .section h2 { font-size: 16px; color: #374151; border-bottom: 2px solid #E5E7EB; padding-bottom: 6px; margin-bottom: 16px; }
+    .big-barcode { text-align: center; margin-bottom: 20px; padding: 30px; border: 2px solid #E5E7EB; border-radius: 16px; background: #FAFAFA; }
+    .big-barcode svg { display: block; margin: 0 auto; }
+    .big-barcode .label { margin-top: 12px; font-size: 18px; font-weight: 700; color: #1E40AF; }
+    .big-barcode .sublabel { font-size: 14px; color: #6B7280; margin-top: 4px; }
+    .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; max-width: 900px; margin: 0 auto; }
+    .card { border: 2px solid #E5E7EB; border-radius: 12px; padding: 16px; text-align: center; }
+    .card svg { display: block; margin: 0 auto 8px; }
+    .card .name { font-size: 13px; color: #374151; font-weight: 600; }
+    .card .sku { font-size: 12px; color: #6B7280; margin-top: 2px; }
+    @media print { body { padding: 10px; } }
+  </style>
+</head>
+<body>
+  <h1>Stock Count - Test Barcodes</h1>
+  <p class="subtitle">Scan these with your phone camera in the Stock Count scanner</p>
+
+  <div class="info">
+    <b>Your bins currently have only 1 item: "zaheer" (SKU-0027)</b>
+    Below is a big barcode for zaheer + 9 other items you can scan to test "unexpected item" detection
+  </div>
+
+  <!-- BIG barcode for the actual bin item -->
+  <div class="section">
+    <h2>Item in bin2 (expected - qty: 10)</h2>
+    <div class="big-barcode">
+      <svg id="bc-main"></svg>
+      <div class="label">zaheer</div>
+      <div class="sublabel">SKU-0027 | Expected in bin2: 10 pcs</div>
+    </div>
+  </div>
+
+  <!-- Other items for testing -->
+  <div class="section">
+    <h2>Other items (will show as "unexpected" if scanned for bin2)</h2>
+    <div class="grid" id="grid"></div>
+  </div>
+
+  <script>
+    // Main bin2 item - big barcode
+    JsBarcode('#bc-main', 'SKU-0027', {
+      format: 'CODE128',
+      width: 3,
+      height: 100,
+      displayValue: true,
+      fontSize: 20,
+      font: 'Arial',
+      textMargin: 8,
+      margin: 15,
+    });
+
+    // Other items for testing
+    const others = [
+      { sku: 'SKU-0011', name: '20" BICYCLE S/S V BRAKE' },
+      { sku: 'SKU-0010', name: 'ALLWYN SKITT 20T IBC' },
+      { sku: 'SKU-0008', name: 'ALLWYN T/C ZIGGY ZX' },
+      { sku: 'SKU-0025', name: 'ALPHA 91 STOMMER 14T' },
+      { sku: 'SKU-0004', name: 'AOKI CADENCE GL (WHT)' },
+      { sku: 'SKU-0001', name: 'Arsal' },
+      { sku: 'SKU-0007', name: 'ATOM MUDGUARD BACK' },
+      { sku: 'ACC-001', name: 'Battery Pack 48V 20Ah' },
+      { sku: 'SKU-0026', name: 'BELL' },
+    ];
+
+    const grid = document.getElementById('grid');
+    others.forEach((item) => {
+      const card = document.createElement('div');
+      card.className = 'card';
+      const svgId = 'bc-' + item.sku.replace(/[^a-zA-Z0-9]/g, '');
+      card.innerHTML = '<svg id="' + svgId + '"></svg><div class="name">' + item.name + '</div><div class="sku">' + item.sku + '</div>';
+      grid.appendChild(card);
+      JsBarcode('#' + svgId, item.sku, {
+        format: 'CODE128',
+        width: 2,
+        height: 70,
+        displayValue: true,
+        fontSize: 14,
+        font: 'Arial',
+        textMargin: 6,
+        margin: 8,
+      });
+    });
+  </script>
+</body>
+</html>

@@ -1057,6 +1057,53 @@ export class ItemsService {
   }
 
   /**
+   * Get item by barcode (searches sku, upc, ean, isbn)
+   */
+  async getItemByBarcode(barcode: string) {
+    // Try SKU first
+    let { data, error } = await supabaseAdmin
+      .from('items')
+      .select('*')
+      .eq('sku', barcode)
+      .limit(1);
+
+    if (error) throw error;
+    if (data && data.length > 0) return data[0];
+
+    // Try UPC
+    ({ data, error } = await supabaseAdmin
+      .from('items')
+      .select('*')
+      .eq('upc', barcode)
+      .limit(1));
+
+    if (error) throw error;
+    if (data && data.length > 0) return data[0];
+
+    // Try EAN
+    ({ data, error } = await supabaseAdmin
+      .from('items')
+      .select('*')
+      .eq('ean', barcode)
+      .limit(1));
+
+    if (error) throw error;
+    if (data && data.length > 0) return data[0];
+
+    // Try ISBN
+    ({ data, error } = await supabaseAdmin
+      .from('items')
+      .select('*')
+      .eq('isbn', barcode)
+      .limit(1));
+
+    if (error) throw error;
+    if (data && data.length > 0) return data[0];
+
+    return null;
+  }
+
+  /**
    * Export items
    */
   async exportItems(filters?: { includeInactive?: boolean; itemIds?: string[] }) {

@@ -1,41 +1,55 @@
 import { useState, useEffect } from 'react';
-import { X, Settings, ShoppingBasket, Plus, Search } from 'lucide-react';
+import { X, ShoppingBasket, Plus, Search } from 'lucide-react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { itemsService, Item as ItemType } from '../services/items.service';
-import { stockCountService, StockCountItem } from '../services/stockCount.service';
+import { stockCountService } from '../services/stockCount.service';
+import apiClient from '../services/api.client';
 
-interface Item {
+interface LocalItem {
   id: string;
   name: string;
   sku: string;
   currentStock: number;
 }
 
+interface UserOption {
+  id: string;
+  full_name: string;
+}
+
+interface LocationOption {
+  id: string;
+  name: string;
+}
+
 const NewStockCountPage = () => {
   const { id } = useParams<{ id: string }>();
   const isEditMode = !!id;
   const navigate = useNavigate();
-  const [stockCountNumber, setStockCountNumber] = useState('1');
   const [description, setDescription] = useState('');
-  const [location, setLocation] = useState('Head Office');
-  const [assignTo, setAssignTo] = useState('');
-  const [scheduleCounts, setScheduleCounts] = useState(false);
+  const [locationId, setLocationId] = useState('');
+  const [locationName, setLocationName] = useState('');
+  const [assignToUserId, setAssignToUserId] = useState('');
+  const [assignToName, setAssignToName] = useState('');
   const [currentStep, setCurrentStep] = useState('configure');
-  const [selectedItems, setSelectedItems] = useState<Item[]>([]);
+  const [selectedItems, setSelectedItems] = useState<LocalItem[]>([]);
   const [showItemSelector, setShowItemSelector] = useState(false);
-  const [availableItems, setAvailableItems] = useState<Item[]>([]);
+  const [availableItems, setAvailableItems] = useState<LocalItem[]>([]);
   const [isLoadingItems, setIsLoadingItems] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [users, setUsers] = useState<UserOption[]>([]);
+  const [locations, setLocations] = useState<LocationOption[]>([]);
+  const [isSaving, setIsSaving] = useState(false);
 
-  // Fetch items from API
+  // Fetch items, users, locations from API
   useEffect(() => {
-    const fetchItems = async () => {
+    const fetchData = async () => {
       setIsLoadingItems(true);
       try {
-        const response = await itemsService.getAllItems({ isActive: true });
-        if (response.data.success && response.data.data) {
-          // Transform API items to our Item interface
-          const transformedItems: Item[] = response.data.data.map((item: ItemType) => ({
+        // Fetch items
+        const itemsResponse = await itemsService.getAllItems({ isActive: true });
+        if (itemsResponse.data.success && itemsResponse.data.data) {
+          const transformedItems: LocalItem[] = itemsResponse.data.data.map((item: ItemType) => ({
             id: item.id,
             name: item.item_name,
             sku: item.sku,
@@ -43,15 +57,26 @@ const NewStockCountPage = () => {
           }));
           setAvailableItems(transformedItems);
         }
+
+        // Fetch users
+        const usersResponse = await apiClient.get('/auth/users');
+        if (usersResponse.data.success) {
+          setUsers(usersResponse.data.data || []);
+        }
+
+        // Fetch locations
+        const locationsResponse = await apiClient.get('/locations');
+        if (locationsResponse.data.success) {
+          setLocations(locationsResponse.data.data || []);
+        }
       } catch (error) {
-        console.error('Error fetching items:', error);
-        // Optionally show an error message to the user
+        console.error('Error fetching data:', error);
       } finally {
         setIsLoadingItems(false);
       }
     };
 
-    fetchItems();
+    fetchData();
   }, []);
 
   // Fetch Stock Count Details if Edit Mode
@@ -65,16 +90,16 @@ const NewStockCountPage = () => {
     try {
       const data = await stockCountService.getStockCountById(id!);
       if (data) {
-        setStockCountNumber(data.stockCountNumber);
-        setDescription(data.description);
-        setLocation(data.location || 'Head Office');
-        setAssignTo(data.assignTo);
-        // Map service items back to local Item interface
-        const mappedItems: Item[] = data.items.map(item => ({
-          id: item.id,
-          name: item.name,
+        setDescription(data.description || '');
+        setLocationId(data.location_id || '');
+        setLocationName(data.location_name || '');
+        setAssignToUserId(data.assigned_to_user_id || '');
+        setAssignToName(data.assigned_to_name || '');
+        const mappedItems: LocalItem[] = (data.items || []).map(item => ({
+          id: item.item_id,
+          name: item.item_name,
           sku: item.sku,
-          currentStock: item.currentStock
+          currentStock: item.expected_quantity
         }));
         setSelectedItems(mappedItems);
       }
@@ -84,21 +109,24 @@ const NewStockCountPage = () => {
     }
   };
 
+  const handleLocationChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const selectedId = e.target.value;
+    setLocationId(selectedId);
+    const loc = locations.find(l => l.id === selectedId);
+    setLocationName(loc?.name || '');
+  };
+
+  const handleAssignToChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const selectedId = e.target.value;
+    setAssignToUserId(selectedId);
+    const user = users.find(u => u.id === selectedId);
+    setAssignToName(user?.full_name || '');
+  };
+
   const handleNext = () => {
     if (currentStep === 'configure') {
-      // Validate required fields
-      if (!stockCountNumber) {
-        alert('Please enter a Stock Count Number');
-        return;
-      }
-      if (!location) {
-        alert('Please select a Location');
-        return;
-      }
-      if (!assignTo) {
-        alert('Please assign to a user');
-        return;
-      }
+      if (!locationId) { alert('Please select a Location'); return; }
+      if (!assignToUserId) { alert('Please assign to a user'); return; }
       setCurrentStep('add-items');
     }
   };
@@ -107,16 +135,46 @@ const NewStockCountPage = () => {
     navigate('/items/stock-count');
   };
 
+  const handleSave = async () => {
+    if (selectedItems.length === 0) {
+      alert('Please add at least one item to the stock count');
+      return;
+    }
+
+    setIsSaving(true);
+    try {
+      const payload = {
+        description,
+        location_id: locationId,
+        location_name: locationName,
+        assigned_to_user_id: assignToUserId,
+        assigned_to_name: assignToName,
+        items: selectedItems.map(item => ({ item_id: item.id })),
+      };
+
+      if (isEditMode) {
+        await stockCountService.updateStockCount(id!, payload);
+        alert('Stock Count updated successfully!');
+      } else {
+        await stockCountService.createStockCount(payload);
+        alert('Stock Count created successfully!');
+      }
+      navigate('/items/stock-count');
+    } catch (error) {
+      console.error('Error saving stock count:', error);
+      alert('Failed to save stock count. Please try again.');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   return (
     <div className="max-w-7xl mx-auto w-full p-6">
       <div className="bg-white rounded-lg shadow-md">
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-slate-200">
           <h1 className="text-2xl font-bold text-slate-800">{isEditMode ? 'Edit Stock Count' : 'New Stock Count'}</h1>
-          <button
-            onClick={handleCancel}
-            className="text-slate-400 hover:text-slate-600 transition-colors"
-          >
+          <button onClick={handleCancel} className="text-slate-400 hover:text-slate-600 transition-colors">
             <X size={24} />
           </button>
         </div>
@@ -134,16 +192,12 @@ const NewStockCountPage = () => {
               ) : (
                 <div className="w-5 h-5 rounded-full border-2 border-blue-600"></div>
               )}
-              <span className={`font-medium ${currentStep === 'configure' ? 'text-blue-600' : 'text-slate-600'}`}>
-                Configure
-              </span>
+              <span className={`font-medium ${currentStep === 'configure' ? 'text-blue-600' : 'text-slate-600'}`}>Configure</span>
             </div>
             <div className="w-8 h-0.5 bg-slate-300 mx-2"></div>
             <div className={`flex items-center gap-2 ${currentStep === 'add-items' ? 'text-blue-600' : 'text-slate-400'}`}>
               <div className={`w-5 h-5 rounded-full border-2 ${currentStep === 'add-items' ? 'border-blue-600' : 'border-slate-300'}`}></div>
-              <span className={`font-medium ${currentStep === 'add-items' ? 'text-blue-600' : 'text-slate-400'}`}>
-                Add Items
-              </span>
+              <span className={`font-medium ${currentStep === 'add-items' ? 'text-blue-600' : 'text-slate-400'}`}>Add Items</span>
             </div>
           </div>
         </div>
@@ -151,27 +205,6 @@ const NewStockCountPage = () => {
         {/* Form Content */}
         {currentStep === 'configure' && (
           <div className="p-6 space-y-6">
-            {/* Stock Count Number */}
-            <div className="flex items-center gap-4">
-              <label className="w-48 text-slate-700">
-                Stock Count#<span className="text-red-500">*</span>
-              </label>
-              <div className="flex items-center gap-2 flex-1 max-w-md">
-                <input
-                  type="text"
-                  value={stockCountNumber}
-                  onChange={(e) => setStockCountNumber(e.target.value)}
-                  className="flex-1 px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  disabled={isEditMode} // Usually stock count numbers are unique and should be consistent
-                />
-                {!isEditMode && (
-                  <button className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors">
-                    <Settings size={20} />
-                  </button>
-                )}
-              </div>
-            </div>
-
             {/* Description */}
             <div className="flex items-start gap-4">
               <label className="w-48 text-slate-700 pt-2">Description</label>
@@ -186,82 +219,50 @@ const NewStockCountPage = () => {
 
             {/* Location */}
             <div className="flex items-center gap-4">
-              <label className="w-48 text-slate-700">
-                Location<span className="text-red-500">*</span>
-              </label>
+              <label className="w-48 text-slate-700">Location<span className="text-red-500">*</span></label>
               <select
-                value={location}
-                onChange={(e) => setLocation(e.target.value)}
+                value={locationId}
+                onChange={handleLocationChange}
                 className="flex-1 max-w-md px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
               >
-                <option value="Head Office">Head Office</option>
-                <option value="Warehouse 1">Warehouse 1</option>
-                <option value="Warehouse 2">Warehouse 2</option>
+                <option value="">Select location</option>
+                {locations.map(loc => (
+                  <option key={loc.id} value={loc.id}>{loc.name}</option>
+                ))}
               </select>
             </div>
 
             {/* Assign To */}
             <div className="flex items-center gap-4">
-              <label className="w-48 text-slate-700 flex items-center gap-1">
-                Assign To<span className="text-red-500">*</span>
-                <button className="text-slate-400 hover:text-slate-600">
-                  <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
-                    <circle cx="8" cy="8" r="7" stroke="currentColor" fill="none" strokeWidth="1.5" />
-                    <text x="8" y="11" fontSize="10" textAnchor="middle" fill="currentColor">?</text>
-                  </svg>
-                </button>
-              </label>
+              <label className="w-48 text-slate-700">Assign To<span className="text-red-500">*</span></label>
               <select
-                value={assignTo}
-                onChange={(e) => setAssignTo(e.target.value)}
-                className="flex-1 max-w-md px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-slate-400"
+                value={assignToUserId}
+                onChange={handleAssignToChange}
+                className="flex-1 max-w-md px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
               >
                 <option value="">Select user</option>
-                <option value="user1">John Doe</option>
-                <option value="user2">Jane Smith</option>
-                <option value="user3">Bob Johnson</option>
+                {users.map(user => (
+                  <option key={user.id} value={user.id}>{user.full_name}</option>
+                ))}
               </select>
-            </div>
-
-            {/* Schedule Counts */}
-            <div className="flex items-center gap-4">
-              <label className="w-48 text-slate-700"></label>
-              <div className="flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  checked={scheduleCounts}
-                  onChange={(e) => setScheduleCounts(e.target.checked)}
-                  className="w-4 h-4 text-blue-600 border-slate-300 rounded focus:ring-blue-500"
-                />
-                <span className="text-slate-700">Schedule Counts</span>
-              </div>
             </div>
           </div>
         )}
 
         {currentStep === 'add-items' && (
           <div className="p-6">
-            {/* Header */}
             <div className="mb-6">
-              <h2 className="text-lg font-semibold text-slate-800 mb-2">
-                Total Added Items ({selectedItems.length})
-              </h2>
-              <p className="text-slate-600 text-sm">
-                Select the items you want to add to your count card, to start stock counting.
-              </p>
+              <h2 className="text-lg font-semibold text-slate-800 mb-2">Total Added Items ({selectedItems.length})</h2>
+              <p className="text-slate-600 text-sm">Select the items you want to add to your count card.</p>
             </div>
 
-            {/* Empty State */}
             {selectedItems.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-16 bg-slate-50 rounded-lg border-2 border-dashed border-slate-200">
                 <div className="w-20 h-20 bg-blue-100 rounded-full flex items-center justify-center mb-4">
                   <ShoppingBasket size={32} className="text-blue-600" />
                 </div>
                 <p className="text-slate-600 mb-4">Select items to be added in the stock count</p>
-                <button
-                  onClick={() => setShowItemSelector(true)}
-                  className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
-                >
+                <button onClick={() => setShowItemSelector(true)} className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium">
                   Select Items
                 </button>
               </div>
@@ -269,12 +270,8 @@ const NewStockCountPage = () => {
               <div className="space-y-4">
                 <div className="flex items-center justify-between">
                   <h3 className="text-sm font-semibold text-slate-700">Selected Items</h3>
-                  <button
-                    onClick={() => setShowItemSelector(true)}
-                    className="flex items-center gap-2 px-4 py-2 text-blue-600 border border-blue-600 rounded-lg hover:bg-blue-50 transition-colors"
-                  >
-                    <Plus size={16} />
-                    Add More Items
+                  <button onClick={() => setShowItemSelector(true)} className="flex items-center gap-2 px-4 py-2 text-blue-600 border border-blue-600 rounded-lg hover:bg-blue-50 transition-colors">
+                    <Plus size={16} /> Add More Items
                   </button>
                 </div>
                 <div className="border border-slate-200 rounded-lg overflow-hidden">
@@ -294,10 +291,7 @@ const NewStockCountPage = () => {
                           <td className="px-4 py-3 text-sm text-slate-600">{item.sku}</td>
                           <td className="px-4 py-3 text-sm text-slate-600">{item.currentStock}</td>
                           <td className="px-4 py-3 text-center">
-                            <button
-                              onClick={() => setSelectedItems(selectedItems.filter(i => i.id !== item.id))}
-                              className="text-red-600 hover:text-red-700 text-sm font-medium"
-                            >
+                            <button onClick={() => setSelectedItems(selectedItems.filter(i => i.id !== item.id))} className="text-red-600 hover:text-red-700 text-sm font-medium">
                               Remove
                             </button>
                           </td>
@@ -318,17 +312,10 @@ const NewStockCountPage = () => {
               <div className="px-6 py-4 border-b border-slate-200">
                 <div className="flex items-center justify-between mb-4">
                   <h3 className="text-lg font-semibold text-slate-800">Select Items</h3>
-                  <button
-                    onClick={() => {
-                      setShowItemSelector(false);
-                      setSearchQuery('');
-                    }}
-                    className="text-slate-400 hover:text-slate-600"
-                  >
+                  <button onClick={() => { setShowItemSelector(false); setSearchQuery(''); }} className="text-slate-400 hover:text-slate-600">
                     <X size={20} />
                   </button>
                 </div>
-                {/* Search Bar */}
                 <div className="relative">
                   <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
                   <input
@@ -343,36 +330,22 @@ const NewStockCountPage = () => {
               <div className="p-6 max-h-96 overflow-y-auto">
                 {isLoadingItems ? (
                   <div className="flex items-center justify-center py-12">
-                    <div className="text-center">
-                      <div className="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-                      <p className="text-slate-600">Loading items...</p>
-                    </div>
-                  </div>
-                ) : availableItems.length === 0 ? (
-                  <div className="flex items-center justify-center py-12">
-                    <div className="text-center">
-                      <ShoppingBasket size={48} className="text-slate-300 mx-auto mb-4" />
-                      <p className="text-slate-600 font-medium mb-2">No items found</p>
-                      <p className="text-sm text-slate-500">Please add items first before creating a stock count</p>
-                    </div>
+                    <div className="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+                    <p className="text-slate-600">Loading items...</p>
                   </div>
                 ) : (
                   <div className="space-y-2">
                     {availableItems
                       .filter(item => {
-                        const query = searchQuery.toLowerCase();
-                        return item.name.toLowerCase().includes(query) ||
-                          item.sku.toLowerCase().includes(query);
+                        const q = searchQuery.toLowerCase();
+                        return item.name.toLowerCase().includes(q) || item.sku.toLowerCase().includes(q);
                       })
                       .map((item) => {
                         const isSelected = selectedItems.some(i => i.id === item.id);
                         return (
                           <div
                             key={item.id}
-                            className={`p-4 border rounded-lg cursor-pointer transition-colors ${isSelected
-                                ? 'bg-blue-50 border-blue-300'
-                                : 'border-slate-200 hover:bg-slate-50'
-                              }`}
+                            className={`p-4 border rounded-lg cursor-pointer transition-colors ${isSelected ? 'bg-blue-50 border-blue-300' : 'border-slate-200 hover:bg-slate-50'}`}
                             onClick={() => {
                               if (isSelected) {
                                 setSelectedItems(selectedItems.filter(i => i.id !== item.id));
@@ -384,14 +357,9 @@ const NewStockCountPage = () => {
                             <div className="flex items-center justify-between">
                               <div>
                                 <h4 className="font-medium text-slate-800">{item.name}</h4>
-                                <p className="text-sm text-slate-600">SKU: {item.sku} • Stock: {item.currentStock}</p>
+                                <p className="text-sm text-slate-600">SKU: {item.sku} | Stock: {item.currentStock}</p>
                               </div>
-                              <input
-                                type="checkbox"
-                                checked={isSelected}
-                                onChange={() => { }}
-                                className="w-5 h-5 text-blue-600 border-slate-300 rounded focus:ring-blue-500"
-                              />
+                              <input type="checkbox" checked={isSelected} onChange={() => {}} className="w-5 h-5 text-blue-600 border-slate-300 rounded" />
                             </div>
                           </div>
                         );
@@ -400,16 +368,8 @@ const NewStockCountPage = () => {
                 )}
               </div>
               <div className="px-6 py-4 border-t border-slate-200 flex justify-end gap-3">
-                <button
-                  onClick={() => setShowItemSelector(false)}
-                  className="px-6 py-2 border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50 transition-colors font-medium"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={() => setShowItemSelector(false)}
-                  className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
-                >
+                <button onClick={() => setShowItemSelector(false)} className="px-6 py-2 border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50 font-medium">Cancel</button>
+                <button onClick={() => setShowItemSelector(false)} className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium">
                   Add Selected ({selectedItems.length})
                 </button>
               </div>
@@ -421,74 +381,16 @@ const NewStockCountPage = () => {
         <div className="flex items-center gap-3 px-6 py-4 border-t border-slate-200">
           {currentStep === 'configure' ? (
             <>
-              <button
-                onClick={handleNext}
-                className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
-              >
-                Next
-              </button>
-              <button
-                onClick={handleCancel}
-                className="px-6 py-2 border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50 transition-colors font-medium"
-              >
-                Cancel
-              </button>
+              <button onClick={handleNext} className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium">Next</button>
+              <button onClick={handleCancel} className="px-6 py-2 border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50 font-medium">Cancel</button>
             </>
           ) : (
             <>
-              <button
-                onClick={() => setCurrentStep('configure')}
-                className="px-6 py-2 border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50 transition-colors font-medium"
-              >
-                Back
+              <button onClick={() => setCurrentStep('configure')} className="px-6 py-2 border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50 font-medium">Back</button>
+              <button onClick={handleSave} disabled={isSaving} className="px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 font-medium disabled:opacity-50">
+                {isSaving ? 'Saving...' : isEditMode ? 'Update' : 'Save'}
               </button>
-              <button
-                onClick={async () => {
-                  if (selectedItems.length === 0) {
-                    alert('Please add at least one item to the stock count');
-                    return;
-                  }
-
-                  try {
-                    // Transform selected items to StockCountItem format
-                    const stockCountItems: StockCountItem[] = selectedItems.map(item => ({
-                      id: item.id,
-                      name: item.name,
-                      sku: item.sku,
-                      currentStock: item.currentStock
-                    }));
-
-                    const payload = {
-                      description,
-                      location,
-                      assignTo,
-                      items: stockCountItems
-                    };
-
-                    if (isEditMode) {
-                      await stockCountService.updateStockCount(id!, payload);
-                      alert('Stock Count updated successfully!');
-                    } else {
-                      await stockCountService.createStockCount(payload);
-                      alert('Stock Count saved successfully!');
-                    }
-
-                    navigate('/items/stock-count');
-                  } catch (error) {
-                    console.error('Error saving stock count:', error);
-                    alert('Failed to save stock count. Please try again.');
-                  }
-                }}
-                className="px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-medium"
-              >
-                {isEditMode ? 'Update' : 'Save'}
-              </button>
-              <button
-                onClick={handleCancel}
-                className="px-6 py-2 border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50 transition-colors font-medium"
-              >
-                Cancel
-              </button>
+              <button onClick={handleCancel} className="px-6 py-2 border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50 font-medium">Cancel</button>
             </>
           )}
         </div>
