@@ -36,6 +36,7 @@ export class MobileAuthService {
         employee_name: user.employee_name,
         employee_id: user.employee_id,
         branch: user.branch,
+        role: user.role || 'counter',
         type: 'mobile'
       },
       JWT_SECRET,
@@ -49,7 +50,8 @@ export class MobileAuthService {
         phone_number: user.phone_number,
         employee_name: user.employee_name,
         employee_id: user.employee_id,
-        branch: user.branch
+        branch: user.branch,
+        role: user.role || 'counter'
       }
     };
   }
@@ -64,7 +66,7 @@ export class MobileAuthService {
       // Check if user still exists and is active
       const { data: user, error } = await supabaseAdmin
         .from('mobile_users')
-        .select('id, phone_number, employee_name, employee_id, branch, is_active')
+        .select('id, phone_number, employee_name, employee_id, branch, role, is_active')
         .eq('id', decoded.id)
         .single();
 
@@ -84,7 +86,7 @@ export class MobileAuthService {
   async getAllUsers() {
     const { data, error } = await supabaseAdmin
       .from('mobile_users')
-      .select('id, phone_number, employee_name, employee_id, branch, is_active, created_at')
+      .select('id, phone_number, employee_name, employee_id, branch, role, is_active, created_at')
       .order('employee_name');
 
     if (error) throw error;
