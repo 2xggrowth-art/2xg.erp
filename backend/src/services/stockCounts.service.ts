@@ -1,44 +1,73 @@
-import { supabaseAdmin } from '../config/supabase';
+import { supabaseAdmin as supabase } from '../config/supabase';
+
+export interface CreateStockCountData {
+  bill_id?: string;
+  location_id?: string;
+  location_name: string;
+  bin_location_id?: string;
+  bin_code?: string;
+  assigned_to?: string;
+  assigned_to_name?: string;
+  assigned_by?: string;
+  assigned_by_name?: string;
+  count_type?: 'delivery' | 'audit';
+  due_date?: string;
+  notes?: string;
+}
+
+export interface UpdateItemCountData {
+  counted_quantity: number;
+  notes?: string;
+}
 
 export class StockCountsService {
   /**
-   * Generate next stock count number (SC-00001, SC-00002, etc.)
+   * Generate a new count number
    */
-  async generateNumber(): Promise<string> {
-    const { data, error } = await supabaseAdmin
+  async generateCountNumber(): Promise<string> {
+    const year = new Date().getFullYear();
+    const { data: latest } = await supabase
       .from('stock_counts')
-      .select('stock_count_number')
+      .select('count_number')
+      .ilike('count_number', `SC-${year}-%`)
       .order('created_at', { ascending: false })
-      .limit(1);
+      .limit(1)
+      .single();
 
-    if (error) throw error;
-
-    let nextNum = 1;
-    if (data && data.length > 0) {
-      const match = data[0].stock_count_number.match(/^SC-(\d+)$/);
-      if (match) nextNum = parseInt(match[1]) + 1;
+    if (!latest) {
+      return `SC-${year}-0001`;
     }
 
-    return `SC-${nextNum.toString().padStart(5, '0')}`;
+    const match = latest.count_number.match(/SC-\d{4}-(\d+)/);
+    if (match) {
+      const nextNumber = parseInt(match[1]) + 1;
+      return `SC-${year}-${nextNumber.toString().padStart(4, '0')}`;
+    }
+
+    return `SC-${year}-0001`;
   }
 
   /**
-   * List stock counts with optional filters
+   * Get all stock counts with optional filters
    */
-  async getAll(filters?: { status?: string; location_id?: string; assigned_to?: string }) {
-    let query = supabaseAdmin
+  async getStockCounts(filters?: {
+    assigned_to?: string;
+    status?: string;
+    count_type?: string;
+  }) {
+    let query = supabase
       .from('stock_counts')
       .select('*')
       .order('created_at', { ascending: false });
 
+    if (filters?.assigned_to) {
+      query = query.eq('assigned_to', filters.assigned_to);
+    }
     if (filters?.status) {
       query = query.eq('status', filters.status);
     }
-    if (filters?.location_id) {
-      query = query.eq('location_id', filters.location_id);
-    }
-    if (filters?.assigned_to) {
-      query = query.eq('assigned_to_user_id', filters.assigned_to);
+    if (filters?.count_type) {
+      query = query.eq('count_type', filters.count_type);
     }
 
     const { data, error } = await query;
@@ -47,337 +76,335 @@ export class StockCountsService {
   }
 
   /**
-   * Get a single stock count with its items
+   * Get a single stock count with items
    */
-  async getById(id: string) {
-    const { data: stockCount, error } = await supabaseAdmin
+  async getStockCount(id: string) {
+    const { data: count, error: countError } = await supabase
       .from('stock_counts')
       .select('*')
       .eq('id', id)
       .single();
 
-    if (error) throw error;
+    if (countError) throw countError;
 
-    const { data: items, error: itemsError } = await supabaseAdmin
+    const { data: items, error: itemsError } = await supabase
       .from('stock_count_items')
       .select('*')
       .eq('stock_count_id', id)
-      .order('created_at', { ascending: true });
+      .order('item_name');
 
     if (itemsError) throw itemsError;
 
-    return { ...stockCount, items: items || [] };
+    return { ...count, items };
   }
 
   /**
-   * Get stock counts assigned to a specific user (for mobile)
+   * Create a new stock count from a bill
    */
-  async getAssigned(userId: string) {
-    const { data, error } = await supabaseAdmin
+  async createStockCount(data: CreateStockCountData) {
+    const countNumber = await this.generateCountNumber();
+
+    // Create the stock count
+    const { data: count, error: countError } = await supabase
       .from('stock_counts')
-      .select('*')
-      .eq('assigned_to_user_id', userId)
-      .in('status', ['draft', 'in_progress'])
-      .order('created_at', { ascending: false });
+      .insert({
+        count_number: countNumber,
+        bill_id: data.bill_id || null,
+        location_id: data.location_id || null,
+        location_name: data.location_name,
+        bin_location_id: data.bin_location_id || null,
+        bin_code: data.bin_code || null,
+        assigned_to: data.assigned_to || null,
+        assigned_to_name: data.assigned_to_name || null,
+        assigned_by: data.assigned_by || null,
+        assigned_by_name: data.assigned_by_name || null,
+        count_type: data.count_type || 'delivery',
+        due_date: data.due_date || null,
+        notes: data.notes || null,
+        status: 'pending',
+      })
+      .select()
+      .single();
+
+    if (countError) throw countError;
+
+    // If bill_id is provided, load items from the bill
+    if (data.bill_id) {
+      const { data: billItems, error: billError } = await supabase
+        .from('bill_items')
+        .select('id, item_id, item_name, quantity')
+        .eq('bill_id', data.bill_id);
+
+      if (billError) throw billError;
+
+      if (billItems && billItems.length > 0) {
+        // Get item details (sku) for each bill item
+        const itemIds = billItems.filter(bi => bi.item_id).map(bi => bi.item_id);
+        let itemDetails: any[] = [];
+        if (itemIds.length > 0) {
+          const { data: items } = await supabase
+            .from('items')
+            .select('id, sku')
+            .in('id', itemIds);
+          itemDetails = items || [];
+        }
+
+        const countItems = billItems.map(bi => {
+          const itemDetail = itemDetails.find(i => i.id === bi.item_id);
+          return {
+            stock_count_id: count.id,
+            item_id: bi.item_id || null,
+            item_name: bi.item_name,
+            sku: itemDetail?.sku || null,
+            bill_item_id: bi.id,
+            expected_quantity: bi.quantity,
+            status: 'pending',
+          };
+        });
+
+        const { error: itemsError } = await supabase
+          .from('stock_count_items')
+          .insert(countItems);
+
+        if (itemsError) throw itemsError;
+
+        // Update total_items
+        await supabase
+          .from('stock_counts')
+          .update({ total_items: countItems.length })
+          .eq('id', count.id);
+      }
+
+      // Also get the bill number
+      const { data: bill } = await supabase
+        .from('bills')
+        .select('bill_number')
+        .eq('id', data.bill_id)
+        .single();
+
+      if (bill) {
+        await supabase
+          .from('stock_counts')
+          .update({ bill_number: bill.bill_number })
+          .eq('id', count.id);
+      }
+    }
+
+    return this.getStockCount(count.id);
+  }
+
+  /**
+   * Start a count (counter begins counting)
+   */
+  async startCount(id: string) {
+    const { data, error } = await supabase
+      .from('stock_counts')
+      .update({
+        status: 'in_progress',
+        started_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', id)
+      .select()
+      .single();
 
     if (error) throw error;
     return data;
   }
 
   /**
-   * Create a new stock count with items.
-   * Snapshots current_stock as expected_quantity for each item.
+   * Update an item's counted quantity
    */
-  async create(data: {
-    description?: string;
-    location_id?: string;
-    location_name?: string;
-    assigned_to_user_id?: string;
-    assigned_to_name?: string;
-    notes?: string;
-    created_by_user_id?: string;
-    items: Array<{
-      item_id: string;
-      bin_location_id?: string;
-      bin_code?: string;
-      expected_quantity?: number;
-    }>;
-  }) {
-    const stockCountNumber = await this.generateNumber();
+  async updateItemCount(countId: string, itemId: string, data: UpdateItemCountData) {
+    // First verify the item belongs to this count
+    const { data: item, error: fetchError } = await supabase
+      .from('stock_count_items')
+      .select('expected_quantity')
+      .eq('id', itemId)
+      .eq('stock_count_id', countId)
+      .single();
 
-    // Create the stock count header
-    const { data: stockCount, error } = await supabaseAdmin
-      .from('stock_counts')
-      .insert({
-        stock_count_number: stockCountNumber,
-        description: data.description || null,
-        location_id: data.location_id || null,
-        location_name: data.location_name || null,
-        assigned_to_user_id: data.assigned_to_user_id || null,
-        assigned_to_name: data.assigned_to_name || null,
-        status: 'draft',
+    if (fetchError) throw fetchError;
+    if (!item) throw new Error('Item not found in this count');
+
+    // Determine status based on match
+    const status = data.counted_quantity === item.expected_quantity ? 'counted' : 'mismatch';
+
+    const { data: updated, error } = await supabase
+      .from('stock_count_items')
+      .update({
+        counted_quantity: data.counted_quantity,
+        status,
+        counted_at: new Date().toISOString(),
         notes: data.notes || null,
-        created_by_user_id: data.created_by_user_id || null,
+        updated_at: new Date().toISOString(),
       })
+      .eq('id', itemId)
+      .eq('stock_count_id', countId)
       .select()
       .single();
 
     if (error) throw error;
-
-    // Snapshot current stock for each item
-    if (data.items && data.items.length > 0) {
-      const itemIds = data.items.map(i => i.item_id);
-      const { data: itemRecords, error: itemsError } = await supabaseAdmin
-        .from('items')
-        .select('id, item_name, sku, current_stock')
-        .in('id', itemIds);
-
-      if (itemsError) throw itemsError;
-
-      const itemMap = new Map(itemRecords?.map(r => [r.id, r]) || []);
-
-      const countItems = data.items.map(item => {
-        const record = itemMap.get(item.item_id);
-        return {
-          stock_count_id: stockCount.id,
-          item_id: item.item_id,
-          item_name: record?.item_name || '',
-          sku: record?.sku || '',
-          bin_location_id: item.bin_location_id || null,
-          bin_code: item.bin_code || null,
-          expected_quantity: item.expected_quantity != null ? item.expected_quantity : (record?.current_stock || 0),
-          counted_quantity: null,
-          variance: null,
-        };
-      });
-
-      const { error: insertError } = await supabaseAdmin
-        .from('stock_count_items')
-        .insert(countItems);
-
-      if (insertError) throw insertError;
-    }
-
-    return this.getById(stockCount.id);
+    return updated;
   }
 
   /**
-   * Update a stock count (draft only)
+   * Submit count for admin review
    */
-  async update(id: string, data: {
-    description?: string;
-    location_id?: string;
-    location_name?: string;
-    assigned_to_user_id?: string;
-    assigned_to_name?: string;
-    notes?: string;
-  }) {
-    // Verify still in draft
-    const existing = await this.getById(id);
-    if (existing.status !== 'draft') {
-      throw new Error('Can only edit stock counts in draft status');
-    }
-
-    const updateData: any = {};
-    if (data.description !== undefined) updateData.description = data.description;
-    if (data.location_id !== undefined) updateData.location_id = data.location_id || null;
-    if (data.location_name !== undefined) updateData.location_name = data.location_name || null;
-    if (data.assigned_to_user_id !== undefined) updateData.assigned_to_user_id = data.assigned_to_user_id || null;
-    if (data.assigned_to_name !== undefined) updateData.assigned_to_name = data.assigned_to_name || null;
-    if (data.notes !== undefined) updateData.notes = data.notes || null;
-    updateData.updated_at = new Date().toISOString();
-
-    const { error } = await supabaseAdmin
+  async submitCount(id: string) {
+    const { data, error } = await supabase
       .from('stock_counts')
-      .update(updateData)
-      .eq('id', id);
-
-    if (error) throw error;
-    return this.getById(id);
-  }
-
-  /**
-   * Delete a stock count (draft only)
-   */
-  async delete(id: string) {
-    const existing = await this.getById(id);
-    if (existing.status !== 'draft') {
-      throw new Error('Can only delete stock counts in draft status');
-    }
-
-    const { error } = await supabaseAdmin
-      .from('stock_counts')
-      .delete()
-      .eq('id', id);
-
-    if (error) throw error;
-    return { success: true };
-  }
-
-  /**
-   * Update counted quantities (from mobile)
-   */
-  async updateCountedQuantities(id: string, items: Array<{
-    id: string;
-    counted_quantity: number;
-    notes?: string;
-  }>) {
-    for (const item of items) {
-      const variance = item.counted_quantity !== null && item.counted_quantity !== undefined
-        ? item.counted_quantity - 0 // Will recalculate below
-        : null;
-
-      // Get expected quantity to calculate variance
-      const { data: existing } = await supabaseAdmin
-        .from('stock_count_items')
-        .select('expected_quantity')
-        .eq('id', item.id)
-        .single();
-
-      const expectedQty = existing?.expected_quantity || 0;
-      const calculatedVariance = item.counted_quantity !== null && item.counted_quantity !== undefined
-        ? item.counted_quantity - expectedQty
-        : null;
-
-      const { error } = await supabaseAdmin
-        .from('stock_count_items')
-        .update({
-          counted_quantity: item.counted_quantity,
-          variance: calculatedVariance,
-          notes: item.notes || null,
-        })
-        .eq('id', item.id);
-
-      if (error) throw error;
-    }
-
-    return this.getById(id);
-  }
-
-  /**
-   * Create a completed stock count from a bin scan session
-   */
-  async createFromBinScan(data: {
-    bin_location_id: string;
-    bin_code: string;
-    location_id?: string;
-    location_name?: string;
-    scanned_by_user_id?: string;
-    scanned_by_name?: string;
-    items: Array<{
-      item_id: string;
-      item_name: string;
-      sku: string;
-      expected_quantity: number;
-      counted_quantity: number;
-    }>;
-  }) {
-    const stockCountNumber = await this.generateNumber();
-
-    const { data: stockCount, error } = await supabaseAdmin
-      .from('stock_counts')
-      .insert({
-        stock_count_number: stockCountNumber,
-        description: `Bin scan: ${data.bin_code}`,
-        location_id: data.location_id || null,
-        location_name: data.location_name || null,
-        assigned_to_user_id: data.scanned_by_user_id || null,
-        assigned_to_name: data.scanned_by_name || null,
-        status: 'completed',
-        notes: null,
-        created_by_user_id: data.scanned_by_user_id || null,
+      .update({
+        status: 'submitted',
+        completed_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
       })
+      .eq('id', id)
       .select()
       .single();
 
     if (error) throw error;
-
-    if (data.items && data.items.length > 0) {
-      const countItems = data.items.map(item => ({
-        stock_count_id: stockCount.id,
-        item_id: item.item_id,
-        item_name: item.item_name,
-        sku: item.sku,
-        bin_location_id: data.bin_location_id,
-        bin_code: data.bin_code,
-        expected_quantity: item.expected_quantity,
-        counted_quantity: item.counted_quantity,
-        variance: item.counted_quantity - item.expected_quantity,
-      }));
-
-      const { error: insertError } = await supabaseAdmin
-        .from('stock_count_items')
-        .insert(countItems);
-
-      if (insertError) throw insertError;
-    }
-
-    return this.getById(stockCount.id);
+    return data;
   }
 
   /**
-   * Update stock count status with workflow logic
+   * Approve a count (admin action)
    */
-  async updateStatus(id: string, status: string, userId?: string, notes?: string) {
-    const existing = await this.getById(id);
-    const currentStatus = existing.status;
-
-    // Validate transition
-    const validTransitions: Record<string, string[]> = {
-      'draft': ['in_progress'],
-      'in_progress': ['submitted'],
-      'submitted': ['approved', 'rejected'],
-      'rejected': ['in_progress'],
-    };
-
-    if (!validTransitions[currentStatus]?.includes(status)) {
-      throw new Error(`Cannot transition from '${currentStatus}' to '${status}'`);
-    }
-
-    const updateData: any = {
-      status,
-      updated_at: new Date().toISOString(),
-    };
-
-    if (notes !== undefined) {
-      updateData.notes = notes;
-    }
-
-    if (status === 'approved') {
-      updateData.approved_by_user_id = userId || null;
-      updateData.approved_at = new Date().toISOString();
-
-      // Adjust items.current_stock to match counted quantities
-      for (const item of existing.items) {
-        if (item.counted_quantity !== null && item.counted_quantity !== undefined) {
-          const { error: stockError } = await supabaseAdmin
-            .from('items')
-            .update({ current_stock: item.counted_quantity })
-            .eq('id', item.item_id);
-
-          if (stockError) {
-            console.error(`Failed to adjust stock for item ${item.item_id}:`, stockError);
-          }
-        }
-      }
-    }
-
-    if (status === 'rejected') {
-      // Clear counted quantities so counter can re-count
-      for (const item of existing.items) {
-        await supabaseAdmin
-          .from('stock_count_items')
-          .update({ counted_quantity: null, variance: null })
-          .eq('id', item.id);
-      }
-    }
-
-    const { error } = await supabaseAdmin
+  async approveCount(id: string, reviewedBy: string, reviewedByName: string, reviewNotes?: string) {
+    const { data, error } = await supabase
       .from('stock_counts')
-      .update(updateData)
-      .eq('id', id);
+      .update({
+        status: 'approved',
+        reviewed_at: new Date().toISOString(),
+        reviewed_by: reviewedBy,
+        reviewed_by_name: reviewedByName,
+        review_notes: reviewNotes || null,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', id)
+      .select()
+      .single();
 
     if (error) throw error;
-    return this.getById(id);
+    return data;
+  }
+
+  /**
+   * Reject a count (admin action)
+   */
+  async rejectCount(id: string, reviewedBy: string, reviewedByName: string, reviewNotes?: string) {
+    const { data, error } = await supabase
+      .from('stock_counts')
+      .update({
+        status: 'rejected',
+        reviewed_at: new Date().toISOString(),
+        reviewed_by: reviewedBy,
+        reviewed_by_name: reviewedByName,
+        review_notes: reviewNotes || null,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', id)
+      .select()
+      .single();
+
+    if (error) throw error;
+    return data;
+  }
+
+  /**
+   * Request a recount (admin action)
+   */
+  async requestRecount(id: string, reviewedBy: string, reviewedByName: string, reviewNotes?: string) {
+    // Reset the count to in_progress and clear counted quantities
+    const { error: itemsError } = await supabase
+      .from('stock_count_items')
+      .update({
+        counted_quantity: null,
+        status: 'pending',
+        counted_at: null,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('stock_count_id', id);
+
+    if (itemsError) throw itemsError;
+
+    const { data, error } = await supabase
+      .from('stock_counts')
+      .update({
+        status: 'recount',
+        reviewed_at: new Date().toISOString(),
+        reviewed_by: reviewedBy,
+        reviewed_by_name: reviewedByName,
+        review_notes: reviewNotes || null,
+        completed_at: null,
+        counted_items: 0,
+        matched_items: 0,
+        mismatched_items: 0,
+        accuracy_percentage: 0,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', id)
+      .select()
+      .single();
+
+    if (error) throw error;
+    return data;
+  }
+
+  /**
+   * Get dashboard stats for admin
+   */
+  async getStats() {
+    // Get counts by status
+    const { data: counts } = await supabase
+      .from('stock_counts')
+      .select('status, accuracy_percentage');
+
+    const stats = {
+      total: counts?.length || 0,
+      pending: counts?.filter(c => c.status === 'pending').length || 0,
+      in_progress: counts?.filter(c => c.status === 'in_progress').length || 0,
+      submitted: counts?.filter(c => c.status === 'submitted').length || 0,
+      approved: counts?.filter(c => c.status === 'approved').length || 0,
+      rejected: counts?.filter(c => c.status === 'rejected').length || 0,
+      recount: counts?.filter(c => c.status === 'recount').length || 0,
+      avg_accuracy: 0,
+    };
+
+    // Calculate average accuracy for completed counts
+    const completedCounts = counts?.filter(c =>
+      ['submitted', 'approved', 'rejected'].includes(c.status) &&
+      c.accuracy_percentage != null
+    ) || [];
+
+    if (completedCounts.length > 0) {
+      const totalAccuracy = completedCounts.reduce((sum, c) => sum + (c.accuracy_percentage || 0), 0);
+      stats.avg_accuracy = Math.round((totalAccuracy / completedCounts.length) * 100) / 100;
+    }
+
+    return stats;
+  }
+
+  /**
+   * Get counter performance stats
+   */
+  async getCounterStats(mobileUserId: string) {
+    const { data: counts } = await supabase
+      .from('stock_counts')
+      .select('status, accuracy_percentage')
+      .eq('assigned_to', mobileUserId);
+
+    const completed = counts?.filter(c => ['approved', 'rejected'].includes(c.status)) || [];
+    const avgAccuracy = completed.length > 0
+      ? completed.reduce((sum, c) => sum + (c.accuracy_percentage || 0), 0) / completed.length
+      : 0;
+
+    return {
+      total_counts: counts?.length || 0,
+      completed_counts: completed.length,
+      pending_counts: counts?.filter(c => ['pending', 'in_progress', 'recount'].includes(c.status)).length || 0,
+      submitted_counts: counts?.filter(c => c.status === 'submitted').length || 0,
+      avg_accuracy: Math.round(avgAccuracy * 100) / 100,
+    };
   }
 }

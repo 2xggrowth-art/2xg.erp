@@ -1,9 +1,7 @@
 import { supabaseAdmin as supabase } from '../config/supabase';
 import { BatchesService } from './batches.service';
-import { PutawayService } from './putaway.service';
 
 const batchesService = new BatchesService();
-const putawayService = new PutawayService();
 
 export interface BinAllocation {
   bin_location_id: string;
@@ -270,19 +268,6 @@ export class BillsService {
             }
           }
         }
-      }
-
-      // Auto-create putaway tasks for bill items without bin allocations
-      try {
-        const unallocatedItems = data.items.filter(
-          (item: any) => !item.bin_allocations || item.bin_allocations.length === 0
-        );
-        if (unallocatedItems.length > 0) {
-          await putawayService.createTasksFromBill(bill.id);
-        }
-      } catch (putawayError) {
-        console.error('Error creating putaway tasks:', putawayError);
-        // Non-blocking: bill creation should still succeed
       }
 
       if (binAllocationWarnings.length > 0) {

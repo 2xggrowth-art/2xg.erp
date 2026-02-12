@@ -1,17 +1,30 @@
 import { Router } from 'express';
-import * as stockCountsController from '../controllers/stockCounts.controller';
+import { StockCountsController } from '../controllers/stockCounts.controller';
+import { authMiddleware } from '../middleware/auth.middleware';
 
 const router = Router();
+const controller = new StockCountsController();
 
-router.get('/', stockCountsController.getAll);
-router.get('/generate-number', stockCountsController.generateNumber);
-router.get('/assigned/:userId', stockCountsController.getAssigned);
-router.get('/:id', stockCountsController.getById);
-router.post('/bin-scan', stockCountsController.createBinScan);
-router.post('/', stockCountsController.create);
-router.put('/:id', stockCountsController.update);
-router.delete('/:id', stockCountsController.remove);
-router.patch('/:id/status', stockCountsController.updateStatus);
-router.patch('/:id/items', stockCountsController.updateCountedQuantities);
+// All routes require authentication
+router.use(authMiddleware);
+
+// List and detail routes
+router.get('/', controller.getStockCounts.bind(controller));
+router.get('/stats', controller.getStats.bind(controller));
+router.get('/counter/:mobileUserId/stats', controller.getCounterStats.bind(controller));
+router.get('/:id', controller.getStockCount.bind(controller));
+
+// Create route (admin)
+router.post('/', controller.createStockCount.bind(controller));
+
+// Counter actions
+router.post('/:id/start', controller.startCount.bind(controller));
+router.put('/:id/items/:itemId', controller.updateItemCount.bind(controller));
+router.post('/:id/submit', controller.submitCount.bind(controller));
+
+// Admin review actions
+router.post('/:id/approve', controller.approveCount.bind(controller));
+router.post('/:id/reject', controller.rejectCount.bind(controller));
+router.post('/:id/recount', controller.requestRecount.bind(controller));
 
 export default router;

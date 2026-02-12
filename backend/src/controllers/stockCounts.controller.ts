@@ -3,114 +3,192 @@ import { StockCountsService } from '../services/stockCounts.service';
 
 const stockCountsService = new StockCountsService();
 
-export const generateNumber = async (req: Request, res: Response) => {
-  try {
-    const number = await stockCountsService.generateNumber();
-    res.json({ success: true, data: { number } });
-  } catch (error: any) {
-    res.status(500).json({ success: false, error: error.message });
-  }
-};
+export class StockCountsController {
+  /**
+   * Get all stock counts
+   */
+  async getStockCounts(req: Request, res: Response) {
+    try {
+      const { assigned_to, status, count_type } = req.query;
 
-export const getAll = async (req: Request, res: Response) => {
-  try {
-    const { status, location_id, assigned_to } = req.query;
-    const filters = {
-      status: status as string | undefined,
-      location_id: location_id as string | undefined,
-      assigned_to: assigned_to as string | undefined,
-    };
-    const data = await stockCountsService.getAll(filters);
-    res.json({ success: true, data });
-  } catch (error: any) {
-    res.status(500).json({ success: false, error: error.message });
-  }
-};
+      const counts = await stockCountsService.getStockCounts({
+        assigned_to: assigned_to as string,
+        status: status as string,
+        count_type: count_type as string,
+      });
 
-export const getById = async (req: Request, res: Response) => {
-  try {
-    const data = await stockCountsService.getById(req.params.id);
-    res.json({ success: true, data });
-  } catch (error: any) {
-    res.status(500).json({ success: false, error: error.message });
-  }
-};
-
-export const getAssigned = async (req: Request, res: Response) => {
-  try {
-    const data = await stockCountsService.getAssigned(req.params.userId);
-    res.json({ success: true, data });
-  } catch (error: any) {
-    res.status(500).json({ success: false, error: error.message });
-  }
-};
-
-export const create = async (req: Request, res: Response) => {
-  try {
-    const data = await stockCountsService.create(req.body);
-    res.status(201).json({ success: true, data });
-  } catch (error: any) {
-    res.status(500).json({ success: false, error: error.message });
-  }
-};
-
-export const update = async (req: Request, res: Response) => {
-  try {
-    const data = await stockCountsService.update(req.params.id, req.body);
-    res.json({ success: true, data });
-  } catch (error: any) {
-    res.status(400).json({ success: false, error: error.message });
-  }
-};
-
-export const remove = async (req: Request, res: Response) => {
-  try {
-    const data = await stockCountsService.delete(req.params.id);
-    res.json({ success: true, data });
-  } catch (error: any) {
-    res.status(400).json({ success: false, error: error.message });
-  }
-};
-
-export const updateCountedQuantities = async (req: Request, res: Response) => {
-  try {
-    const { items } = req.body;
-    if (!items || !Array.isArray(items)) {
-      return res.status(400).json({ success: false, error: 'items array is required' });
+      res.json({ success: true, data: counts });
+    } catch (error: any) {
+      console.error('Error fetching stock counts:', error);
+      res.status(500).json({ success: false, error: error.message });
     }
-    const data = await stockCountsService.updateCountedQuantities(req.params.id, items);
-    res.json({ success: true, data });
-  } catch (error: any) {
-    res.status(500).json({ success: false, error: error.message });
   }
-};
 
-export const createBinScan = async (req: Request, res: Response) => {
-  try {
-    const userId = (req as any).user?.id;
-    const userName = (req as any).user?.name || (req as any).user?.username;
-    const body = {
-      ...req.body,
-      scanned_by_user_id: req.body.scanned_by_user_id || userId,
-      scanned_by_name: req.body.scanned_by_name || userName,
-    };
-    const data = await stockCountsService.createFromBinScan(body);
-    res.status(201).json({ success: true, data });
-  } catch (error: any) {
-    res.status(500).json({ success: false, error: error.message });
-  }
-};
-
-export const updateStatus = async (req: Request, res: Response) => {
-  try {
-    const { status, notes } = req.body;
-    if (!status) {
-      return res.status(400).json({ success: false, error: 'status is required' });
+  /**
+   * Get a single stock count with items
+   */
+  async getStockCount(req: Request, res: Response) {
+    try {
+      const { id } = req.params;
+      const count = await stockCountsService.getStockCount(id);
+      res.json({ success: true, data: count });
+    } catch (error: any) {
+      console.error('Error fetching stock count:', error);
+      res.status(500).json({ success: false, error: error.message });
     }
-    const userId = (req as any).user?.id;
-    const data = await stockCountsService.updateStatus(req.params.id, status, userId, notes);
-    res.json({ success: true, data });
-  } catch (error: any) {
-    res.status(400).json({ success: false, error: error.message });
   }
-};
+
+  /**
+   * Create a new stock count (admin)
+   */
+  async createStockCount(req: Request, res: Response) {
+    try {
+      const count = await stockCountsService.createStockCount(req.body);
+      res.status(201).json({ success: true, data: count });
+    } catch (error: any) {
+      console.error('Error creating stock count:', error);
+      res.status(500).json({ success: false, error: error.message });
+    }
+  }
+
+  /**
+   * Start a count (counter)
+   */
+  async startCount(req: Request, res: Response) {
+    try {
+      const { id } = req.params;
+      const count = await stockCountsService.startCount(id);
+      res.json({ success: true, data: count });
+    } catch (error: any) {
+      console.error('Error starting count:', error);
+      res.status(500).json({ success: false, error: error.message });
+    }
+  }
+
+  /**
+   * Update item count (counter scans/enters quantity)
+   */
+  async updateItemCount(req: Request, res: Response) {
+    try {
+      const { id, itemId } = req.params;
+      const { counted_quantity, notes } = req.body;
+
+      const item = await stockCountsService.updateItemCount(id, itemId, {
+        counted_quantity,
+        notes,
+      });
+
+      res.json({ success: true, data: item });
+    } catch (error: any) {
+      console.error('Error updating item count:', error);
+      res.status(500).json({ success: false, error: error.message });
+    }
+  }
+
+  /**
+   * Submit count for review (counter)
+   */
+  async submitCount(req: Request, res: Response) {
+    try {
+      const { id } = req.params;
+      const count = await stockCountsService.submitCount(id);
+      res.json({ success: true, data: count, message: 'Count submitted for review' });
+    } catch (error: any) {
+      console.error('Error submitting count:', error);
+      res.status(500).json({ success: false, error: error.message });
+    }
+  }
+
+  /**
+   * Approve count (admin)
+   */
+  async approveCount(req: Request, res: Response) {
+    try {
+      const { id } = req.params;
+      const { reviewed_by, reviewed_by_name, review_notes } = req.body;
+
+      const count = await stockCountsService.approveCount(
+        id,
+        reviewed_by,
+        reviewed_by_name,
+        review_notes
+      );
+
+      res.json({ success: true, data: count, message: 'Count approved' });
+    } catch (error: any) {
+      console.error('Error approving count:', error);
+      res.status(500).json({ success: false, error: error.message });
+    }
+  }
+
+  /**
+   * Reject count (admin)
+   */
+  async rejectCount(req: Request, res: Response) {
+    try {
+      const { id } = req.params;
+      const { reviewed_by, reviewed_by_name, review_notes } = req.body;
+
+      const count = await stockCountsService.rejectCount(
+        id,
+        reviewed_by,
+        reviewed_by_name,
+        review_notes
+      );
+
+      res.json({ success: true, data: count, message: 'Count rejected' });
+    } catch (error: any) {
+      console.error('Error rejecting count:', error);
+      res.status(500).json({ success: false, error: error.message });
+    }
+  }
+
+  /**
+   * Request recount (admin)
+   */
+  async requestRecount(req: Request, res: Response) {
+    try {
+      const { id } = req.params;
+      const { reviewed_by, reviewed_by_name, review_notes } = req.body;
+
+      const count = await stockCountsService.requestRecount(
+        id,
+        reviewed_by,
+        reviewed_by_name,
+        review_notes
+      );
+
+      res.json({ success: true, data: count, message: 'Recount requested' });
+    } catch (error: any) {
+      console.error('Error requesting recount:', error);
+      res.status(500).json({ success: false, error: error.message });
+    }
+  }
+
+  /**
+   * Get dashboard stats (admin)
+   */
+  async getStats(req: Request, res: Response) {
+    try {
+      const stats = await stockCountsService.getStats();
+      res.json({ success: true, data: stats });
+    } catch (error: any) {
+      console.error('Error fetching stats:', error);
+      res.status(500).json({ success: false, error: error.message });
+    }
+  }
+
+  /**
+   * Get counter performance stats
+   */
+  async getCounterStats(req: Request, res: Response) {
+    try {
+      const { mobileUserId } = req.params;
+      const stats = await stockCountsService.getCounterStats(mobileUserId);
+      res.json({ success: true, data: stats });
+    } catch (error: any) {
+      console.error('Error fetching counter stats:', error);
+      res.status(500).json({ success: false, error: error.message });
+    }
+  }
+}
