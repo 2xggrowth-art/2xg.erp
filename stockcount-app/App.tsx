@@ -95,7 +95,7 @@ function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const login = async (phone: string, pin: string) => {
-    const res = await api.post('/mobile-auth/login', { phoneNumber: phone, pin });
+    const res = await api.post('/mobile-auth/login', { phone_number: phone, pin });
     if (res.success) {
       await SecureStore.setItemAsync('authToken', res.data.token);
       setUser(res.data.user);
