@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useContext, useCallback, useRef, createContext } from 'react';
 import {
   View, Text, TouchableOpacity, StyleSheet, Alert, Vibration,
@@ -924,7 +925,7 @@ function ScannerScreen({ navigation, route }: any) {
           renderItem={({ item }) => (
             <View style={styles.scannedItemRow}>
               <View style={styles.scannedItemInfo}>
-                <Text style={styles.scannedItemName} numberOfLines={1}>{item.name}</Text>
+                <Text style={styles.scannedItemRowName} numberOfLines={1}>{item.name}</Text>
                 {item.serial && <Text style={styles.scannedItemSerial}>{item.serial}</Text>}
               </View>
               <View style={styles.scannedItemCount}>
@@ -2124,7 +2125,7 @@ const styles = StyleSheet.create({
   recentlyScannedTitle: { fontSize: 12, fontWeight: '600', color: COLORS.gray500, paddingHorizontal: 16, paddingTop: 12, paddingBottom: 8 },
   scannedItemRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: COLORS.gray100 },
   scannedItemInfo: { flex: 1 },
-  scannedItemName: { fontSize: 14, fontWeight: '500', color: COLORS.gray900 },
+  scannedItemRowName: { fontSize: 14, fontWeight: '500', color: COLORS.gray900 },
   scannedItemSerial: { fontSize: 11, color: COLORS.purple, marginTop: 2 },
   scannedItemCount: { width: 36, height: 36, borderRadius: 18, backgroundColor: COLORS.successLight, alignItems: 'center', justifyContent: 'center' },
   scannedItemCountText: { fontSize: 16, fontWeight: '700', color: COLORS.success },
