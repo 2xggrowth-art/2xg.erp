@@ -170,13 +170,13 @@ export class StockCountsService {
       const targetBin = allBinsWithStock.find((b: any) => b.id === data.bin_location_id);
 
       if (targetBin && targetBin.items && targetBin.items.length > 0) {
-        // Get item details (sku, barcode, advanced_tracking_type) for all items in this bin
+        // Get item details (sku, advanced_tracking_type) for all items in this bin
         const itemIds = targetBin.items.map((i: any) => i.item_id).filter(Boolean);
         let itemDetailsMap: Record<string, any> = {};
         if (itemIds.length > 0) {
           const { data: itemDetails } = await supabase
             .from('items')
-            .select('id, sku, barcode, advanced_tracking_type')
+            .select('id, sku, advanced_tracking_type')
             .in('id', itemIds);
           if (itemDetails) {
             itemDetails.forEach((item: any) => { itemDetailsMap[item.id] = item; });
@@ -225,7 +225,7 @@ export class StockCountsService {
                 stock_count_id: count.id,
                 item_id: binItem.item_id,
                 item_name: binItem.item_name,
-                sku: itemInfo.sku || itemInfo.barcode || '',
+                sku: itemInfo.sku || '',
                 serial_number: null,
                 expected_quantity: netQuantity,
                 status: 'pending',
@@ -237,7 +237,7 @@ export class StockCountsService {
               stock_count_id: count.id,
               item_id: binItem.item_id,
               item_name: binItem.item_name,
-              sku: itemInfo.sku || itemInfo.barcode || '',
+              sku: itemInfo.sku || '',
               serial_number: null,
               expected_quantity: netQuantity,
               status: 'pending',

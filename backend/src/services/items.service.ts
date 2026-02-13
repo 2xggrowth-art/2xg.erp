@@ -1112,22 +1112,12 @@ export class ItemsService {
    * Get item by barcode (searches barcode, sku, upc, ean, isbn, serial_numbers)
    */
   async getItemByBarcode(barcode: string) {
-    // Try barcode column first
+    // Try SKU first
     let { data, error } = await supabaseAdmin
       .from('items')
       .select('*')
-      .eq('barcode', barcode)
-      .limit(1);
-
-    if (error) throw error;
-    if (data && data.length > 0) return { ...data[0], matched_serial: null };
-
-    // Try SKU
-    ({ data, error } = await supabaseAdmin
-      .from('items')
-      .select('*')
       .eq('sku', barcode)
-      .limit(1));
+      .limit(1);
 
     if (error) throw error;
     if (data && data.length > 0) return { ...data[0], matched_serial: null };
