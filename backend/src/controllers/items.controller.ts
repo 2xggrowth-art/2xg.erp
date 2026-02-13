@@ -133,6 +133,16 @@ export const getItemById = async (req: Request, res: Response) => {
   }
 };
 
+export const getItemBins = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const bins = await itemsService.getItemBins(id);
+    res.json({ success: true, data: bins });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+};
+
 export const createItem = async (req: Request, res: Response) => {
   try {
     console.log('Creating item with data:', req.body);

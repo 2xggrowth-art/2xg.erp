@@ -2,7 +2,7 @@ import React, { useState, useEffect, useContext, useCallback, useRef, createCont
 import {
   View, Text, TouchableOpacity, StyleSheet, Alert, Vibration,
   FlatList, TextInput, ActivityIndicator, KeyboardAvoidingView,
-  Platform, ScrollView, Modal, Animated, RefreshControl,
+  Platform, ScrollView, Modal, Animated, RefreshControl, Image,
 } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
@@ -11,6 +11,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import * as SecureStore from 'expo-secure-store';
 import { CameraView, useCameraPermissions, BarcodeScanningResult } from 'expo-camera';
+import * as ImagePicker from 'expo-image-picker';
 import { useFocusEffect } from '@react-navigation/native';
 
 // ============================================================================
@@ -672,7 +673,7 @@ function CountDetailScreen({ navigation, route }: any) {
       <View style={styles.actions}>
         {isEditable && (
           <>
-            <TouchableOpacity style={styles.scanBtn} onPress={() => navigation.navigate('Scanner', { countId: count.id, items: count.items })}>
+            <TouchableOpacity style={styles.scanBtn} onPress={() => navigation.navigate('Scanner', { countId: count.id, items: count.items, binCode: count.bin_code })}>
               <Text style={styles.scanBtnText}>📷 Scan Barcode</Text>
             </TouchableOpacity>
             <View style={styles.actionRow}>
@@ -693,14 +694,29 @@ function CountDetailScreen({ navigation, route }: any) {
   );
 }
 
-// Scanner
+// Scanner - Half screen with live count updates
 function ScannerScreen({ navigation, route }: any) {
-  const { countId, items } = route.params;
+  const { countId, items: initialItems, binCode } = route.params;
   const [permission, requestPermission] = useCameraPermissions();
   const [scanned, setScanned] = useState(false);
   const [flashOn, setFlashOn] = useState(false);
   const [lookingUp, setLookingUp] = useState(false);
+  const [lastScanned, setLastScanned] = useState<string | null>(null);
+  const [scannedItems, setScannedItems] = useState<{ id: string; name: string; serial?: string; time: Date }[]>([]);
+  const [itemCounts, setItemCounts] = useState<Record<string, number>>({});
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const scanLineAnim = useRef(new Animated.Value(0)).current;
+
+  // Initialize counts from existing data
+  useEffect(() => {
+    const counts: Record<string, number> = {};
+    initialItems.forEach((item: StockCountItem) => {
+      if (item.counted_quantity !== null) {
+        counts[item.id] = item.counted_quantity;
+      }
+    });
+    setItemCounts(counts);
+  }, []);
 
   useEffect(() => {
     const animate = () => {
@@ -714,28 +730,48 @@ function ScannerScreen({ navigation, route }: any) {
 
   useEffect(() => { if (!permission?.granted) requestPermission(); }, [permission]);
 
+  // Auto-reset scan after delay
+  useEffect(() => {
+    if (scanned && !lookingUp) {
+      const timer = setTimeout(() => setScanned(false), 1500);
+      return () => clearTimeout(timer);
+    }
+  }, [scanned, lookingUp]);
+
+  // Clear error message after delay
+  useEffect(() => {
+    if (errorMessage) {
+      const timer = setTimeout(() => setErrorMessage(null), 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [errorMessage]);
+
   const handleBarCodeScanned = async ({ data }: BarcodeScanningResult) => {
     if (scanned || lookingUp) return;
+    if (data === lastScanned) return; // Prevent duplicate scans
+
     setScanned(true);
     setLookingUp(true);
+    setLastScanned(data);
+    setErrorMessage(null);
     Vibration.vibrate(50);
 
     try {
       // First, check for serial number match (exact match for serial-tracked items)
-      const serialMatched = items.find((i: StockCountItem) =>
+      const serialMatched = initialItems.find((i: StockCountItem) =>
         i.serial_number && i.serial_number.toLowerCase() === data.toLowerCase()
       );
       if (serialMatched) {
-        navigation.navigate('ScannedItem', { item: serialMatched, countId, isSerial: true });
+        await countItem(serialMatched, true);
         return;
       }
 
       // Then check SKU match
-      const skuMatched = items.find((i: StockCountItem) =>
+      const skuMatched = initialItems.find((i: StockCountItem) =>
         i.sku?.toLowerCase() === data.toLowerCase() || i.sku?.includes(data)
       );
       if (skuMatched) {
-        navigation.navigate('ScannedItem', { item: skuMatched, countId, isSerial: false });
+        await countItem(skuMatched, false);
         return;
       }
 
@@ -745,30 +781,70 @@ function ScannerScreen({ navigation, route }: any) {
 
       // Check if matched serial exists in our items list
       if (apiItem.matched_serial) {
-        const serialItem = items.find((i: StockCountItem) =>
+        const serialItem = initialItems.find((i: StockCountItem) =>
           i.serial_number === apiItem.matched_serial
         );
         if (serialItem) {
-          navigation.navigate('ScannedItem', { item: serialItem, countId, isSerial: true });
+          await countItem(serialItem, true);
           return;
         }
       }
 
       // Fallback to item_id match
-      const apiMatched = items.find((i: StockCountItem) => i.item_id === apiItem.id);
+      const apiMatched = initialItems.find((i: StockCountItem) => i.item_id === apiItem.id);
       if (apiMatched) {
-        navigation.navigate('ScannedItem', { item: apiMatched, countId, isSerial: false });
+        await countItem(apiMatched, false);
       } else {
-        navigation.navigate('ScanUnknown', { barcode: data, countId });
+        // Item found but NOT in this count's bin - show wrong bin warning
+        Vibration.vibrate([0, 100, 50, 100]); // Error vibration
+        try {
+          const binRes = await api.get(`/items/${apiItem.id}/bins`);
+          const itemBins = binRes.data || [];
+          const correctBin = itemBins.length > 0 ? itemBins[0] : null;
+          setErrorMessage(`⚠️ Wrong bin! "${apiItem.item_name || apiItem.name}" belongs to ${correctBin?.bin_code || 'another bin'}`);
+        } catch {
+          setErrorMessage(`⚠️ Wrong bin! This item belongs to another bin`);
+        }
       }
     } catch {
-      Alert.alert('Not Found', `No item for: ${data}`, [
-        { text: 'Scan Again', onPress: () => setScanned(false) },
-        { text: 'Cancel', onPress: () => navigation.goBack() },
-      ]);
+      Vibration.vibrate([0, 100, 50, 100]);
+      setErrorMessage(`❌ Not found: ${data}`);
     } finally {
       setLookingUp(false);
     }
+  };
+
+  const countItem = async (item: StockCountItem, isSerial: boolean) => {
+    const newCount = isSerial ? 1 : (itemCounts[item.id] || 0) + 1;
+
+    // Update local state immediately
+    setItemCounts(prev => ({ ...prev, [item.id]: newCount }));
+    setScannedItems(prev => [
+      { id: item.id, name: item.item_name, serial: item.serial_number || undefined, time: new Date() },
+      ...prev.slice(0, 9) // Keep last 10
+    ]);
+
+    // Success vibration
+    Vibration.vibrate(isSerial ? [0, 50, 50, 50] : 50);
+
+    // Save to server
+    try {
+      await api.patch(`/stock-counts/${countId}/items`, {
+        items: [{ id: item.id, counted_quantity: newCount }]
+      });
+    } catch (e: any) {
+      setErrorMessage(`Failed to save: ${e.message}`);
+      // Revert on error
+      setItemCounts(prev => ({ ...prev, [item.id]: (itemCounts[item.id] || 0) }));
+    }
+  };
+
+  const getTotalCounted = () => {
+    return Object.values(itemCounts).reduce((sum, count) => sum + count, 0);
+  };
+
+  const getItemsCounted = () => {
+    return Object.keys(itemCounts).filter(id => itemCounts[id] > 0).length;
   };
 
   if (!permission?.granted) {
@@ -781,28 +857,86 @@ function ScannerScreen({ navigation, route }: any) {
   }
 
   return (
-    <View style={styles.scannerContainer}>
-      <CameraView style={StyleSheet.absoluteFillObject} facing="back" enableTorch={flashOn} barcodeScannerSettings={{ barcodeTypes: ['code128', 'code39', 'ean13', 'ean8', 'upc_a', 'qr'] }} onBarcodeScanned={scanned ? undefined : handleBarCodeScanned} />
-      <View style={styles.scannerOverlay}>
-        <View style={styles.scannerHeader}>
-          <TouchableOpacity onPress={() => navigation.goBack()}><Text style={styles.scannerHeaderText}>Cancel</Text></TouchableOpacity>
-          <Text style={styles.scannerHeaderTitle}>Scan Barcode</Text>
-          <TouchableOpacity onPress={() => setFlashOn(!flashOn)}><Text style={styles.scannerHeaderText}>{flashOn ? '🔦 On' : '🔦 Off'}</Text></TouchableOpacity>
+    <View style={styles.container}>
+      {/* Top Half - Camera */}
+      <View style={styles.halfScreenCamera}>
+        <CameraView
+          style={StyleSheet.absoluteFillObject}
+          facing="back"
+          enableTorch={flashOn}
+          barcodeScannerSettings={{ barcodeTypes: ['code128', 'code39', 'ean13', 'ean8', 'upc_a', 'qr'] }}
+          onBarcodeScanned={scanned ? undefined : handleBarCodeScanned}
+        />
+        <View style={styles.cameraOverlay}>
+          <View style={styles.scannerHeader}>
+            <TouchableOpacity onPress={() => navigation.goBack()}>
+              <Text style={styles.scannerHeaderText}>← Back</Text>
+            </TouchableOpacity>
+            <Text style={styles.scannerHeaderTitle}>Scan Items</Text>
+            <TouchableOpacity onPress={() => setFlashOn(!flashOn)}>
+              <Text style={styles.scannerHeaderText}>{flashOn ? '🔦 On' : '🔦 Off'}</Text>
+            </TouchableOpacity>
+          </View>
+          <View style={styles.smallScanFrame}>
+            <View style={[styles.scannerCorner, styles.scannerCornerTL]} />
+            <View style={[styles.scannerCorner, styles.scannerCornerTR]} />
+            <View style={[styles.scannerCorner, styles.scannerCornerBL]} />
+            <View style={[styles.scannerCorner, styles.scannerCornerBR]} />
+            <Animated.View style={[styles.scanLine, { transform: [{ translateY: scanLineAnim.interpolate({ inputRange: [0, 1], outputRange: [0, 100] }) }] }]} />
+          </View>
+          <Text style={styles.scannerInstruction}>{lookingUp ? 'Processing...' : 'Point camera at barcode'}</Text>
         </View>
-        <View style={styles.scannerFrame}>
-          <View style={[styles.scannerCorner, styles.scannerCornerTL]} />
-          <View style={[styles.scannerCorner, styles.scannerCornerTR]} />
-          <View style={[styles.scannerCorner, styles.scannerCornerBL]} />
-          <View style={[styles.scannerCorner, styles.scannerCornerBR]} />
-          <Animated.View style={[styles.scanLine, { transform: [{ translateY: scanLineAnim.interpolate({ inputRange: [0, 1], outputRange: [0, 180] }) }] }]} />
+      </View>
+
+      {/* Bottom Half - Scanned Items */}
+      <View style={styles.scannedListContainer}>
+        {/* Count Summary */}
+        <View style={styles.countSummary}>
+          <View style={styles.countSummaryItem}>
+            <Text style={styles.countSummaryValue}>{getItemsCounted()}/{initialItems.length}</Text>
+            <Text style={styles.countSummaryLabel}>Items</Text>
+          </View>
+          <View style={styles.countSummaryItem}>
+            <Text style={styles.countSummaryValue}>{getTotalCounted()}</Text>
+            <Text style={styles.countSummaryLabel}>Total Scanned</Text>
+          </View>
+          <TouchableOpacity
+            style={styles.doneBtn}
+            onPress={() => navigation.navigate('CountDetail', { countId })}
+          >
+            <Text style={styles.doneBtnText}>Done</Text>
+          </TouchableOpacity>
         </View>
-        <Text style={styles.scannerInstruction}>{lookingUp ? 'Looking up...' : 'Point at barcode'}</Text>
-        <Text style={styles.scannerItemCount}>
-          {items.filter((i: StockCountItem) => i.serial_number).length > 0
-            ? `${items.filter((i: StockCountItem) => i.serial_number).length} serial items • ${items.filter((i: StockCountItem) => !i.serial_number).length} regular items`
-            : `${items.length} items in count`
+
+        {/* Error/Success Message */}
+        {errorMessage && (
+          <View style={[styles.scanMessage, styles.scanMessageError]}>
+            <Text style={styles.scanMessageText}>{errorMessage}</Text>
+          </View>
+        )}
+
+        {/* Recently Scanned */}
+        <Text style={styles.recentlyScannedTitle}>Recently Scanned</Text>
+        <FlatList
+          data={scannedItems}
+          keyExtractor={(item, index) => `${item.id}-${index}`}
+          renderItem={({ item }) => (
+            <View style={styles.scannedItemRow}>
+              <View style={styles.scannedItemInfo}>
+                <Text style={styles.scannedItemName} numberOfLines={1}>{item.name}</Text>
+                {item.serial && <Text style={styles.scannedItemSerial}>{item.serial}</Text>}
+              </View>
+              <View style={styles.scannedItemCount}>
+                <Text style={styles.scannedItemCountText}>{itemCounts[item.id] || 1}</Text>
+              </View>
+            </View>
+          )}
+          ListEmptyComponent={
+            <View style={styles.emptyScanned}>
+              <Text style={styles.emptyScannedText}>Scan items to start counting</Text>
+            </View>
           }
-        </Text>
+        />
       </View>
     </View>
   );
@@ -810,7 +944,7 @@ function ScannerScreen({ navigation, route }: any) {
 
 // ScannedItem
 function ScannedItemScreen({ navigation, route }: any) {
-  const { item, countId, isSerial = false } = route.params;
+  const { item, countId, isSerial = false, binCode } = route.params;
   const [quantity, setQuantity] = useState(item.counted_quantity?.toString() || '');
   const [saving, setSaving] = useState(false);
   const [autoSaved, setAutoSaved] = useState(false);
@@ -830,6 +964,7 @@ function ScannedItemScreen({ navigation, route }: any) {
       Vibration.vibrate([0, 50, 100, 50]); // Double vibrate for serial scan success
       Alert.alert('Serial Counted!', `${item.item_name}\nSerial: ${item.serial_number}`, [
         { text: 'Scan Next', onPress: () => navigation.goBack() },
+        { text: 'Report Damage', style: 'destructive', onPress: () => navigation.replace('ItemDamage', { item, countId, binCode }) },
         { text: 'Done', onPress: () => navigation.navigate('CountDetail', { countId }) },
       ]);
     } catch (e: any) { Alert.alert('Error', e.message); }
@@ -897,6 +1032,12 @@ function ScannedItemScreen({ navigation, route }: any) {
         <TouchableOpacity style={styles.primaryBtn} onPress={handleSave} disabled={saving}>
           <Text style={styles.primaryBtnText}>{saving ? 'Saving...' : 'Save Count'}</Text>
         </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.secondaryBtn, { marginTop: 12, borderColor: COLORS.danger }]}
+          onPress={() => navigation.navigate('ItemDamage', { item, countId, binCode })}
+        >
+          <Text style={[styles.secondaryBtnText, { color: COLORS.danger }]}>⚠️ Report Damage</Text>
+        </TouchableOpacity>
       </View>
     </View>
   );
@@ -917,6 +1058,231 @@ function ScanUnknownScreen({ navigation, route }: any) {
           <Text style={styles.primaryBtnText}>Scan Another</Text>
         </TouchableOpacity>
       </View>
+    </View>
+  );
+}
+
+// WrongBin - Item belongs to a different bin
+function WrongBinScreen({ navigation, route }: any) {
+  const { barcode, itemName, currentBin, correctBin, countId } = route.params;
+
+  return (
+    <View style={styles.container}>
+      <Header title="Wrong Bin!" onBack={() => navigation.goBack()} />
+      <View style={styles.centered}>
+        <Text style={styles.wrongBinIcon}>⚠️</Text>
+        <Text style={styles.wrongBinTitle}>Wrong Bin Location</Text>
+        <Text style={styles.wrongBinItemName}>{itemName}</Text>
+
+        <View style={styles.wrongBinCard}>
+          <View style={styles.wrongBinRow}>
+            <Text style={styles.wrongBinLabel}>Scanned in:</Text>
+            <View style={styles.wrongBinBadge}>
+              <Text style={styles.wrongBinBadgeText}>{currentBin || 'Current Bin'}</Text>
+            </View>
+          </View>
+          <View style={styles.wrongBinArrow}>
+            <Text style={{ fontSize: 24 }}>↓</Text>
+          </View>
+          <View style={styles.wrongBinRow}>
+            <Text style={styles.wrongBinLabel}>Belongs to:</Text>
+            <View style={[styles.wrongBinBadge, { backgroundColor: COLORS.successLight }]}>
+              <Text style={[styles.wrongBinBadgeText, { color: COLORS.success }]}>{correctBin}</Text>
+            </View>
+          </View>
+        </View>
+
+        <Text style={styles.wrongBinDesc}>
+          This item should be in bin "{correctBin}".{'\n'}
+          Please move it to the correct location.
+        </Text>
+
+        <TouchableOpacity style={styles.primaryBtn} onPress={() => navigation.goBack()}>
+          <Text style={styles.primaryBtnText}>Scan Another</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.secondaryBtn, { marginTop: 12 }]}
+          onPress={() => navigation.navigate('CountDetail', { countId })}
+        >
+          <Text style={styles.secondaryBtnText}>Back to Count</Text>
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+}
+
+// ItemDamage - Report damage with photo
+function ItemDamageScreen({ navigation, route }: any) {
+  const { item, countId, binCode } = route.params;
+  const [photo, setPhoto] = useState<string | null>(null);
+  const [description, setDescription] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [damagedBins, setDamagedBins] = useState<BinLocation[]>([]);
+  const [selectedDamageBin, setSelectedDamageBin] = useState('');
+  const [loadingBins, setLoadingBins] = useState(true);
+
+  useEffect(() => {
+    fetchDamagedBins();
+  }, []);
+
+  const fetchDamagedBins = async () => {
+    try {
+      const res = await api.get('/bin-locations');
+      const bins = res.data || res || [];
+      // Filter for bins that might be for damaged items (name contains 'damage' or 'defect')
+      const damageBins = bins.filter((b: BinLocation) =>
+        b.bin_code.toLowerCase().includes('damage') ||
+        b.bin_code.toLowerCase().includes('defect') ||
+        b.description?.toLowerCase().includes('damage')
+      );
+      setDamagedBins(damageBins.length > 0 ? damageBins : bins.slice(0, 5)); // Show damage bins or first 5
+    } catch (e) {
+      console.error('Error fetching bins:', e);
+    } finally {
+      setLoadingBins(false);
+    }
+  };
+
+  const takePhoto = async () => {
+    const { status } = await ImagePicker.requestCameraPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert('Permission Required', 'Camera permission is needed to take photos');
+      return;
+    }
+
+    const result = await ImagePicker.launchCameraAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      aspect: [4, 3],
+      quality: 0.5, // Reduce quality for smaller file size
+    });
+
+    if (!result.canceled && result.assets[0]) {
+      setPhoto(result.assets[0].uri);
+    }
+  };
+
+  const handleSubmit = async () => {
+    if (!description.trim()) {
+      Alert.alert('Required', 'Please describe the damage');
+      return;
+    }
+    if (!photo) {
+      Alert.alert('Required', 'Please take a photo of the damage');
+      return;
+    }
+
+    setSubmitting(true);
+    try {
+      // Submit damage report
+      await api.post('/damage-reports', {
+        item_id: item.item_id,
+        item_name: item.item_name,
+        serial_number: item.serial_number || null,
+        quantity: 1,
+        description: description,
+        source_bin: binCode,
+        destination_bin: selectedDamageBin || 'DAMAGED',
+        stock_count_id: countId,
+        photo_url: photo, // In real app, upload to storage first
+      });
+
+      // Mark item as damaged in count (counted_quantity = 0 with note)
+      await api.patch(`/stock-counts/${countId}/items`, {
+        items: [{
+          id: item.id,
+          counted_quantity: 0,
+          notes: `DAMAGED: ${description}`,
+        }]
+      });
+
+      Vibration.vibrate([0, 100, 50, 100]);
+      Alert.alert(
+        'Damage Reported',
+        `${item.item_name} has been marked as damaged and will be moved to the damaged bin.`,
+        [
+          { text: 'Scan Next', onPress: () => navigation.navigate('Scanner', { countId, items: [], binCode }) },
+          { text: 'Done', onPress: () => navigation.navigate('CountDetail', { countId }) },
+        ]
+      );
+    } catch (e: any) {
+      Alert.alert('Error', e.message || 'Failed to submit damage report');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <View style={styles.container}>
+      <Header title="Report Damage" onBack={() => navigation.goBack()} />
+      <ScrollView style={styles.damageContent}>
+        <View style={styles.damageItemCard}>
+          <Text style={styles.damageItemIcon}>⚠️</Text>
+          <Text style={styles.damageItemName}>{item.item_name}</Text>
+          {item.serial_number && (
+            <View style={styles.serialBadge}>
+              <Text style={styles.serialBadgeText}>{item.serial_number}</Text>
+            </View>
+          )}
+          <Text style={styles.damageItemBin}>Current Bin: {binCode || 'Unknown'}</Text>
+        </View>
+
+        <Text style={styles.inputLabel}>Take Photo of Damage *</Text>
+        <TouchableOpacity style={styles.photoBtn} onPress={takePhoto}>
+          {photo ? (
+            <Image source={{ uri: photo }} style={styles.photoPreview} />
+          ) : (
+            <View style={styles.photoPlaceholder}>
+              <Text style={styles.photoPlaceholderIcon}>📷</Text>
+              <Text style={styles.photoPlaceholderText}>Tap to take photo</Text>
+            </View>
+          )}
+        </TouchableOpacity>
+
+        <Text style={styles.inputLabel}>Describe the Damage *</Text>
+        <TextInput
+          style={[styles.formInput, { height: 100, textAlignVertical: 'top' }]}
+          value={description}
+          onChangeText={setDescription}
+          placeholder="Describe what is damaged..."
+          placeholderTextColor={COLORS.gray400}
+          multiline
+        />
+
+        <Text style={styles.inputLabel}>Move to Damaged Bin (Optional)</Text>
+        {loadingBins ? (
+          <ActivityIndicator size="small" color={COLORS.primary} />
+        ) : (
+          <View style={styles.pickerContainer}>
+            {damagedBins.map(bin => (
+              <TouchableOpacity
+                key={bin.id}
+                style={[styles.pickerOption, selectedDamageBin === bin.id && styles.pickerOptionSelected]}
+                onPress={() => setSelectedDamageBin(bin.id)}
+              >
+                <Text style={[styles.pickerOptionText, selectedDamageBin === bin.id && styles.pickerOptionTextSelected]}>
+                  {bin.bin_code}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        )}
+
+        <TouchableOpacity
+          style={[styles.primaryBtn, { backgroundColor: COLORS.danger, marginTop: 24 }]}
+          onPress={handleSubmit}
+          disabled={submitting}
+        >
+          <Text style={styles.primaryBtnText}>{submitting ? 'Submitting...' : 'Submit Damage Report'}</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[styles.secondaryBtn, { marginTop: 12 }]}
+          onPress={() => navigation.goBack()}
+        >
+          <Text style={styles.secondaryBtnText}>Cancel</Text>
+        </TouchableOpacity>
+      </ScrollView>
     </View>
   );
 }
@@ -1405,6 +1771,8 @@ function AppNavigator() {
             <Stack.Screen name="Scanner" component={ScannerScreen} />
             <Stack.Screen name="ScannedItem" component={ScannedItemScreen} />
             <Stack.Screen name="ScanUnknown" component={ScanUnknownScreen} />
+            <Stack.Screen name="WrongBin" component={WrongBinScreen} />
+            <Stack.Screen name="ItemDamage" component={ItemDamageScreen} />
             <Stack.Screen name="EndCount" component={EndCountScreen} />
             <Stack.Screen name="Submitted" component={SubmittedScreen} options={{ gestureEnabled: false }} />
             <Stack.Screen name="ItemLookup" component={ItemLookupScreen} />
@@ -1710,4 +2078,53 @@ const styles = StyleSheet.create({
   itemCardSerial: { borderLeftWidth: 3, borderLeftColor: COLORS.purple },
   qtyValueSerial: { color: COLORS.success },
   serialScanHint: { fontSize: 11, color: COLORS.purple, textAlign: 'center', marginTop: 8, fontStyle: 'italic' },
+
+  // Wrong Bin
+  wrongBinIcon: { fontSize: 64, marginBottom: 16 },
+  wrongBinTitle: { fontSize: 22, fontWeight: '700', color: COLORS.danger, marginBottom: 8 },
+  wrongBinItemName: { fontSize: 16, fontWeight: '600', color: COLORS.gray900, marginBottom: 16 },
+  wrongBinCard: { backgroundColor: COLORS.white, borderRadius: 12, padding: 20, marginVertical: 16, width: '90%', alignItems: 'center' },
+  wrongBinRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', width: '100%' },
+  wrongBinLabel: { fontSize: 14, color: COLORS.gray600 },
+  wrongBinBadge: { backgroundColor: COLORS.dangerLight, paddingHorizontal: 16, paddingVertical: 8, borderRadius: 8 },
+  wrongBinBadgeText: { fontSize: 16, fontWeight: '700', color: COLORS.danger },
+  wrongBinArrow: { marginVertical: 12 },
+  wrongBinDesc: { fontSize: 14, color: COLORS.gray600, textAlign: 'center', paddingHorizontal: 24, marginBottom: 24 },
+
+  // Half Screen Scanner
+  halfScreenCamera: { height: '45%', backgroundColor: COLORS.black, position: 'relative' },
+  cameraOverlay: { ...StyleSheet.absoluteFillObject, justifyContent: 'space-between', paddingBottom: 10 },
+  smallScanFrame: { width: 200, height: 120, alignSelf: 'center', position: 'relative' },
+  scannedListContainer: { flex: 1, backgroundColor: COLORS.white },
+  countSummary: { flexDirection: 'row', alignItems: 'center', padding: 12, borderBottomWidth: 1, borderBottomColor: COLORS.gray200, backgroundColor: COLORS.gray50 },
+  countSummaryItem: { flex: 1, alignItems: 'center' },
+  countSummaryValue: { fontSize: 20, fontWeight: '700', color: COLORS.primary },
+  countSummaryLabel: { fontSize: 11, color: COLORS.gray500, marginTop: 2 },
+  doneBtn: { backgroundColor: COLORS.success, paddingHorizontal: 20, paddingVertical: 10, borderRadius: 8 },
+  doneBtnText: { color: COLORS.white, fontWeight: '600', fontSize: 14 },
+  scanMessage: { padding: 12, marginHorizontal: 12, marginTop: 8, borderRadius: 8 },
+  scanMessageError: { backgroundColor: COLORS.dangerLight },
+  scanMessageSuccess: { backgroundColor: COLORS.successLight },
+  scanMessageText: { fontSize: 13, color: COLORS.danger, textAlign: 'center' },
+  recentlyScannedTitle: { fontSize: 12, fontWeight: '600', color: COLORS.gray500, paddingHorizontal: 16, paddingTop: 12, paddingBottom: 8 },
+  scannedItemRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: COLORS.gray100 },
+  scannedItemInfo: { flex: 1 },
+  scannedItemName: { fontSize: 14, fontWeight: '500', color: COLORS.gray900 },
+  scannedItemSerial: { fontSize: 11, color: COLORS.purple, marginTop: 2 },
+  scannedItemCount: { width: 36, height: 36, borderRadius: 18, backgroundColor: COLORS.successLight, alignItems: 'center', justifyContent: 'center' },
+  scannedItemCountText: { fontSize: 16, fontWeight: '700', color: COLORS.success },
+  emptyScanned: { padding: 40, alignItems: 'center' },
+  emptyScannedText: { fontSize: 14, color: COLORS.gray400 },
+
+  // Item Damage
+  damageContent: { flex: 1, padding: 20 },
+  damageItemCard: { backgroundColor: COLORS.dangerLight, borderRadius: 12, padding: 20, alignItems: 'center', marginBottom: 20 },
+  damageItemIcon: { fontSize: 40, marginBottom: 8 },
+  damageItemName: { fontSize: 18, fontWeight: '600', color: COLORS.gray900, textAlign: 'center' },
+  damageItemBin: { fontSize: 12, color: COLORS.gray600, marginTop: 8 },
+  photoBtn: { backgroundColor: COLORS.gray100, borderRadius: 12, height: 200, justifyContent: 'center', alignItems: 'center', marginBottom: 16, overflow: 'hidden', borderWidth: 2, borderColor: COLORS.gray300, borderStyle: 'dashed' },
+  photoPreview: { width: '100%', height: '100%', resizeMode: 'cover' },
+  photoPlaceholder: { alignItems: 'center' },
+  photoPlaceholderIcon: { fontSize: 48, marginBottom: 8 },
+  photoPlaceholderText: { fontSize: 14, color: COLORS.gray500 },
 });

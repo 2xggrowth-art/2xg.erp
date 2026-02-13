@@ -775,6 +775,58 @@ export class ItemsService {
   }
 
   /**
+   * Get bins that contain this item (via bill_item_bin_allocations)
+   */
+  async getItemBins(itemId: string) {
+    // Find bill_items for this item
+    const { data: billItems, error: billItemsError } = await supabaseAdmin
+      .from('bill_items')
+      .select('id')
+      .eq('item_id', itemId);
+
+    if (billItemsError) throw billItemsError;
+
+    if (!billItems || billItems.length === 0) {
+      return [];
+    }
+
+    const billItemIds = billItems.map(bi => bi.id);
+
+    // Get bin allocations for these bill items
+    const { data: allocations, error: allocError } = await supabaseAdmin
+      .from('bill_item_bin_allocations')
+      .select(`
+        quantity,
+        bin_location_id,
+        bin_locations (id, bin_code, location_id, description)
+      `)
+      .in('bill_item_id', billItemIds);
+
+    if (allocError) throw allocError;
+
+    // Aggregate by bin
+    const binMap = new Map<string, { bin_code: string; total_quantity: number; bin_location_id: string }>();
+
+    for (const alloc of allocations || []) {
+      const bin = (alloc as any).bin_locations;
+      if (!bin) continue;
+
+      const existing = binMap.get(bin.id);
+      if (existing) {
+        existing.total_quantity += Number(alloc.quantity) || 0;
+      } else {
+        binMap.set(bin.id, {
+          bin_location_id: bin.id,
+          bin_code: bin.bin_code,
+          total_quantity: Number(alloc.quantity) || 0,
+        });
+      }
+    }
+
+    return Array.from(binMap.values());
+  }
+
+  /**
    * Get items summary
    */
   async getItemsSummary() {
