@@ -17,9 +17,11 @@ import {
   Clock,
   XCircle,
   Copy,
-  CreditCard
+  CreditCard,
+  Barcode
 } from 'lucide-react';
 import { billsService, type Bill as BillServiceType, type BillItem } from '../services/bills.service';
+import BarcodeLabelsModal from '../components/bills/BarcodeLabelsModal';
 
 interface Bill extends BillServiceType {
   items?: BillItem[];
@@ -32,6 +34,7 @@ const BillDetailPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'details' | 'payments' | 'activity'>('details');
   const [showActionMenu, setShowActionMenu] = useState(false);
+  const [showBarcodeModal, setShowBarcodeModal] = useState(false);
 
   useEffect(() => {
     fetchBillDetails();
@@ -291,6 +294,13 @@ const BillDetailPage: React.FC = () => {
             </div>
 
             <div className="flex items-center gap-2">
+              <button
+                onClick={() => setShowBarcodeModal(true)}
+                className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                title="Print Barcode Labels"
+              >
+                <Barcode size={20} className="text-purple-600" />
+              </button>
               <button
                 onClick={handlePrint}
                 className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
@@ -553,6 +563,14 @@ const BillDetailPage: React.FC = () => {
           </div>
         )}
       </div>
+
+      {/* Barcode Labels Modal */}
+      <BarcodeLabelsModal
+        isOpen={showBarcodeModal}
+        onClose={() => setShowBarcodeModal(false)}
+        billNumber={bill.bill_number}
+        items={lineItems}
+      />
     </div>
   );
 };
