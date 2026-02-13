@@ -771,10 +771,17 @@ function ScannerScreen({ navigation, route }: any) {
       }
 
       // 2. Check SKU match — exact, contains, or barcode starts with item SKU (e.g. "SKU-0031/1" starts with "SKU-0031")
+      // Also try stripping serial suffix for matching (e.g. scan "SKU-0032/2" → try matching "SKU-0032")
+      const slashIdx = data.lastIndexOf('/');
+      const baseScannedLower = slashIdx > 0 ? data.substring(0, slashIdx).toLowerCase() : null;
+
       const skuMatched = initialItems.find((i: StockCountItem) => {
         if (!i.sku) return false;
         const skuLower = i.sku.toLowerCase();
-        return skuLower === scannedLower || skuLower.includes(scannedLower) || scannedLower.includes(skuLower) || scannedLower.startsWith(skuLower);
+        if (skuLower === scannedLower || skuLower.includes(scannedLower) || scannedLower.includes(skuLower) || scannedLower.startsWith(skuLower)) return true;
+        // Also try matching base SKU (without serial suffix)
+        if (baseScannedLower && (skuLower === baseScannedLower || baseScannedLower === skuLower)) return true;
+        return false;
       });
       if (skuMatched) {
         await countItem(skuMatched, false);
@@ -785,16 +792,31 @@ function ScannerScreen({ navigation, route }: any) {
       let apiItem: any = null;
       try {
         const res = await api.get(`/items/barcode/${encodeURIComponent(data)}`);
-        apiItem = res.data || res;
-      } catch {
-        // API didn't find the item — try stripping serial suffix (e.g. "SKU-0031/1" → "SKU-0031")
-        const slashIdx = data.lastIndexOf('/');
-        if (slashIdx > 0) {
-          try {
-            const baseSku = data.substring(0, slashIdx);
-            const res2 = await api.get(`/items/barcode/${encodeURIComponent(baseSku)}`);
-            apiItem = res2.data || res2;
-          } catch { /* will fall through to not found */ }
+        if (res.success && res.data) {
+          apiItem = res.data;
+        }
+      } catch { /* network error */ }
+
+      // If not found, try stripping serial suffix (e.g. "SKU-0031/1" → "SKU-0031")
+      if (!apiItem && slashIdx > 0) {
+        try {
+          const baseSku = data.substring(0, slashIdx);
+          const res2 = await api.get(`/items/barcode/${encodeURIComponent(baseSku)}`);
+          if (res2.success && res2.data) {
+            apiItem = res2.data;
+          }
+        } catch { /* will fall through to not found */ }
+      }
+
+      // 3b. If API still didn't find, try matching base SKU against local items
+      if (!apiItem && baseScannedLower) {
+        const baseMatch = initialItems.find((i: StockCountItem) => {
+          if (!i.sku) return false;
+          return i.sku.toLowerCase() === baseScannedLower;
+        });
+        if (baseMatch) {
+          await countItem(baseMatch, false);
+          return;
         }
       }
 
@@ -826,7 +848,7 @@ function ScannerScreen({ navigation, route }: any) {
         const itemName = apiItem.item_name || apiItem.name || 'Unknown item';
         try {
           const binRes = await api.get(`/items/${apiItem.id}/bins`);
-          const itemBins = binRes.data || [];
+          const itemBins = (binRes.success ? binRes.data : binRes) || [];
           if (itemBins.length > 0) {
             const binList = itemBins.map((b: any) => b.bin_code).join(', ');
             setErrorMessage(`⚠️ Wrong bin! "${itemName}" belongs to: ${binList}`);
