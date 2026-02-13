@@ -12,6 +12,7 @@ router.use(authMiddleware);
 router.get('/', controller.getStockCounts.bind(controller));
 router.get('/stats', controller.getStats.bind(controller));
 router.get('/counter/:mobileUserId/stats', controller.getCounterStats.bind(controller));
+router.get('/assigned/:userId', controller.getAssignedStockCounts.bind(controller));
 router.get('/:id', controller.getStockCount.bind(controller));
 
 // Create route (admin)
@@ -20,6 +21,8 @@ router.post('/', controller.createStockCount.bind(controller));
 // Counter actions
 router.post('/:id/start', controller.startCount.bind(controller));
 router.put('/:id/items/:itemId', controller.updateItemCount.bind(controller));
+router.patch('/:id/items', controller.bulkUpdateItems.bind(controller));
+router.patch('/:id/status', controller.updateStatus.bind(controller));
 router.post('/:id/submit', controller.submitCount.bind(controller));
 
 // Admin review actions

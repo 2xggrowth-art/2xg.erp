@@ -35,8 +35,8 @@ interface StockCountItem {
 
 interface StockCount {
   id: string;
-  stock_count_number: string;
-  description: string | null;
+  count_number: string;
+  notes: string | null;
   location_name: string | null;
   status: string;
   items: StockCountItem[];
@@ -239,7 +239,7 @@ export default function StockCountDetailScreen({ navigation, route }: Props) {
   if (!stockCount) return null;
 
   const isEditable = stockCount.status === 'in_progress';
-  const isDraft = stockCount.status === 'draft';
+  const isPending = stockCount.status === 'pending';
 
   return (
     <KeyboardAvoidingView
@@ -251,7 +251,7 @@ export default function StockCountDetailScreen({ navigation, route }: Props) {
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
           <Text style={styles.backText}>← Back</Text>
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>{stockCount.stock_count_number}</Text>
+        <Text style={styles.headerTitle}>{stockCount.count_number}</Text>
         <View style={{ width: 60 }} />
       </View>
 
@@ -275,7 +275,7 @@ export default function StockCountDetailScreen({ navigation, route }: Props) {
 
       {/* Actions */}
       <View style={styles.actions}>
-        {isDraft && (
+        {isPending && (
           <TouchableOpacity
             style={[styles.actionButton, styles.startButton]}
             onPress={handleStartCounting}

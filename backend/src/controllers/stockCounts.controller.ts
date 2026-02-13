@@ -25,6 +25,24 @@ export class StockCountsController {
   }
 
   /**
+   * Get stock counts assigned to a specific user (mobile app)
+   */
+  async getAssignedStockCounts(req: Request, res: Response) {
+    try {
+      const { userId } = req.params;
+
+      const counts = await stockCountsService.getStockCounts({
+        assigned_to: userId,
+      });
+
+      res.json({ success: true, data: counts });
+    } catch (error: any) {
+      console.error('Error fetching assigned stock counts:', error);
+      res.status(500).json({ success: false, error: error.message });
+    }
+  }
+
+  /**
    * Get a single stock count with items
    */
   async getStockCount(req: Request, res: Response) {
@@ -81,6 +99,60 @@ export class StockCountsController {
       res.json({ success: true, data: item });
     } catch (error: any) {
       console.error('Error updating item count:', error);
+      res.status(500).json({ success: false, error: error.message });
+    }
+  }
+
+  /**
+   * Bulk update item counts (mobile app)
+   */
+  async bulkUpdateItems(req: Request, res: Response) {
+    try {
+      const { id } = req.params;
+      const { items } = req.body; // Array of { id, counted_quantity, notes? }
+
+      if (!items || !Array.isArray(items)) {
+        return res.status(400).json({ success: false, error: 'Items array is required' });
+      }
+
+      // Update each item
+      for (const item of items) {
+        await stockCountsService.updateItemCount(id, item.id, {
+          counted_quantity: item.counted_quantity,
+          notes: item.notes,
+        });
+      }
+
+      res.json({ success: true, message: 'Items updated successfully' });
+    } catch (error: any) {
+      console.error('Error bulk updating items:', error);
+      res.status(500).json({ success: false, error: error.message });
+    }
+  }
+
+  /**
+   * Update stock count status (mobile app)
+   */
+  async updateStatus(req: Request, res: Response) {
+    try {
+      const { id } = req.params;
+      const { status, notes } = req.body;
+
+      let count;
+      if (status === 'in_progress') {
+        count = await stockCountsService.startCount(id);
+      } else if (status === 'submitted') {
+        count = await stockCountsService.submitCount(id);
+      } else {
+        return res.status(400).json({
+          success: false,
+          error: `Invalid status: ${status}. Use 'in_progress' or 'submitted'.`
+        });
+      }
+
+      res.json({ success: true, data: count });
+    } catch (error: any) {
+      console.error('Error updating status:', error);
       res.status(500).json({ success: false, error: error.message });
     }
   }

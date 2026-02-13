@@ -19,20 +19,22 @@ type Props = {
 
 interface StockCount {
   id: string;
-  stock_count_number: string;
-  description: string | null;
+  count_number: string;
+  notes: string | null;
   location_name: string | null;
   status: string;
   items?: any[];
+  total_items: number;
   created_at: string;
 }
 
 const statusColors: Record<string, { bg: string; text: string }> = {
-  draft: { bg: '#F3F4F6', text: '#6B7280' },
+  pending: { bg: '#F3F4F6', text: '#6B7280' },
   in_progress: { bg: '#DBEAFE', text: '#2563EB' },
   submitted: { bg: '#FEF3C7', text: '#D97706' },
   approved: { bg: '#D1FAE5', text: '#059669' },
   rejected: { bg: '#FEE2E2', text: '#DC2626' },
+  recount: { bg: '#FEE2E2', text: '#DC2626' },
 };
 
 export default function StockCountListScreen({ navigation }: Props) {
@@ -81,7 +83,7 @@ export default function StockCountListScreen({ navigation }: Props) {
 
   const renderItem = ({ item }: { item: StockCount }) => {
     const colors = statusColors[item.status] || statusColors.draft;
-    const itemCount = item.items?.length || 0;
+    const itemCount = item.total_items || 0;
 
     return (
       <TouchableOpacity
@@ -90,7 +92,7 @@ export default function StockCountListScreen({ navigation }: Props) {
         activeOpacity={0.7}
       >
         <View style={styles.cardHeader}>
-          <Text style={styles.scNumber}>{item.stock_count_number}</Text>
+          <Text style={styles.scNumber}>{item.count_number}</Text>
           <View style={[styles.badge, { backgroundColor: colors.bg }]}>
             <Text style={[styles.badgeText, { color: colors.text }]}>{formatStatus(item.status)}</Text>
           </View>
@@ -98,8 +100,8 @@ export default function StockCountListScreen({ navigation }: Props) {
         {item.location_name && (
           <Text style={styles.location}>{item.location_name}</Text>
         )}
-        {item.description && (
-          <Text style={styles.description} numberOfLines={1}>{item.description}</Text>
+        {item.notes && (
+          <Text style={styles.description} numberOfLines={1}>{item.notes}</Text>
         )}
         <View style={styles.cardFooter}>
           <Text style={styles.itemCount}>{itemCount} item{itemCount !== 1 ? 's' : ''}</Text>
