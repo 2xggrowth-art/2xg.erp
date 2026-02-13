@@ -1057,15 +1057,25 @@ export class ItemsService {
   }
 
   /**
-   * Get item by barcode (searches sku, upc, ean, isbn)
+   * Get item by barcode (searches barcode, sku, upc, ean, isbn)
    */
   async getItemByBarcode(barcode: string) {
-    // Try SKU first
+    // Try barcode column first
     let { data, error } = await supabaseAdmin
       .from('items')
       .select('*')
-      .eq('sku', barcode)
+      .eq('barcode', barcode)
       .limit(1);
+
+    if (error) throw error;
+    if (data && data.length > 0) return data[0];
+
+    // Try SKU
+    ({ data, error } = await supabaseAdmin
+      .from('items')
+      .select('*')
+      .eq('sku', barcode)
+      .limit(1));
 
     if (error) throw error;
     if (data && data.length > 0) return data[0];

@@ -168,13 +168,13 @@ export class StockCountsService {
         .from('bill_item_bin_allocations')
         .select(`
           quantity,
-          bill_items!inner(item_id, item_name, items(sku))
+          bill_items!inner(item_id, item_name, items(sku, barcode))
         `)
         .eq('bin_location_id', data.bin_location_id);
 
       if (binAllocations && binAllocations.length > 0) {
         // Aggregate quantities by item
-        const itemQuantities: Record<string, { item_id: string; item_name: string; sku: string; quantity: number }> = {};
+        const itemQuantities: Record<string, { item_id: string; item_name: string; sku: string; barcode: string; quantity: number }> = {};
 
         for (const alloc of binAllocations) {
           const billItem = (alloc as any).bill_items;
@@ -184,7 +184,8 @@ export class StockCountsService {
               itemQuantities[key] = {
                 item_id: billItem.item_id,
                 item_name: billItem.item_name,
-                sku: billItem.items?.sku || '',
+                sku: billItem.items?.sku || billItem.items?.barcode || '',
+                barcode: billItem.items?.barcode || '',
                 quantity: 0,
               };
             }
@@ -196,7 +197,7 @@ export class StockCountsService {
           stock_count_id: count.id,
           item_id: item.item_id,
           item_name: item.item_name,
-          sku: item.sku,
+          sku: item.sku || item.barcode,
           expected_quantity: item.quantity,
           status: 'pending',
         }));
