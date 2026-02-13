@@ -759,29 +759,53 @@ function ScannerScreen({ navigation, route }: any) {
     Vibration.vibrate(50);
 
     try {
-      // First, check for serial number match (exact match for serial-tracked items)
+      const scannedLower = data.toLowerCase();
+
+      // 1. Check for serial number match (exact match for serial-tracked items)
       const serialMatched = initialItems.find((i: StockCountItem) =>
-        i.serial_number && i.serial_number.toLowerCase() === data.toLowerCase()
+        i.serial_number && i.serial_number.toLowerCase() === scannedLower
       );
       if (serialMatched) {
         await countItem(serialMatched, true);
         return;
       }
 
-      // Then check SKU match
-      const skuMatched = initialItems.find((i: StockCountItem) =>
-        i.sku?.toLowerCase() === data.toLowerCase() || i.sku?.includes(data)
-      );
+      // 2. Check SKU match — exact, contains, or barcode starts with item SKU (e.g. "SKU-0031/1" starts with "SKU-0031")
+      const skuMatched = initialItems.find((i: StockCountItem) => {
+        if (!i.sku) return false;
+        const skuLower = i.sku.toLowerCase();
+        return skuLower === scannedLower || skuLower.includes(scannedLower) || scannedLower.includes(skuLower) || scannedLower.startsWith(skuLower);
+      });
       if (skuMatched) {
         await countItem(skuMatched, false);
         return;
       }
 
-      // Try API lookup for barcode/serial
-      const res = await api.get(`/items/barcode/${encodeURIComponent(data)}`);
-      const apiItem = res.data || res;
+      // 3. Try API lookup for barcode/serial
+      let apiItem: any = null;
+      try {
+        const res = await api.get(`/items/barcode/${encodeURIComponent(data)}`);
+        apiItem = res.data || res;
+      } catch {
+        // API didn't find the item — try stripping serial suffix (e.g. "SKU-0031/1" → "SKU-0031")
+        const slashIdx = data.lastIndexOf('/');
+        if (slashIdx > 0) {
+          try {
+            const baseSku = data.substring(0, slashIdx);
+            const res2 = await api.get(`/items/barcode/${encodeURIComponent(baseSku)}`);
+            apiItem = res2.data || res2;
+          } catch { /* will fall through to not found */ }
+        }
+      }
 
-      // Check if matched serial exists in our items list
+      // If API didn't find anything, it's an unknown barcode
+      if (!apiItem || (!apiItem.id && !apiItem.item_name)) {
+        Vibration.vibrate([0, 100, 50, 100]);
+        setErrorMessage(`❌ Unknown barcode: ${data}`);
+        return;
+      }
+
+      // 4. Check if matched serial exists in our items list
       if (apiItem.matched_serial) {
         const serialItem = initialItems.find((i: StockCountItem) =>
           i.serial_number === apiItem.matched_serial
@@ -792,25 +816,30 @@ function ScannerScreen({ navigation, route }: any) {
         }
       }
 
-      // Fallback to item_id match
+      // 5. Match by item_id against items in this count
       const apiMatched = initialItems.find((i: StockCountItem) => i.item_id === apiItem.id);
       if (apiMatched) {
         await countItem(apiMatched, false);
       } else {
-        // Item found but NOT in this count's bin - show wrong bin warning
-        Vibration.vibrate([0, 100, 50, 100]); // Error vibration
+        // Item exists in the system but NOT in this count's bin — show wrong bin with correct bin info
+        Vibration.vibrate([0, 100, 50, 100]);
+        const itemName = apiItem.item_name || apiItem.name || 'Unknown item';
         try {
           const binRes = await api.get(`/items/${apiItem.id}/bins`);
           const itemBins = binRes.data || [];
-          const correctBin = itemBins.length > 0 ? itemBins[0] : null;
-          setErrorMessage(`⚠️ Wrong bin! "${apiItem.item_name || apiItem.name}" belongs to ${correctBin?.bin_code || 'another bin'}`);
+          if (itemBins.length > 0) {
+            const binList = itemBins.map((b: any) => b.bin_code).join(', ');
+            setErrorMessage(`⚠️ Wrong bin! "${itemName}" belongs to: ${binList}`);
+          } else {
+            setErrorMessage(`⚠️ Wrong bin! "${itemName}" is not allocated to any bin`);
+          }
         } catch {
-          setErrorMessage(`⚠️ Wrong bin! This item belongs to another bin`);
+          setErrorMessage(`⚠️ Wrong bin! "${itemName}" belongs to another bin`);
         }
       }
     } catch {
       Vibration.vibrate([0, 100, 50, 100]);
-      setErrorMessage(`❌ Not found: ${data}`);
+      setErrorMessage(`❌ Unknown barcode: ${data}`);
     } finally {
       setLookingUp(false);
     }

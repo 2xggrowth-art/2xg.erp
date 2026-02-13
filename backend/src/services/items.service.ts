@@ -1193,6 +1193,21 @@ export class ItemsService {
       }
     }
 
+    // Try stripping serial suffix (e.g. "SKU-0031/1" → "SKU-0031") for label barcodes
+    const slashIdx = barcode.lastIndexOf('/');
+    if (slashIdx > 0) {
+      const baseSku = barcode.substring(0, slashIdx);
+      const { data: skuData, error: skuError } = await supabaseAdmin
+        .from('items')
+        .select('*')
+        .eq('sku', baseSku)
+        .limit(1);
+
+      if (!skuError && skuData && skuData.length > 0) {
+        return { ...skuData[0], matched_serial: null };
+      }
+    }
+
     return null;
   }
 
