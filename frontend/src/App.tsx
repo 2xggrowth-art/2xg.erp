@@ -63,6 +63,7 @@ import ComingSoonPage from './pages/ComingSoonPage';
 import TransferOrderDetailPage from './pages/TransferOrderDetailPage';
 import BinLocationsPage from './pages/BinLocationsPage';
 import BrandManufacturerManagementPage from './pages/BrandManufacturerManagementPage';
+import DamageReportsPage from './pages/DamageReportsPage';
 
 function App() {
   return (
@@ -169,6 +170,9 @@ function App() {
             <Route path="/search" element={<ProtectedRoute><DashboardLayout><SearchPage /></DashboardLayout></ProtectedRoute>} />
             <Route path="/ai-reporting" element={<ProtectedRoute><DashboardLayout><AIReportingPage /></DashboardLayout></ProtectedRoute>} />
             <Route path="/settings" element={<ProtectedRoute><DashboardLayout><SettingsPage /></DashboardLayout></ProtectedRoute>} />
+
+            {/* Damage Reports */}
+            <Route path="/inventory/damage-reports" element={<ProtectedRoute><DashboardLayout><DamageReportsPage /></DashboardLayout></ProtectedRoute>} />
           </Routes>
         </DateFilterProvider>
       </AuthProvider>

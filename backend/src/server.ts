@@ -38,6 +38,7 @@ import posSessionsRoutes from './routes/pos-sessions.routes';
 import batchesRoutes from './routes/batches.routes';
 import stockCountsRoutes from './routes/stockCounts.routes';
 import mobileAuthRoutes from './routes/mobile-auth.routes';
+import damageReportsRoutes from './routes/damageReports.routes';
 import { readOnlyGuard } from './middleware/readOnly.middleware';
 import { authMiddleware } from './middleware/auth.middleware';
 
@@ -139,6 +140,7 @@ app.use('/api/manufacturers', manufacturersRoutes);
 app.use('/api/pos-sessions', posSessionsRoutes);
 app.use('/api/batches', batchesRoutes);
 app.use('/api/stock-counts', stockCountsRoutes);
+app.use('/api/damage-reports', damageReportsRoutes);
 
 // Health check endpoint for deployment platforms
 app.get('/health', (_req: Request, res: Response) => {

@@ -12,6 +12,7 @@ import { StatusBar } from 'expo-status-bar';
 import * as SecureStore from 'expo-secure-store';
 import { CameraView, useCameraPermissions, BarcodeScanningResult } from 'expo-camera';
 import * as ImagePicker from 'expo-image-picker';
+import * as FileSystem from 'expo-file-system';
 import { useFocusEffect } from '@react-navigation/native';
 
 // ============================================================================
@@ -1114,6 +1115,7 @@ function WrongBinScreen({ navigation, route }: any) {
 // ItemDamage - Report damage with photo
 function ItemDamageScreen({ navigation, route }: any) {
   const { item, countId, binCode } = route.params;
+  const { user } = useAuth();
   const [photo, setPhoto] = useState<string | null>(null);
   const [description, setDescription] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -1174,17 +1176,30 @@ function ItemDamageScreen({ navigation, route }: any) {
 
     setSubmitting(true);
     try {
+      // Convert photo to base64
+      let photoBase64 = '';
+      try {
+        const base64 = await FileSystem.readAsStringAsync(photo, {
+          encoding: FileSystem.EncodingType.Base64,
+        });
+        photoBase64 = `data:image/jpeg;base64,${base64}`;
+      } catch (e) {
+        console.error('Error converting photo to base64:', e);
+      }
+
       // Submit damage report
       await api.post('/damage-reports', {
         item_id: item.item_id,
         item_name: item.item_name,
         serial_number: item.serial_number || null,
-        quantity: 1,
-        description: description,
-        source_bin: binCode,
-        destination_bin: selectedDamageBin || 'DAMAGED',
+        bin_location_id: null, // We don't have the bin location ID here
+        bin_code: binCode,
+        damaged_bin_id: selectedDamageBin || null,
+        damage_description: description,
+        photo_base64: photoBase64,
         stock_count_id: countId,
-        photo_url: photo, // In real app, upload to storage first
+        reported_by: user?.id,
+        reported_by_name: user?.employee_name || 'Mobile User',
       });
 
       // Mark item as damaged in count (counted_quantity = 0 with note)
