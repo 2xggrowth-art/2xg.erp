@@ -192,57 +192,17 @@ export class StockCountsService {
 
           if (netQuantity <= 0) continue; // Skip items with zero or negative net stock
 
-          // For serial-tracked items, look up serial numbers from bill_item_bin_allocations
-          if (itemInfo.advanced_tracking_type === 'serial') {
-            const { data: serialAllocations } = await supabase
-              .from('bill_item_bin_allocations')
-              .select('bill_items!inner(serial_numbers)')
-              .eq('bin_location_id', data.bin_location_id);
-
-            const allSerials: string[] = [];
-            if (serialAllocations) {
-              for (const alloc of serialAllocations) {
-                const serials = (alloc as any).bill_items?.serial_numbers || [];
-                allSerials.push(...serials);
-              }
-            }
-
-            if (allSerials.length > 0) {
-              for (const serial of allSerials) {
-                countItems.push({
-                  stock_count_id: count.id,
-                  item_id: binItem.item_id,
-                  item_name: binItem.item_name,
-                  sku: serial,
-                  serial_number: serial,
-                  expected_quantity: 1,
-                  status: 'pending',
-                });
-              }
-            } else {
-              // Fallback: no serials found, create single row
-              countItems.push({
-                stock_count_id: count.id,
-                item_id: binItem.item_id,
-                item_name: binItem.item_name,
-                sku: itemInfo.sku || '',
-                serial_number: null,
-                expected_quantity: netQuantity,
-                status: 'pending',
-              });
-            }
-          } else {
-            // Non-serial items: single row with net quantity
-            countItems.push({
-              stock_count_id: count.id,
-              item_id: binItem.item_id,
-              item_name: binItem.item_name,
-              sku: itemInfo.sku || '',
-              serial_number: null,
-              expected_quantity: netQuantity,
-              status: 'pending',
-            });
-          }
+          // All items (including serial-tracked): single row with net quantity
+          // Serial barcodes (e.g. SKU-0032/1) are matched to the parent item by SKU
+          countItems.push({
+            stock_count_id: count.id,
+            item_id: binItem.item_id,
+            item_name: binItem.item_name,
+            sku: itemInfo.sku || '',
+            serial_number: null,
+            expected_quantity: netQuantity,
+            status: 'pending',
+          });
         }
 
         if (countItems.length > 0) {

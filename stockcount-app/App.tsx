@@ -704,7 +704,7 @@ function ScannerScreen({ navigation, route }: any) {
   const [flashOn, setFlashOn] = useState(false);
   const [lookingUp, setLookingUp] = useState(false);
   const [lastScanned, setLastScanned] = useState<string | null>(null);
-  const [scannedItems, setScannedItems] = useState<{ id: string; name: string; serial?: string; time: Date }[]>([]);
+  const [scannedItems, setScannedItems] = useState<{ id: string; name: string; serial?: string; time: Date; item?: StockCountItem }[]>([]);
   const [itemCounts, setItemCounts] = useState<Record<string, number>>({});
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const scanLineAnim = useRef(new Animated.Value(0)).current;
@@ -868,12 +868,12 @@ function ScannerScreen({ navigation, route }: any) {
   };
 
   const countItem = async (item: StockCountItem, isSerial: boolean) => {
-    const newCount = isSerial ? 1 : (itemCounts[item.id] || 0) + 1;
+    const newCount = (itemCounts[item.id] || 0) + 1;
 
     // Update local state immediately
     setItemCounts(prev => ({ ...prev, [item.id]: newCount }));
     setScannedItems(prev => [
-      { id: item.id, name: item.item_name, serial: item.serial_number || undefined, time: new Date() },
+      { id: item.id, name: item.item_name, serial: item.serial_number || undefined, time: new Date(), item },
       ...prev.slice(0, 9) // Keep last 10
     ]);
 
@@ -973,14 +973,24 @@ function ScannerScreen({ navigation, route }: any) {
         <FlatList
           data={scannedItems}
           keyExtractor={(item, index) => `${item.id}-${index}`}
-          renderItem={({ item }) => (
+          renderItem={({ item: scannedItem }) => (
             <View style={styles.scannedItemRow}>
               <View style={styles.scannedItemInfo}>
-                <Text style={styles.scannedItemRowName} numberOfLines={1}>{item.name}</Text>
-                {item.serial && <Text style={styles.scannedItemSerial}>{item.serial}</Text>}
+                <Text style={styles.scannedItemRowName} numberOfLines={1}>{scannedItem.name}</Text>
+                {scannedItem.serial && <Text style={styles.scannedItemSerial}>{scannedItem.serial}</Text>}
               </View>
+              <TouchableOpacity
+                style={styles.damageBtnSmall}
+                onPress={() => {
+                  if (scannedItem.item) {
+                    navigation.navigate('ItemDamage', { item: scannedItem.item, countId, binCode });
+                  }
+                }}
+              >
+                <Text style={styles.damageBtnSmallText}>Damaged</Text>
+              </TouchableOpacity>
               <View style={styles.scannedItemCount}>
-                <Text style={styles.scannedItemCountText}>{itemCounts[item.id] || 1}</Text>
+                <Text style={styles.scannedItemCountText}>{itemCounts[scannedItem.id] || 1}</Text>
               </View>
             </View>
           )}
@@ -2260,6 +2270,8 @@ const styles = StyleSheet.create({
   scannedItemInfo: { flex: 1 },
   scannedItemRowName: { fontSize: 14, fontWeight: '500', color: COLORS.gray900 },
   scannedItemSerial: { fontSize: 11, color: COLORS.purple, marginTop: 2 },
+  damageBtnSmall: { backgroundColor: COLORS.dangerLight, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 6, marginRight: 10 },
+  damageBtnSmallText: { fontSize: 11, fontWeight: '600', color: COLORS.danger },
   scannedItemCount: { width: 36, height: 36, borderRadius: 18, backgroundColor: COLORS.successLight, alignItems: 'center', justifyContent: 'center' },
   scannedItemCountText: { fontSize: 16, fontWeight: '700', color: COLORS.success },
   emptyScanned: { padding: 40, alignItems: 'center' },
