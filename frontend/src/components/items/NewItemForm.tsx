@@ -336,7 +336,7 @@ const NewItemForm = () => {
           // Inventory Tracking
           trackInventory: true,
           trackBinLocation: false,
-          advancedTracking: 'none',
+          advancedTracking: item.advanced_tracking_type || 'none',
           inventoryAccount: '',
           valuationMethod: '',
           reorderPoint: item.reorder_point ? item.reorder_point.toString() : '',
