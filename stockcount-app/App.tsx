@@ -59,6 +59,7 @@ interface StockCountItem {
   item_id: string;
   item_name: string;
   sku: string;
+  serial_number: string | null;  // For serial-tracked items
   bin_code: string | null;
   expected_quantity: number;
   counted_quantity: number | null;
@@ -298,13 +299,18 @@ const ApprovalCard = ({ count, onPress }: { count: StockCount; onPress: () => vo
 const ItemRow = ({ item, onPress, showVariance = false }: { item: StockCountItem; onPress?: () => void; showVariance?: boolean; }) => {
   const isCounted = item.counted_quantity !== null;
   const hasVariance = isCounted && item.counted_quantity !== item.expected_quantity;
+  const isSerial = !!item.serial_number;
 
   return (
-    <TouchableOpacity style={[styles.itemRow, hasVariance && styles.itemRowVariance]} onPress={onPress} disabled={!onPress} activeOpacity={onPress ? 0.7 : 1}>
-      <View style={styles.itemRowIcon}><Text style={styles.itemRowEmoji}>📦</Text></View>
+    <TouchableOpacity style={[styles.itemRow, hasVariance && styles.itemRowVariance, isSerial && styles.itemRowSerial]} onPress={onPress} disabled={!onPress} activeOpacity={onPress ? 0.7 : 1}>
+      <View style={[styles.itemRowIcon, isSerial && styles.itemRowIconSerial]}><Text style={styles.itemRowEmoji}>{isSerial ? '🏷️' : '📦'}</Text></View>
       <View style={styles.itemRowContent}>
         <Text style={styles.itemRowName} numberOfLines={1}>{item.item_name}</Text>
-        <Text style={styles.itemRowSku}>{item.sku || 'No SKU'}</Text>
+        {isSerial ? (
+          <Text style={styles.itemRowSerialText}>{item.serial_number}</Text>
+        ) : (
+          <Text style={styles.itemRowSku}>{item.sku || 'No SKU'}</Text>
+        )}
       </View>
       <View style={styles.itemRowQty}>
         {showVariance && isCounted ? (
@@ -515,12 +521,17 @@ function CountDetailScreen({ navigation, route }: any) {
     try {
       const res = await api.get(`/stock-counts/${countId}`);
       if (res.success) {
-        const sc = res.data;
-        setCount(sc);
-        // Auto-start if pending
+        let sc = res.data;
+
+        // Auto-start if pending - update local state with new status
         if (['pending', 'recount'].includes(sc.status)) {
-          await api.post(`/stock-counts/${countId}/start`);
+          const startRes = await api.post(`/stock-counts/${countId}/start`);
+          if (startRes.success && startRes.data) {
+            sc = { ...sc, status: 'in_progress' };
+          }
         }
+
+        setCount(sc);
         const vals: Record<string, string> = {};
         (sc.items || []).forEach((item: StockCountItem) => {
           if (item.counted_quantity !== null) vals[item.id] = String(item.counted_quantity);
@@ -612,13 +623,22 @@ function CountDetailScreen({ navigation, route }: any) {
         data={getFilteredItems()}
         keyExtractor={item => item.id}
         renderItem={({ item }) => (
-          <View style={styles.itemCard}>
+          <View style={[styles.itemCard, item.serial_number && styles.itemCardSerial]}>
             <View style={styles.itemCardHeader}>
               <View style={{ flex: 1 }}>
                 <Text style={styles.itemName} numberOfLines={1}>{item.item_name}</Text>
-                <Text style={styles.itemSku}>{item.sku || 'No SKU'}</Text>
+                {item.serial_number ? (
+                  <View style={styles.serialBadgeSmall}>
+                    <Text style={styles.serialBadgeSmallText}>SN: {item.serial_number}</Text>
+                  </View>
+                ) : (
+                  <Text style={styles.itemSku}>{item.sku || 'No SKU'}</Text>
+                )}
               </View>
               {item.bin_code && <View style={styles.binBadge}><Text style={styles.binBadgeText}>{item.bin_code}</Text></View>}
+              {item.serial_number && countedValues[item.id] && (
+                <View style={styles.serialCountedBadge}><Text style={styles.serialCountedBadgeText}>✓</Text></View>
+              )}
             </View>
             <View style={styles.itemCardRow}>
               <View style={styles.qtyBox}>
@@ -627,7 +647,7 @@ function CountDetailScreen({ navigation, route }: any) {
               </View>
               <View style={styles.qtyBox}>
                 <Text style={styles.qtyLabel}>Counted</Text>
-                {isEditable ? (
+                {isEditable && !item.serial_number ? (
                   <TextInput
                     style={[styles.qtyInput, countedValues[item.id] && Number(countedValues[item.id]) !== item.expected_quantity && styles.qtyInputVariance]}
                     value={countedValues[item.id] || ''}
@@ -637,10 +657,13 @@ function CountDetailScreen({ navigation, route }: any) {
                     placeholderTextColor={COLORS.gray400}
                   />
                 ) : (
-                  <Text style={styles.qtyValue}>{item.counted_quantity ?? '—'}</Text>
+                  <Text style={[styles.qtyValue, item.serial_number && countedValues[item.id] && styles.qtyValueSerial]}>{countedValues[item.id] || item.counted_quantity ?? '—'}</Text>
                 )}
               </View>
             </View>
+            {item.serial_number && !countedValues[item.id] && isEditable && (
+              <Text style={styles.serialScanHint}>Scan barcode to count</Text>
+            )}
           </View>
         )}
         contentContainerStyle={styles.listContent}
@@ -698,17 +721,43 @@ function ScannerScreen({ navigation, route }: any) {
     Vibration.vibrate(50);
 
     try {
-      const matched = items.find((i: StockCountItem) => i.sku?.toLowerCase() === data.toLowerCase() || i.sku?.includes(data));
-      if (matched) {
-        navigation.navigate('ScannedItem', { item: matched, countId });
+      // First, check for serial number match (exact match for serial-tracked items)
+      const serialMatched = items.find((i: StockCountItem) =>
+        i.serial_number && i.serial_number.toLowerCase() === data.toLowerCase()
+      );
+      if (serialMatched) {
+        navigation.navigate('ScannedItem', { item: serialMatched, countId, isSerial: true });
         return;
       }
 
+      // Then check SKU match
+      const skuMatched = items.find((i: StockCountItem) =>
+        i.sku?.toLowerCase() === data.toLowerCase() || i.sku?.includes(data)
+      );
+      if (skuMatched) {
+        navigation.navigate('ScannedItem', { item: skuMatched, countId, isSerial: false });
+        return;
+      }
+
+      // Try API lookup for barcode/serial
       const res = await api.get(`/items/barcode/${encodeURIComponent(data)}`);
       const apiItem = res.data || res;
+
+      // Check if matched serial exists in our items list
+      if (apiItem.matched_serial) {
+        const serialItem = items.find((i: StockCountItem) =>
+          i.serial_number === apiItem.matched_serial
+        );
+        if (serialItem) {
+          navigation.navigate('ScannedItem', { item: serialItem, countId, isSerial: true });
+          return;
+        }
+      }
+
+      // Fallback to item_id match
       const apiMatched = items.find((i: StockCountItem) => i.item_id === apiItem.id);
       if (apiMatched) {
-        navigation.navigate('ScannedItem', { item: apiMatched, countId });
+        navigation.navigate('ScannedItem', { item: apiMatched, countId, isSerial: false });
       } else {
         navigation.navigate('ScanUnknown', { barcode: data, countId });
       }
@@ -748,7 +797,12 @@ function ScannerScreen({ navigation, route }: any) {
           <Animated.View style={[styles.scanLine, { transform: [{ translateY: scanLineAnim.interpolate({ inputRange: [0, 1], outputRange: [0, 180] }) }] }]} />
         </View>
         <Text style={styles.scannerInstruction}>{lookingUp ? 'Looking up...' : 'Point at barcode'}</Text>
-        <Text style={styles.scannerItemCount}>{items.length} items in count</Text>
+        <Text style={styles.scannerItemCount}>
+          {items.filter((i: StockCountItem) => i.serial_number).length > 0
+            ? `${items.filter((i: StockCountItem) => i.serial_number).length} serial items • ${items.filter((i: StockCountItem) => !i.serial_number).length} regular items`
+            : `${items.length} items in count`
+          }
+        </Text>
       </View>
     </View>
   );
@@ -756,9 +810,31 @@ function ScannerScreen({ navigation, route }: any) {
 
 // ScannedItem
 function ScannedItemScreen({ navigation, route }: any) {
-  const { item, countId } = route.params;
+  const { item, countId, isSerial = false } = route.params;
   const [quantity, setQuantity] = useState(item.counted_quantity?.toString() || '');
   const [saving, setSaving] = useState(false);
+  const [autoSaved, setAutoSaved] = useState(false);
+
+  // For serial-tracked items, auto-count as 1 and save immediately
+  useEffect(() => {
+    if (isSerial && item.serial_number && !autoSaved && item.counted_quantity === null) {
+      setAutoSaved(true);
+      autoSaveSerial();
+    }
+  }, [isSerial, item.serial_number]);
+
+  const autoSaveSerial = async () => {
+    setSaving(true);
+    try {
+      await api.patch(`/stock-counts/${countId}/items`, { items: [{ id: item.id, counted_quantity: 1 }] });
+      Vibration.vibrate([0, 50, 100, 50]); // Double vibrate for serial scan success
+      Alert.alert('Serial Counted!', `${item.item_name}\nSerial: ${item.serial_number}`, [
+        { text: 'Scan Next', onPress: () => navigation.goBack() },
+        { text: 'Done', onPress: () => navigation.navigate('CountDetail', { countId }) },
+      ]);
+    } catch (e: any) { Alert.alert('Error', e.message); }
+    finally { setSaving(false); }
+  };
 
   const handleSave = async () => {
     const qty = parseInt(quantity, 10);
@@ -775,6 +851,23 @@ function ScannedItemScreen({ navigation, route }: any) {
     finally { setSaving(false); }
   };
 
+  // For serial items that are auto-saving, show a different UI
+  if (isSerial && item.serial_number && (saving || autoSaved)) {
+    return (
+      <View style={styles.container}>
+        <Header title="Serial Scanned" onBack={() => navigation.goBack()} />
+        <View style={[styles.centered, { padding: 24 }]}>
+          <Text style={styles.successIcon}>✓</Text>
+          <Text style={styles.scannedItemName}>{item.item_name}</Text>
+          <View style={styles.serialBadge}>
+            <Text style={styles.serialBadgeText}>{item.serial_number}</Text>
+          </View>
+          {saving && <ActivityIndicator size="large" color={COLORS.primary} style={{ marginTop: 24 }} />}
+        </View>
+      </View>
+    );
+  }
+
   return (
     <View style={styles.container}>
       <Header title="Item Found" onBack={() => navigation.goBack()} />
@@ -782,15 +875,25 @@ function ScannedItemScreen({ navigation, route }: any) {
         <View style={styles.scannedItemCard}>
           <Text style={styles.scannedItemIcon}>📦</Text>
           <Text style={styles.scannedItemName}>{item.item_name}</Text>
-          <Text style={styles.scannedItemSku}>SKU: {item.sku || 'N/A'}</Text>
+          {item.serial_number ? (
+            <View style={styles.serialBadge}>
+              <Text style={styles.serialBadgeText}>SN: {item.serial_number}</Text>
+            </View>
+          ) : (
+            <Text style={styles.scannedItemSku}>SKU: {item.sku || 'N/A'}</Text>
+          )}
           {item.bin_code && <Badge type="progress">{item.bin_code}</Badge>}
         </View>
         <View style={styles.scannedItemExpected}>
           <Text style={styles.scannedItemExpLabel}>Expected Quantity</Text>
           <Text style={styles.scannedItemExpValue}>{item.expected_quantity}</Text>
         </View>
-        <Text style={styles.inputLabel}>Enter Counted Quantity</Text>
-        <TextInput style={styles.bigInput} value={quantity} onChangeText={setQuantity} keyboardType="numeric" placeholder="0" placeholderTextColor={COLORS.gray400} autoFocus />
+        {!item.serial_number && (
+          <>
+            <Text style={styles.inputLabel}>Enter Counted Quantity</Text>
+            <TextInput style={styles.bigInput} value={quantity} onChangeText={setQuantity} keyboardType="numeric" placeholder="0" placeholderTextColor={COLORS.gray400} autoFocus />
+          </>
+        )}
         <TouchableOpacity style={styles.primaryBtn} onPress={handleSave} disabled={saving}>
           <Text style={styles.primaryBtnText}>{saving ? 'Saving...' : 'Save Count'}</Text>
         </TouchableOpacity>
@@ -1410,6 +1513,9 @@ const styles = StyleSheet.create({
   itemRowStatus: { fontSize: 16, fontWeight: '600', color: COLORS.gray400 },
   itemRowStatusMatch: { color: COLORS.success },
   itemRowStatusMismatch: { color: COLORS.danger },
+  itemRowSerial: { borderLeftWidth: 2, borderLeftColor: COLORS.purple },
+  itemRowIconSerial: { backgroundColor: COLORS.purpleLight },
+  itemRowSerialText: { fontSize: 11, color: COLORS.purple, fontWeight: '600', fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace' },
 
   // Schedule
   scheduleBanner: { backgroundColor: COLORS.white, borderRadius: 12, padding: 16, marginBottom: 16 },
@@ -1593,4 +1699,15 @@ const styles = StyleSheet.create({
   // Placeholder
   placeholderIcon: { fontSize: 64, marginBottom: 16 },
   placeholderText: { fontSize: 16, color: COLORS.gray500 },
+
+  // Serial Number
+  serialBadge: { backgroundColor: COLORS.purpleLight, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8, marginTop: 8 },
+  serialBadgeText: { fontSize: 14, fontWeight: '600', color: COLORS.purple, fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace' },
+  serialBadgeSmall: { backgroundColor: COLORS.purpleLight, paddingHorizontal: 8, paddingVertical: 2, borderRadius: 4, marginTop: 2, alignSelf: 'flex-start' },
+  serialBadgeSmallText: { fontSize: 11, fontWeight: '600', color: COLORS.purple, fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace' },
+  serialCountedBadge: { width: 24, height: 24, borderRadius: 12, backgroundColor: COLORS.success, alignItems: 'center', justifyContent: 'center', marginLeft: 8 },
+  serialCountedBadgeText: { fontSize: 14, color: COLORS.white, fontWeight: '700' },
+  itemCardSerial: { borderLeftWidth: 3, borderLeftColor: COLORS.purple },
+  qtyValueSerial: { color: COLORS.success },
+  serialScanHint: { fontSize: 11, color: COLORS.purple, textAlign: 'center', marginTop: 8, fontStyle: 'italic' },
 });
