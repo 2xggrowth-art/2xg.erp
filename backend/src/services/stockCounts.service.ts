@@ -163,44 +163,52 @@ export class StockCountsService {
 
     // If bin_location_id is provided (without bill_id), load items from bin stock
     if (data.bin_location_id && !data.bill_id) {
-      // Get items in this bin from bill_item_bin_allocations
+      // Get items in this bin with serial numbers from bill_item_bin_allocations
       const { data: binAllocations } = await supabase
         .from('bill_item_bin_allocations')
         .select(`
           quantity,
-          bill_items!inner(item_id, item_name, items(sku, barcode))
+          bill_items!inner(item_id, item_name, serial_numbers, items(sku, barcode, advanced_tracking_type))
         `)
         .eq('bin_location_id', data.bin_location_id);
 
       if (binAllocations && binAllocations.length > 0) {
-        // Aggregate quantities by item
-        const itemQuantities: Record<string, { item_id: string; item_name: string; sku: string; barcode: string; quantity: number }> = {};
+        const countItems: any[] = [];
 
         for (const alloc of binAllocations) {
           const billItem = (alloc as any).bill_items;
-          if (billItem?.item_id) {
-            const key = billItem.item_id;
-            if (!itemQuantities[key]) {
-              itemQuantities[key] = {
+          if (!billItem?.item_id) continue;
+
+          const itemInfo = billItem.items || {};
+          const serialNumbers = billItem.serial_numbers || [];
+          const isSerialTracked = itemInfo.advanced_tracking_type === 'serial' && serialNumbers.length > 0;
+
+          if (isSerialTracked) {
+            // Expand each serial number into its own stock_count_item
+            for (const serial of serialNumbers) {
+              countItems.push({
+                stock_count_id: count.id,
                 item_id: billItem.item_id,
                 item_name: billItem.item_name,
-                sku: billItem.items?.sku || billItem.items?.barcode || '',
-                barcode: billItem.items?.barcode || '',
-                quantity: 0,
-              };
+                sku: serial, // Use serial as the scannable code
+                serial_number: serial,
+                expected_quantity: 1, // Each serial = 1 unit
+                status: 'pending',
+              });
             }
-            itemQuantities[key].quantity += Number(alloc.quantity) || 0;
+          } else {
+            // Non-serial items: single row with total quantity
+            countItems.push({
+              stock_count_id: count.id,
+              item_id: billItem.item_id,
+              item_name: billItem.item_name,
+              sku: itemInfo.sku || itemInfo.barcode || '',
+              serial_number: null,
+              expected_quantity: Number(alloc.quantity) || 0,
+              status: 'pending',
+            });
           }
         }
-
-        const countItems = Object.values(itemQuantities).map(item => ({
-          stock_count_id: count.id,
-          item_id: item.item_id,
-          item_name: item.item_name,
-          sku: item.sku || item.barcode,
-          expected_quantity: item.quantity,
-          status: 'pending',
-        }));
 
         if (countItems.length > 0) {
           const { error: itemsError } = await supabase

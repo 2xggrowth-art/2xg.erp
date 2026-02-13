@@ -1057,7 +1057,7 @@ export class ItemsService {
   }
 
   /**
-   * Get item by barcode (searches barcode, sku, upc, ean, isbn)
+   * Get item by barcode (searches barcode, sku, upc, ean, isbn, serial_numbers)
    */
   async getItemByBarcode(barcode: string) {
     // Try barcode column first
@@ -1068,7 +1068,7 @@ export class ItemsService {
       .limit(1);
 
     if (error) throw error;
-    if (data && data.length > 0) return data[0];
+    if (data && data.length > 0) return { ...data[0], matched_serial: null };
 
     // Try SKU
     ({ data, error } = await supabaseAdmin
@@ -1078,7 +1078,7 @@ export class ItemsService {
       .limit(1));
 
     if (error) throw error;
-    if (data && data.length > 0) return data[0];
+    if (data && data.length > 0) return { ...data[0], matched_serial: null };
 
     // Try UPC
     ({ data, error } = await supabaseAdmin
@@ -1088,7 +1088,7 @@ export class ItemsService {
       .limit(1));
 
     if (error) throw error;
-    if (data && data.length > 0) return data[0];
+    if (data && data.length > 0) return { ...data[0], matched_serial: null };
 
     // Try EAN
     ({ data, error } = await supabaseAdmin
@@ -1098,7 +1098,7 @@ export class ItemsService {
       .limit(1));
 
     if (error) throw error;
-    if (data && data.length > 0) return data[0];
+    if (data && data.length > 0) return { ...data[0], matched_serial: null };
 
     // Try ISBN
     ({ data, error } = await supabaseAdmin
@@ -1108,7 +1108,38 @@ export class ItemsService {
       .limit(1));
 
     if (error) throw error;
-    if (data && data.length > 0) return data[0];
+    if (data && data.length > 0) return { ...data[0], matched_serial: null };
+
+    // Try serial number lookup in bill_items
+    const { data: billItems, error: billError } = await supabaseAdmin
+      .from('bill_items')
+      .select('item_id, item_name, serial_numbers')
+      .not('serial_numbers', 'eq', '[]');
+
+    if (!billError && billItems) {
+      for (const billItem of billItems) {
+        const serials = billItem.serial_numbers || [];
+        if (serials.includes(barcode)) {
+          // Found the serial number, get the full item
+          if (billItem.item_id) {
+            const { data: item } = await supabaseAdmin
+              .from('items')
+              .select('*')
+              .eq('id', billItem.item_id)
+              .single();
+            if (item) {
+              return { ...item, matched_serial: barcode };
+            }
+          }
+          // Return minimal info if no item_id
+          return {
+            id: billItem.item_id,
+            item_name: billItem.item_name,
+            matched_serial: barcode,
+          };
+        }
+      }
+    }
 
     return null;
   }
