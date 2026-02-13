@@ -657,7 +657,7 @@ function CountDetailScreen({ navigation, route }: any) {
                     placeholderTextColor={COLORS.gray400}
                   />
                 ) : (
-                  <Text style={[styles.qtyValue, item.serial_number && countedValues[item.id] && styles.qtyValueSerial]}>{countedValues[item.id] || item.counted_quantity ?? '—'}</Text>
+                  <Text style={[styles.qtyValue, item.serial_number && countedValues[item.id] && styles.qtyValueSerial]}>{countedValues[item.id] || (item.counted_quantity ?? '—')}</Text>
                 )}
               </View>
             </View>
