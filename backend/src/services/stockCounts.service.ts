@@ -99,10 +99,43 @@ export class StockCountsService {
   }
 
   /**
-   * Create a new stock count from a bill
+   * Create a new stock count from a bill or bin
    */
   async createStockCount(data: CreateStockCountData) {
     const countNumber = await this.generateCountNumber();
+
+    // If bin_location_id is provided but location_name is not, look up the bin details
+    let locationName = data.location_name;
+    let binCode = data.bin_code;
+    let locationId = data.location_id;
+
+    if (data.bin_location_id && !locationName) {
+      const { data: bin } = await supabase
+        .from('bin_locations')
+        .select('bin_code, location_id, locations(name)')
+        .eq('id', data.bin_location_id)
+        .single();
+
+      if (bin) {
+        binCode = bin.bin_code;
+        locationId = bin.location_id;
+        locationName = (bin as any).locations?.name || bin.bin_code || 'Unknown';
+      }
+    }
+
+    // If assigned_to is provided but assigned_to_name is not, look up the user
+    let assignedToName = data.assigned_to_name;
+    if (data.assigned_to && !assignedToName) {
+      const { data: mobileUser } = await supabase
+        .from('mobile_users')
+        .select('employee_name')
+        .eq('id', data.assigned_to)
+        .single();
+
+      if (mobileUser) {
+        assignedToName = mobileUser.employee_name;
+      }
+    }
 
     // Create the stock count
     const { data: count, error: countError } = await supabase
@@ -110,15 +143,15 @@ export class StockCountsService {
       .insert({
         count_number: countNumber,
         bill_id: data.bill_id || null,
-        location_id: data.location_id || null,
-        location_name: data.location_name,
+        location_id: locationId || null,
+        location_name: locationName || 'Unknown',
         bin_location_id: data.bin_location_id || null,
-        bin_code: data.bin_code || null,
+        bin_code: binCode || null,
         assigned_to: data.assigned_to || null,
-        assigned_to_name: data.assigned_to_name || null,
+        assigned_to_name: assignedToName || null,
         assigned_by: data.assigned_by || null,
         assigned_by_name: data.assigned_by_name || null,
-        count_type: data.count_type || 'delivery',
+        count_type: data.count_type || 'audit',
         due_date: data.due_date || null,
         notes: data.notes || null,
         status: 'pending',
@@ -127,6 +160,61 @@ export class StockCountsService {
       .single();
 
     if (countError) throw countError;
+
+    // If bin_location_id is provided (without bill_id), load items from bin stock
+    if (data.bin_location_id && !data.bill_id) {
+      // Get items in this bin from bill_item_bin_allocations
+      const { data: binAllocations } = await supabase
+        .from('bill_item_bin_allocations')
+        .select(`
+          quantity,
+          bill_items!inner(item_id, item_name, items(sku))
+        `)
+        .eq('bin_location_id', data.bin_location_id);
+
+      if (binAllocations && binAllocations.length > 0) {
+        // Aggregate quantities by item
+        const itemQuantities: Record<string, { item_id: string; item_name: string; sku: string; quantity: number }> = {};
+
+        for (const alloc of binAllocations) {
+          const billItem = (alloc as any).bill_items;
+          if (billItem?.item_id) {
+            const key = billItem.item_id;
+            if (!itemQuantities[key]) {
+              itemQuantities[key] = {
+                item_id: billItem.item_id,
+                item_name: billItem.item_name,
+                sku: billItem.items?.sku || '',
+                quantity: 0,
+              };
+            }
+            itemQuantities[key].quantity += Number(alloc.quantity) || 0;
+          }
+        }
+
+        const countItems = Object.values(itemQuantities).map(item => ({
+          stock_count_id: count.id,
+          item_id: item.item_id,
+          item_name: item.item_name,
+          sku: item.sku,
+          expected_quantity: item.quantity,
+          status: 'pending',
+        }));
+
+        if (countItems.length > 0) {
+          const { error: itemsError } = await supabase
+            .from('stock_count_items')
+            .insert(countItems);
+
+          if (itemsError) throw itemsError;
+
+          await supabase
+            .from('stock_counts')
+            .update({ total_items: countItems.length })
+            .eq('id', count.id);
+        }
+      }
+    }
 
     // If bill_id is provided, load items from the bill
     if (data.bill_id) {
