@@ -629,7 +629,7 @@ function CountDetailScreen({ navigation, route }: any) {
           <View style={[styles.itemCard, item.serial_number && styles.itemCardSerial]}>
             <View style={styles.itemCardHeader}>
               <View style={{ flex: 1 }}>
-                <Text style={styles.itemName} numberOfLines={1}>{item.item_name}</Text>
+                <Text style={styles.itemName} numberOfLines={1}>{item.item_name}  <Text style={{ fontSize: 12, color: COLORS.gray400, fontWeight: '400' }}>({item.expected_quantity})</Text></Text>
                 {item.serial_number ? (
                   <View style={styles.serialBadgeSmall}>
                     <Text style={styles.serialBadgeSmallText}>SN: {item.serial_number}</Text>
@@ -1549,7 +1549,7 @@ function AdminDashboard({ navigation }: any) {
         <View style={styles.adminQuickActions}>
           <TouchableOpacity style={styles.adminQuickAction} onPress={() => navigation.navigate('AssignCount')}><Text style={styles.adminQuickActionIcon}>➕</Text><Text style={styles.adminQuickActionLabel}>Assign Count</Text></TouchableOpacity>
           <TouchableOpacity style={styles.adminQuickAction} onPress={() => navigation.navigate('Schedule')}><Text style={styles.adminQuickActionIcon}>📅</Text><Text style={styles.adminQuickActionLabel}>Schedule</Text></TouchableOpacity>
-          <TouchableOpacity style={styles.adminQuickAction} onPress={() => navigation.navigate('Workload')}><Text style={styles.adminQuickActionIcon}>👥</Text><Text style={styles.adminQuickActionLabel}>Workload</Text></TouchableOpacity>
+          <TouchableOpacity style={styles.adminQuickAction} onPress={() => navigation.navigate('Bins')}><Text style={styles.adminQuickActionIcon}>📦</Text><Text style={styles.adminQuickActionLabel}>Bins</Text></TouchableOpacity>
         </View>
         <Text style={styles.sectionTitle}>Pending Approvals ({pendingApprovals.length})</Text>
         {pendingApprovals.length === 0 ? (
@@ -1736,9 +1736,91 @@ function ReviewCountScreen({ navigation, route }: any) {
   );
 }
 
-// Placeholder screens
-function WorkloadScreen({ navigation }: any) {
-  return <View style={styles.container}><Header title="Workload" onBack={() => navigation.goBack()} /><View style={styles.centered}><Text style={styles.placeholderIcon}>👥</Text><Text style={styles.placeholderText}>Coming soon</Text></View></View>;
+// Bins Screen - Shows all bins grouped by location with items and quantities
+function BinsScreen({ navigation }: any) {
+  const [bins, setBins] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [expandedBin, setExpandedBin] = useState<string | null>(null);
+
+  const fetchBins = async () => {
+    try {
+      const res = await api.get('/bin-locations/stock/all');
+      const allBins = res.data || res || [];
+      // Only show bins that have items
+      setBins(allBins.filter((b: any) => b.total_items > 0));
+    } catch (e) { console.error(e); }
+    finally { setLoading(false); setRefreshing(false); }
+  };
+
+  useFocusEffect(useCallback(() => { fetchBins(); }, []));
+
+  // Group bins by location
+  const groupedBins = bins.reduce((acc: Record<string, any[]>, bin: any) => {
+    const location = bin.locations?.name || 'Unknown Location';
+    if (!acc[location]) acc[location] = [];
+    acc[location].push(bin);
+    return acc;
+  }, {});
+
+  if (loading) return <View style={styles.centered}><ActivityIndicator size="large" color={COLORS.primary} /></View>;
+
+  const locationNames = Object.keys(groupedBins).sort();
+
+  return (
+    <View style={styles.container}>
+      <Header title="Bins" onBack={() => navigation.goBack()} />
+      <ScrollView
+        style={{ flex: 1 }}
+        contentContainerStyle={{ padding: 16, paddingBottom: 40 }}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); fetchBins(); }} />}
+      >
+        {locationNames.length === 0 ? (
+          <View style={styles.emptyState}>
+            <Text style={styles.emptyStateIcon}>📦</Text>
+            <Text style={styles.emptyStateText}>No bins with stock found</Text>
+          </View>
+        ) : (
+          locationNames.map(location => (
+            <View key={location} style={{ marginBottom: 20 }}>
+              <Text style={[styles.sectionTitle, { marginTop: 0 }]}>{location}</Text>
+              {groupedBins[location].map((bin: any) => {
+                const isExpanded = expandedBin === bin.id;
+                return (
+                  <TouchableOpacity
+                    key={bin.id}
+                    style={[styles.binCard, isExpanded && { borderLeftWidth: 3, borderLeftColor: COLORS.primary }]}
+                    onPress={() => setExpandedBin(isExpanded ? null : bin.id)}
+                    activeOpacity={0.7}
+                  >
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.binCardCode}>{bin.bin_code}</Text>
+                        <Text style={styles.binCardItems}>{bin.total_items} items  •  {Math.round(bin.total_quantity)} total qty</Text>
+                      </View>
+                      <Text style={{ fontSize: 16, color: COLORS.gray400 }}>{isExpanded ? '▲' : '▼'}</Text>
+                    </View>
+                    {isExpanded && bin.items && bin.items.length > 0 && (
+                      <View style={{ marginTop: 12, borderTopWidth: 1, borderTopColor: COLORS.gray200, paddingTop: 12 }}>
+                        {bin.items.map((item: any, idx: number) => (
+                          <View key={item.item_id || idx} style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 6 }}>
+                            <Text style={{ fontSize: 14, color: COLORS.gray700, flex: 1 }} numberOfLines={1}>{item.item_name}</Text>
+                            <Text style={{ fontSize: 14, fontWeight: '600', color: COLORS.primary, marginLeft: 12 }}>
+                              {Math.round(item.quantity * 100) / 100} {item.unit_of_measurement || 'pcs'}
+                            </Text>
+                          </View>
+                        ))}
+                      </View>
+                    )}
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          ))
+        )}
+      </ScrollView>
+    </View>
+  );
 }
 
 function ScheduleScreen({ navigation }: any) {
@@ -1797,7 +1879,7 @@ function AppNavigator() {
             {/* Admin screens */}
             <Stack.Screen name="AssignCount" component={AssignCountScreen} />
             <Stack.Screen name="ReviewCount" component={ReviewCountScreen} />
-            <Stack.Screen name="Workload" component={WorkloadScreen} />
+            <Stack.Screen name="Bins" component={BinsScreen} />
             <Stack.Screen name="Schedule" component={ScheduleScreen} />
           </>
         )}

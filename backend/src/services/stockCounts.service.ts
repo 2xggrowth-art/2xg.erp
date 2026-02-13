@@ -1,4 +1,5 @@
 import { supabaseAdmin as supabase } from '../config/supabase';
+import { BinLocationsService } from './binLocations.service';
 
 export interface CreateStockCountData {
   bill_id?: string;
@@ -162,49 +163,83 @@ export class StockCountsService {
     if (countError) throw countError;
 
     // If bin_location_id is provided (without bill_id), load items from bin stock
+    // Uses getBinLocationsWithStock() which calculates NET stock (purchases - sales +/- transfers)
     if (data.bin_location_id && !data.bill_id) {
-      // Get items in this bin with serial numbers from bill_item_bin_allocations
-      const { data: binAllocations } = await supabase
-        .from('bill_item_bin_allocations')
-        .select(`
-          quantity,
-          bill_items!inner(item_id, item_name, serial_numbers, items(sku, barcode, advanced_tracking_type))
-        `)
-        .eq('bin_location_id', data.bin_location_id);
+      const binLocationsService = new BinLocationsService();
+      const allBinsWithStock = await binLocationsService.getBinLocationsWithStock();
+      const targetBin = allBinsWithStock.find((b: any) => b.id === data.bin_location_id);
 
-      if (binAllocations && binAllocations.length > 0) {
+      if (targetBin && targetBin.items && targetBin.items.length > 0) {
+        // Get item details (sku, barcode, advanced_tracking_type) for all items in this bin
+        const itemIds = targetBin.items.map((i: any) => i.item_id).filter(Boolean);
+        let itemDetailsMap: Record<string, any> = {};
+        if (itemIds.length > 0) {
+          const { data: itemDetails } = await supabase
+            .from('items')
+            .select('id, sku, barcode, advanced_tracking_type')
+            .in('id', itemIds);
+          if (itemDetails) {
+            itemDetails.forEach((item: any) => { itemDetailsMap[item.id] = item; });
+          }
+        }
+
         const countItems: any[] = [];
 
-        for (const alloc of binAllocations) {
-          const billItem = (alloc as any).bill_items;
-          if (!billItem?.item_id) continue;
+        for (const binItem of targetBin.items) {
+          if (!binItem.item_id) continue;
+          const itemInfo = itemDetailsMap[binItem.item_id] || {};
+          const netQuantity = Math.round(binItem.quantity * 100) / 100; // Round to avoid floating point issues
 
-          const itemInfo = billItem.items || {};
-          const serialNumbers = billItem.serial_numbers || [];
-          const isSerialTracked = itemInfo.advanced_tracking_type === 'serial' && serialNumbers.length > 0;
+          if (netQuantity <= 0) continue; // Skip items with zero or negative net stock
 
-          if (isSerialTracked) {
-            // Expand each serial number into its own stock_count_item
-            for (const serial of serialNumbers) {
+          // For serial-tracked items, look up serial numbers from bill_item_bin_allocations
+          if (itemInfo.advanced_tracking_type === 'serial') {
+            const { data: serialAllocations } = await supabase
+              .from('bill_item_bin_allocations')
+              .select('bill_items!inner(serial_numbers)')
+              .eq('bin_location_id', data.bin_location_id);
+
+            const allSerials: string[] = [];
+            if (serialAllocations) {
+              for (const alloc of serialAllocations) {
+                const serials = (alloc as any).bill_items?.serial_numbers || [];
+                allSerials.push(...serials);
+              }
+            }
+
+            if (allSerials.length > 0) {
+              for (const serial of allSerials) {
+                countItems.push({
+                  stock_count_id: count.id,
+                  item_id: binItem.item_id,
+                  item_name: binItem.item_name,
+                  sku: serial,
+                  serial_number: serial,
+                  expected_quantity: 1,
+                  status: 'pending',
+                });
+              }
+            } else {
+              // Fallback: no serials found, create single row
               countItems.push({
                 stock_count_id: count.id,
-                item_id: billItem.item_id,
-                item_name: billItem.item_name,
-                sku: serial, // Use serial as the scannable code
-                serial_number: serial,
-                expected_quantity: 1, // Each serial = 1 unit
+                item_id: binItem.item_id,
+                item_name: binItem.item_name,
+                sku: itemInfo.sku || itemInfo.barcode || '',
+                serial_number: null,
+                expected_quantity: netQuantity,
                 status: 'pending',
               });
             }
           } else {
-            // Non-serial items: single row with total quantity
+            // Non-serial items: single row with net quantity
             countItems.push({
               stock_count_id: count.id,
-              item_id: billItem.item_id,
-              item_name: billItem.item_name,
+              item_id: binItem.item_id,
+              item_name: binItem.item_name,
               sku: itemInfo.sku || itemInfo.barcode || '',
               serial_number: null,
-              expected_quantity: Number(alloc.quantity) || 0,
+              expected_quantity: netQuantity,
               status: 'pending',
             });
           }
