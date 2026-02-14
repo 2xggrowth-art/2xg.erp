@@ -1321,18 +1321,6 @@ const PosCreate: React.FC = () => {
                                 <button
                                   onClick={(e) => {
                                     e.stopPropagation();
-                                    // TODO: Implement cash in/out modal
-                                    alert('Cash In/Out feature coming soon');
-                                  }}
-                                  className="px-3 py-1.5 text-xs font-medium text-blue-700 bg-blue-50 border border-blue-200 rounded-md hover:bg-blue-100 transition-colors flex items-center gap-1"
-                                  title="Cash In/Out"
-                                >
-                                  <DollarSign size={14} />
-                                  Cash In/Out
-                                </button>
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
                                     setActiveSession(session);
                                     setShowCloseSessionModal(true);
                                   }}
