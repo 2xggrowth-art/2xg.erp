@@ -451,13 +451,13 @@ function CounterDashboard({ navigation }: any) {
   const pendingReview = counts.filter(c => c.status === 'submitted').length;
   const completed = counts.filter(c => c.status === 'approved').length;
 
-  const schedule = [
-    { name: 'Mon', status: 'done' as const },
-    { name: 'Tue', status: 'done' as const },
-    { name: 'Wed', status: 'today' as const },
-    { name: 'Thu', status: 'upcoming' as const },
-    { name: 'Fri', status: 'upcoming' as const },
-  ];
+  // Dynamic schedule based on actual current day
+  const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  const todayIndex = new Date().getDay(); // 0=Sun, 1=Mon, ... 6=Sat
+  const schedule = dayNames.map((name, i) => ({
+    name,
+    status: (i === todayIndex ? 'today' : i < todayIndex ? 'done' : 'upcoming') as 'done' | 'today' | 'upcoming',
+  }));
 
   if (loading) return <View style={styles.centered}><ActivityIndicator size="large" color={COLORS.primary} /></View>;
 
@@ -492,7 +492,11 @@ function CounterDashboard({ navigation }: any) {
         )}
 
         <Text style={styles.sectionTitle}>Quick Actions</Text>
-        <View style={styles.quickActions}>
+        <View style={[styles.quickActions, { flexWrap: 'wrap' }]}>
+          <TouchableOpacity style={styles.quickAction} onPress={() => navigation.navigate('FindBin')}>
+            <Text style={styles.quickActionIcon}>📷</Text>
+            <Text style={styles.quickActionLabel}>Find Bin</Text>
+          </TouchableOpacity>
           <TouchableOpacity style={styles.quickAction} onPress={() => navigation.navigate('ItemLookup')}>
             <Text style={styles.quickActionIcon}>🔍</Text>
             <Text style={styles.quickActionLabel}>Item Lookup</Text>
@@ -1798,19 +1802,13 @@ function ReviewCountScreen({ navigation, route }: any) {
 }
 
 // Bins Screen - Shows all bins grouped by location with items and quantities
-// Features: Search by item name/SKU, Barcode scanner to find bin location
+// Features: Search by item name/SKU
 function BinsScreen({ navigation }: any) {
   const [bins, setBins] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [expandedBin, setExpandedBin] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
-  const [showScanner, setShowScanner] = useState(false);
-  const [scanResult, setScanResult] = useState<{ item: any; bins: any[] } | null>(null);
-  const [scanError, setScanError] = useState<string | null>(null);
-  const [scanLoading, setScanLoading] = useState(false);
-  const [scanned, setScanned] = useState(false);
-  const [permission, requestPermission] = useCameraPermissions();
 
   const fetchBins = async () => {
     try {
@@ -1844,208 +1842,32 @@ function BinsScreen({ navigation }: any) {
     return acc;
   }, {});
 
-  const handleBarCodeScanned = async ({ data }: BarcodeScanningResult) => {
-    if (scanned || scanLoading) return;
-    setScanned(true);
-    setScanLoading(true);
-    setScanError(null);
-    setScanResult(null);
-    Vibration.vibrate(50);
-
-    try {
-      // Look up item by barcode
-      const res = await api.get(`/items/barcode/${encodeURIComponent(data)}`);
-      const item = res.success ? res.data : res;
-
-      if (!item || !item.id) {
-        // Try stripping serial suffix
-        const slashIdx = data.lastIndexOf('/');
-        if (slashIdx > 0) {
-          const baseSku = data.substring(0, slashIdx);
-          const res2 = await api.get(`/items/barcode/${encodeURIComponent(baseSku)}`);
-          const item2 = res2.success ? res2.data : res2;
-          if (item2 && item2.id) {
-            const binRes = await api.get(`/bin-locations/item/${item2.id}`);
-            const itemBins = (binRes.success ? binRes.data : binRes) || [];
-            setScanResult({ item: item2, bins: itemBins });
-            Vibration.vibrate([0, 50, 50, 50]);
-            setScanLoading(false);
-            return;
-          }
-        }
-        Vibration.vibrate([0, 100, 50, 100]);
-        setScanError(`No item found for barcode: ${data}`);
-        setScanLoading(false);
-        return;
-      }
-
-      // Get bin locations for this item
-      const binRes = await api.get(`/bin-locations/item/${item.id}`);
-      const itemBins = (binRes.success ? binRes.data : binRes) || [];
-      setScanResult({ item, bins: itemBins });
-      Vibration.vibrate([0, 50, 50, 50]);
-    } catch (e: any) {
-      Vibration.vibrate([0, 100, 50, 100]);
-      setScanError(`Error looking up barcode: ${data}`);
-    } finally {
-      setScanLoading(false);
-    }
-  };
-
   if (loading) return <View style={styles.centered}><ActivityIndicator size="large" color={COLORS.primary} /></View>;
 
   const locationNames = Object.keys(groupedBins).sort();
-
-  // Scanner Modal
-  if (showScanner) {
-    if (!permission?.granted) {
-      return (
-        <View style={styles.container}>
-          <Header title="Scan Barcode" onBack={() => setShowScanner(false)} />
-          <View style={[styles.centered, { padding: 24 }]}>
-            <Text style={styles.permissionTitle}>Camera Permission Required</Text>
-            <Text style={{ fontSize: 14, color: COLORS.gray500, textAlign: 'center', marginBottom: 24 }}>
-              Allow camera access to scan barcodes and find bin locations.
-            </Text>
-            <TouchableOpacity style={styles.primaryBtn} onPress={requestPermission}>
-              <Text style={styles.primaryBtnText}>Grant Permission</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      );
-    }
-
-    return (
-      <View style={styles.container}>
-        <Header title="Scan Barcode" onBack={() => { setShowScanner(false); setScanResult(null); setScanError(null); setScanned(false); }} />
-        {!scanResult && !scanError ? (
-          <>
-            <View style={styles.halfScreenCamera}>
-              <CameraView
-                style={StyleSheet.absoluteFillObject}
-                barcodeScannerSettings={{ barcodeTypes: ['qr', 'ean13', 'ean8', 'code128', 'code39', 'code93', 'upc_a', 'upc_e', 'itf14', 'codabar'] }}
-                onBarcodeScanned={scanned ? undefined : handleBarCodeScanned}
-              />
-              <View style={styles.cameraOverlay}>
-                <View />
-                <View style={styles.smallScanFrame}>
-                  <View style={[styles.scannerCorner, styles.scannerCornerTL]} />
-                  <View style={[styles.scannerCorner, styles.scannerCornerTR]} />
-                  <View style={[styles.scannerCorner, styles.scannerCornerBL]} />
-                  <View style={[styles.scannerCorner, styles.scannerCornerBR]} />
-                </View>
-                <Text style={styles.scannerInstruction}>
-                  {scanLoading ? 'Looking up item...' : 'Scan barcode to find bin location'}
-                </Text>
-              </View>
-            </View>
-            <View style={[styles.centered, { flex: 1, padding: 24 }]}>
-              {scanLoading && <ActivityIndicator size="large" color={COLORS.primary} />}
-              {!scanLoading && (
-                <Text style={{ fontSize: 14, color: COLORS.gray500, textAlign: 'center' }}>
-                  Point camera at any barcode to find which bin the item is stored in.
-                </Text>
-              )}
-            </View>
-          </>
-        ) : scanError ? (
-          <View style={[styles.centered, { padding: 24 }]}>
-            <Text style={{ fontSize: 48, marginBottom: 16 }}>❌</Text>
-            <Text style={{ fontSize: 18, fontWeight: '600', color: COLORS.danger, marginBottom: 8, textAlign: 'center' }}>{scanError}</Text>
-            <TouchableOpacity
-              style={[styles.primaryBtn, { marginTop: 24, width: '100%' }]}
-              onPress={() => { setScanned(false); setScanError(null); }}
-            >
-              <Text style={styles.primaryBtnText}>Scan Again</Text>
-            </TouchableOpacity>
-          </View>
-        ) : scanResult ? (
-          <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 20 }}>
-            {/* Item info */}
-            <View style={{ backgroundColor: COLORS.white, borderRadius: 12, padding: 16, marginBottom: 16 }}>
-              <Text style={{ fontSize: 18, fontWeight: '700', color: COLORS.gray900 }}>
-                {scanResult.item.item_name || scanResult.item.name}
-              </Text>
-              {scanResult.item.sku && (
-                <Text style={{ fontSize: 13, color: COLORS.gray500, marginTop: 4 }}>SKU: {scanResult.item.sku}</Text>
-              )}
-              {scanResult.item.current_stock != null && (
-                <Text style={{ fontSize: 13, color: COLORS.primary, marginTop: 4 }}>
-                  Total Stock: {scanResult.item.current_stock}
-                </Text>
-              )}
-            </View>
-
-            {/* Bin locations */}
-            <Text style={[styles.sectionTitle, { marginTop: 0 }]}>
-              Bin Locations ({scanResult.bins.length})
-            </Text>
-            {scanResult.bins.length === 0 ? (
-              <View style={{ backgroundColor: COLORS.warningLight, borderRadius: 12, padding: 16, alignItems: 'center' }}>
-                <Text style={{ color: COLORS.warning, fontSize: 14, fontWeight: '500' }}>
-                  This item is not allocated to any bin
-                </Text>
-              </View>
-            ) : (
-              scanResult.bins.map((bin: any, idx: number) => (
-                <View key={bin.bin_location_id || bin.id || idx} style={[styles.binCard, { borderLeftWidth: 3, borderLeftColor: COLORS.success }]}>
-                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <View>
-                      <Text style={styles.binCardCode}>{bin.bin_code}</Text>
-                      {bin.location_name && <Text style={styles.binCardLocation}>{bin.location_name}</Text>}
-                    </View>
-                    <View style={{ backgroundColor: COLORS.primaryLight, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8 }}>
-                      <Text style={{ fontSize: 16, fontWeight: '700', color: COLORS.primary }}>
-                        {Math.round((bin.quantity || bin.net_stock || 0) * 100) / 100}
-                      </Text>
-                    </View>
-                  </View>
-                </View>
-              ))
-            )}
-
-            <TouchableOpacity
-              style={[styles.primaryBtn, { marginTop: 16 }]}
-              onPress={() => { setScanned(false); setScanResult(null); setScanError(null); }}
-            >
-              <Text style={styles.primaryBtnText}>Scan Another</Text>
-            </TouchableOpacity>
-          </ScrollView>
-        ) : null}
-      </View>
-    );
-  }
 
   return (
     <View style={styles.container}>
       <Header title="Bins" onBack={() => navigation.goBack()} />
 
-      {/* Search + Scan bar */}
+      {/* Search bar */}
       <View style={{ backgroundColor: COLORS.white, paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: COLORS.gray200 }}>
-        <View style={{ flexDirection: 'row', gap: 10 }}>
-          <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', backgroundColor: COLORS.gray100, borderRadius: 10, paddingHorizontal: 12 }}>
-            <Text style={{ fontSize: 16, color: COLORS.gray400, marginRight: 8 }}>🔍</Text>
-            <TextInput
-              style={{ flex: 1, fontSize: 15, color: COLORS.gray900, paddingVertical: 10 }}
-              placeholder="Search by item name or SKU..."
-              placeholderTextColor={COLORS.gray400}
-              value={searchQuery}
-              onChangeText={setSearchQuery}
-              autoCapitalize="none"
-              autoCorrect={false}
-            />
-            {searchQuery.length > 0 && (
-              <TouchableOpacity onPress={() => setSearchQuery('')}>
-                <Text style={{ fontSize: 16, color: COLORS.gray400 }}>✕</Text>
-              </TouchableOpacity>
-            )}
-          </View>
-          <TouchableOpacity
-            style={{ backgroundColor: COLORS.primary, borderRadius: 10, paddingHorizontal: 14, justifyContent: 'center', alignItems: 'center' }}
-            onPress={() => { setShowScanner(true); setScanned(false); setScanResult(null); setScanError(null); }}
-          >
-            <Text style={{ fontSize: 20, color: COLORS.white }}>📷</Text>
-          </TouchableOpacity>
+        <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: COLORS.gray100, borderRadius: 10, paddingHorizontal: 12 }}>
+          <Text style={{ fontSize: 16, color: COLORS.gray400, marginRight: 8 }}>🔍</Text>
+          <TextInput
+            style={{ flex: 1, fontSize: 15, color: COLORS.gray900, paddingVertical: 10 }}
+            placeholder="Search by item name or SKU..."
+            placeholderTextColor={COLORS.gray400}
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+            autoCapitalize="none"
+            autoCorrect={false}
+          />
+          {searchQuery.length > 0 && (
+            <TouchableOpacity onPress={() => setSearchQuery('')}>
+              <Text style={{ fontSize: 16, color: COLORS.gray400 }}>✕</Text>
+            </TouchableOpacity>
+          )}
         </View>
         {searchQuery.trim() !== '' && (
           <Text style={{ fontSize: 12, color: COLORS.gray500, marginTop: 8 }}>
@@ -2112,6 +1934,175 @@ function BinsScreen({ navigation }: any) {
   );
 }
 
+// Find Bin Screen - Scan barcode to find which bin an item is in
+function FindBinScreen({ navigation }: any) {
+  const [scanResult, setScanResult] = useState<{ item: any; bins: any[] } | null>(null);
+  const [scanError, setScanError] = useState<string | null>(null);
+  const [scanLoading, setScanLoading] = useState(false);
+  const [scanned, setScanned] = useState(false);
+  const [permission, requestPermission] = useCameraPermissions();
+
+  const handleBarCodeScanned = async ({ data }: BarcodeScanningResult) => {
+    if (scanned || scanLoading) return;
+    setScanned(true);
+    setScanLoading(true);
+    setScanError(null);
+    setScanResult(null);
+    Vibration.vibrate(50);
+
+    try {
+      const res = await api.get(`/items/barcode/${encodeURIComponent(data)}`);
+      const item = res.success ? res.data : res;
+
+      if (!item || !item.id) {
+        const slashIdx = data.lastIndexOf('/');
+        if (slashIdx > 0) {
+          const baseSku = data.substring(0, slashIdx);
+          const res2 = await api.get(`/items/barcode/${encodeURIComponent(baseSku)}`);
+          const item2 = res2.success ? res2.data : res2;
+          if (item2 && item2.id) {
+            const binRes = await api.get(`/bin-locations/item/${item2.id}`);
+            const itemBins = (binRes.success ? binRes.data : binRes) || [];
+            setScanResult({ item: item2, bins: itemBins });
+            Vibration.vibrate([0, 50, 50, 50]);
+            setScanLoading(false);
+            return;
+          }
+        }
+        Vibration.vibrate([0, 100, 50, 100]);
+        setScanError(`No item found for barcode: ${data}`);
+        setScanLoading(false);
+        return;
+      }
+
+      const binRes = await api.get(`/bin-locations/item/${item.id}`);
+      const itemBins = (binRes.success ? binRes.data : binRes) || [];
+      setScanResult({ item, bins: itemBins });
+      Vibration.vibrate([0, 50, 50, 50]);
+    } catch (e: any) {
+      Vibration.vibrate([0, 100, 50, 100]);
+      setScanError(`Error looking up barcode: ${data}`);
+    } finally {
+      setScanLoading(false);
+    }
+  };
+
+  if (!permission?.granted) {
+    return (
+      <View style={styles.container}>
+        <Header title="Find Bin" onBack={() => navigation.goBack()} />
+        <View style={[styles.centered, { padding: 24 }]}>
+          <Text style={styles.permissionTitle}>Camera Permission Required</Text>
+          <Text style={{ fontSize: 14, color: COLORS.gray500, textAlign: 'center', marginBottom: 24 }}>
+            Allow camera access to scan barcodes and find bin locations.
+          </Text>
+          <TouchableOpacity style={styles.primaryBtn} onPress={requestPermission}>
+            <Text style={styles.primaryBtnText}>Grant Permission</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
+  }
+
+  return (
+    <View style={styles.container}>
+      <Header title="Find Bin" onBack={() => navigation.goBack()} />
+      {!scanResult && !scanError ? (
+        <>
+          <View style={styles.halfScreenCamera}>
+            <CameraView
+              style={StyleSheet.absoluteFillObject}
+              barcodeScannerSettings={{ barcodeTypes: ['qr', 'ean13', 'ean8', 'code128', 'code39', 'code93', 'upc_a', 'upc_e', 'itf14', 'codabar'] }}
+              onBarcodeScanned={scanned ? undefined : handleBarCodeScanned}
+            />
+            <View style={styles.cameraOverlay}>
+              <View />
+              <View style={styles.smallScanFrame}>
+                <View style={[styles.scannerCorner, styles.scannerCornerTL]} />
+                <View style={[styles.scannerCorner, styles.scannerCornerTR]} />
+                <View style={[styles.scannerCorner, styles.scannerCornerBL]} />
+                <View style={[styles.scannerCorner, styles.scannerCornerBR]} />
+              </View>
+              <Text style={styles.scannerInstruction}>
+                {scanLoading ? 'Looking up item...' : 'Scan barcode to find bin location'}
+              </Text>
+            </View>
+          </View>
+          <View style={[styles.centered, { flex: 1, padding: 24 }]}>
+            {scanLoading && <ActivityIndicator size="large" color={COLORS.primary} />}
+            {!scanLoading && (
+              <Text style={{ fontSize: 14, color: COLORS.gray500, textAlign: 'center' }}>
+                Point camera at any barcode to find which bin the item is stored in.
+              </Text>
+            )}
+          </View>
+        </>
+      ) : scanError ? (
+        <View style={[styles.centered, { padding: 24 }]}>
+          <Text style={{ fontSize: 48, marginBottom: 16 }}>❌</Text>
+          <Text style={{ fontSize: 18, fontWeight: '600', color: COLORS.danger, marginBottom: 8, textAlign: 'center' }}>{scanError}</Text>
+          <TouchableOpacity
+            style={[styles.primaryBtn, { marginTop: 24, width: '100%' }]}
+            onPress={() => { setScanned(false); setScanError(null); }}
+          >
+            <Text style={styles.primaryBtnText}>Scan Again</Text>
+          </TouchableOpacity>
+        </View>
+      ) : scanResult ? (
+        <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 20 }}>
+          <View style={{ backgroundColor: COLORS.white, borderRadius: 12, padding: 16, marginBottom: 16 }}>
+            <Text style={{ fontSize: 18, fontWeight: '700', color: COLORS.gray900 }}>
+              {scanResult.item.item_name || scanResult.item.name}
+            </Text>
+            {scanResult.item.sku && (
+              <Text style={{ fontSize: 13, color: COLORS.gray500, marginTop: 4 }}>SKU: {scanResult.item.sku}</Text>
+            )}
+            {scanResult.item.current_stock != null && (
+              <Text style={{ fontSize: 13, color: COLORS.primary, marginTop: 4 }}>
+                Total Stock: {scanResult.item.current_stock}
+              </Text>
+            )}
+          </View>
+
+          <Text style={[styles.sectionTitle, { marginTop: 0 }]}>
+            Bin Locations ({scanResult.bins.length})
+          </Text>
+          {scanResult.bins.length === 0 ? (
+            <View style={{ backgroundColor: COLORS.warningLight, borderRadius: 12, padding: 16, alignItems: 'center' }}>
+              <Text style={{ color: COLORS.warning, fontSize: 14, fontWeight: '500' }}>
+                This item is not allocated to any bin
+              </Text>
+            </View>
+          ) : (
+            scanResult.bins.map((bin: any, idx: number) => (
+              <View key={bin.bin_location_id || bin.id || idx} style={[styles.binCard, { borderLeftWidth: 3, borderLeftColor: COLORS.success }]}>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <View>
+                    <Text style={styles.binCardCode}>{bin.bin_code}</Text>
+                    {bin.location_name && <Text style={styles.binCardLocation}>{bin.location_name}</Text>}
+                  </View>
+                  <View style={{ backgroundColor: COLORS.primaryLight, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8 }}>
+                    <Text style={{ fontSize: 16, fontWeight: '700', color: COLORS.primary }}>
+                      {Math.round((bin.quantity || bin.net_stock || 0) * 100) / 100}
+                    </Text>
+                  </View>
+                </View>
+              </View>
+            ))
+          )}
+
+          <TouchableOpacity
+            style={[styles.primaryBtn, { marginTop: 16 }]}
+            onPress={() => { setScanned(false); setScanResult(null); setScanError(null); }}
+          >
+            <Text style={styles.primaryBtnText}>Scan Another</Text>
+          </TouchableOpacity>
+        </ScrollView>
+      ) : null}
+    </View>
+  );
+}
+
 function ScheduleScreen({ navigation }: any) {
   return <View style={styles.container}><Header title="Schedule" onBack={() => navigation.goBack()} /><View style={styles.centered}><Text style={styles.placeholderIcon}>📅</Text><Text style={styles.placeholderText}>Coming soon</Text></View></View>;
 }
@@ -2164,6 +2155,7 @@ function AppNavigator() {
             <Stack.Screen name="Submitted" component={SubmittedScreen} options={{ gestureEnabled: false }} />
             <Stack.Screen name="ItemLookup" component={ItemLookupScreen} />
             <Stack.Screen name="BinInventory" component={BinInventoryScreen} />
+            <Stack.Screen name="FindBin" component={FindBinScreen} />
             <Stack.Screen name="DamageReport" component={DamageReportScreen} />
             {/* Admin screens */}
             <Stack.Screen name="AssignCount" component={AssignCountScreen} />
