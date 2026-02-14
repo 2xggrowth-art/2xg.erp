@@ -69,6 +69,11 @@ const NewBillForm = () => {
   const [binModalOpen, setBinModalOpen] = useState(false);
   const [selectedItemIndex, setSelectedItemIndex] = useState<number | null>(null);
 
+  // File upload state
+  const [attachedFiles, setAttachedFiles] = useState<File[]>([]);
+  const [uploadedUrls, setUploadedUrls] = useState<{ url: string; filename: string }[]>([]);
+  const [uploading, setUploading] = useState(false);
+
 
   const [formData, setFormData] = useState({
     vendor_id: '',
@@ -333,6 +338,17 @@ const NewBillForm = () => {
     setLoading(true);
 
     try {
+      // Upload attached files first
+      let fileUrls: string[] = [...uploadedUrls.map(u => u.url)];
+      if (attachedFiles.length > 0) {
+        setUploading(true);
+        const uploadRes = await billsService.uploadFiles(attachedFiles);
+        if (uploadRes.success && uploadRes.data) {
+          fileUrls = [...fileUrls, ...uploadRes.data.map(f => f.url)];
+        }
+        setUploading(false);
+      }
+
       const billData: any = {
         vendor_id: formData.vendor_id,
         vendor_name: formData.vendor_name,
@@ -349,6 +365,7 @@ const NewBillForm = () => {
         adjustment: formData.adjustment,
         total_amount: calculateTotal(),
         notes: formData.notes,
+        attachment_urls: fileUrls.length > 0 ? fileUrls : undefined,
         items: billItems.map(item => ({
           item_id: item.item_id || undefined,
           item_name: item.item_name,
@@ -758,11 +775,61 @@ const NewBillForm = () => {
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Attach File(s) to Bill
                 </label>
-                <button className="flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-md hover:bg-gray-50 text-sm">
+                <input
+                  type="file"
+                  id="bill-file-upload"
+                  multiple
+                  accept="image/jpeg,image/png,image/gif,image/webp,application/pdf"
+                  className="hidden"
+                  onChange={(e) => {
+                    const files = Array.from(e.target.files || []);
+                    const totalFiles = attachedFiles.length + uploadedUrls.length + files.length;
+                    if (totalFiles > 5) {
+                      alert('Maximum 5 files allowed');
+                      return;
+                    }
+                    const oversized = files.find(f => f.size > 10 * 1024 * 1024);
+                    if (oversized) {
+                      alert(`File "${oversized.name}" exceeds 10MB limit`);
+                      return;
+                    }
+                    setAttachedFiles(prev => [...prev, ...files]);
+                    e.target.value = '';
+                  }}
+                />
+                <button
+                  type="button"
+                  onClick={() => document.getElementById('bill-file-upload')?.click()}
+                  className="flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-md hover:bg-gray-50 text-sm"
+                  disabled={attachedFiles.length + uploadedUrls.length >= 5}
+                >
                   <Upload className="h-4 w-4 text-gray-600" />
-                  <span>Upload File</span>
+                  <span>{uploading ? 'Uploading...' : 'Upload File'}</span>
                 </button>
                 <p className="mt-1 text-xs text-gray-500">You can upload a maximum of 5 files, 10MB each</p>
+
+                {/* Show attached files */}
+                {(attachedFiles.length > 0 || uploadedUrls.length > 0) && (
+                  <div className="mt-2 space-y-1">
+                    {uploadedUrls.map((f, i) => (
+                      <div key={`uploaded-${i}`} className="flex items-center gap-2 text-sm text-green-700 bg-green-50 px-3 py-1.5 rounded">
+                        <span className="truncate flex-1">{f.filename}</span>
+                        <button type="button" onClick={() => setUploadedUrls(prev => prev.filter((_, idx) => idx !== i))} className="text-red-400 hover:text-red-600">
+                          <X className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                    ))}
+                    {attachedFiles.map((f, i) => (
+                      <div key={`file-${i}`} className="flex items-center gap-2 text-sm text-gray-700 bg-gray-50 px-3 py-1.5 rounded">
+                        <span className="truncate flex-1">{f.name}</span>
+                        <span className="text-xs text-gray-400">{(f.size / 1024).toFixed(0)}KB</span>
+                        <button type="button" onClick={() => setAttachedFiles(prev => prev.filter((_, idx) => idx !== i))} className="text-red-400 hover:text-red-600">
+                          <X className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
 
@@ -779,8 +846,10 @@ const NewBillForm = () => {
                   <input
                     type="number"
                     name="discount_value"
-                    value={formData.discount_value}
+                    value={formData.discount_value || ''}
                     onChange={(e) => setFormData({ ...formData, discount_value: parseFloat(e.target.value) || 0 })}
+                    onFocus={(e) => { if (formData.discount_value === 0) e.target.value = ''; }}
+                    placeholder="0"
                     className="w-16 px-2 py-1 border border-gray-300 rounded text-sm text-center"
                   />
                   <select
@@ -798,11 +867,12 @@ const NewBillForm = () => {
 
               <div className="flex justify-between items-center py-2">
                 <div className="flex items-center gap-2">
-                  <span className="text-sm text-gray-700 w-12">CGST</span>
+                  <span className={`text-sm w-12 ${formData.igst_rate > 0 ? 'text-gray-400' : 'text-gray-700'}`}>CGST</span>
                   <select
                     value={formData.cgst_rate}
-                    onChange={(e) => setFormData({ ...formData, cgst_rate: parseFloat(e.target.value) || 0 })}
-                    className="px-2 py-1 border border-gray-300 rounded text-sm bg-white w-20"
+                    onChange={(e) => setFormData({ ...formData, cgst_rate: parseFloat(e.target.value) || 0, igst_rate: 0 })}
+                    disabled={formData.igst_rate > 0}
+                    className={`px-2 py-1 border border-gray-300 rounded text-sm bg-white w-20 ${formData.igst_rate > 0 ? 'opacity-50 cursor-not-allowed' : ''}`}
                   >
                     <option value={0}>0%</option>
                     <option value={2.5}>2.5%</option>
@@ -816,11 +886,12 @@ const NewBillForm = () => {
 
               <div className="flex justify-between items-center py-2">
                 <div className="flex items-center gap-2">
-                  <span className="text-sm text-gray-700 w-12">SGST</span>
+                  <span className={`text-sm w-12 ${formData.igst_rate > 0 ? 'text-gray-400' : 'text-gray-700'}`}>SGST</span>
                   <select
                     value={formData.sgst_rate}
-                    onChange={(e) => setFormData({ ...formData, sgst_rate: parseFloat(e.target.value) || 0 })}
-                    className="px-2 py-1 border border-gray-300 rounded text-sm bg-white w-20"
+                    onChange={(e) => setFormData({ ...formData, sgst_rate: parseFloat(e.target.value) || 0, igst_rate: 0 })}
+                    disabled={formData.igst_rate > 0}
+                    className={`px-2 py-1 border border-gray-300 rounded text-sm bg-white w-20 ${formData.igst_rate > 0 ? 'opacity-50 cursor-not-allowed' : ''}`}
                   >
                     <option value={0}>0%</option>
                     <option value={2.5}>2.5%</option>
@@ -834,11 +905,12 @@ const NewBillForm = () => {
 
               <div className="flex justify-between items-center py-2">
                 <div className="flex items-center gap-2">
-                  <span className="text-sm text-gray-700 w-12">IGST</span>
+                  <span className={`text-sm w-12 ${(formData.cgst_rate > 0 || formData.sgst_rate > 0) ? 'text-gray-400' : 'text-gray-700'}`}>IGST</span>
                   <select
                     value={formData.igst_rate}
-                    onChange={(e) => setFormData({ ...formData, igst_rate: parseFloat(e.target.value) || 0 })}
-                    className="px-2 py-1 border border-gray-300 rounded text-sm bg-white w-20"
+                    onChange={(e) => setFormData({ ...formData, igst_rate: parseFloat(e.target.value) || 0, cgst_rate: 0, sgst_rate: 0 })}
+                    disabled={formData.cgst_rate > 0 || formData.sgst_rate > 0}
+                    className={`px-2 py-1 border border-gray-300 rounded text-sm bg-white w-20 ${(formData.cgst_rate > 0 || formData.sgst_rate > 0) ? 'opacity-50 cursor-not-allowed' : ''}`}
                   >
                     <option value={0}>0%</option>
                     <option value={5}>5%</option>
@@ -856,8 +928,10 @@ const NewBillForm = () => {
                   <input
                     type="number"
                     name="adjustment"
-                    value={formData.adjustment}
+                    value={formData.adjustment || ''}
                     onChange={(e) => setFormData({ ...formData, adjustment: parseFloat(e.target.value) || 0 })}
+                    onFocus={(e) => { if (formData.adjustment === 0) e.target.value = ''; }}
+                    placeholder="0"
                     step="0.01"
                     className="w-24 px-2 py-1 border border-gray-300 rounded text-sm text-center"
                   />

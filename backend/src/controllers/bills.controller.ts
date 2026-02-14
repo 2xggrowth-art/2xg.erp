@@ -27,6 +27,28 @@ export class BillsController {
   };
 
   /**
+   * Upload files for a bill
+   */
+  uploadFiles = async (req: Request, res: Response) => {
+    try {
+      const processedFiles = (req as any).processedFiles || [];
+      if (processedFiles.length === 0) {
+        return res.status(400).json({ success: false, error: 'No files uploaded' });
+      }
+      res.json({
+        success: true,
+        data: processedFiles.map((f: any) => ({
+          url: f.url,
+          filename: f.originalname,
+        })),
+      });
+    } catch (error: any) {
+      console.error('Error uploading bill files:', error);
+      res.status(500).json({ success: false, error: error.message });
+    }
+  };
+
+  /**
    * Create a new bill
    */
   createBill = async (req: Request, res: Response) => {

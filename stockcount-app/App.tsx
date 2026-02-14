@@ -87,6 +87,10 @@ interface StockCount {
   mismatches?: number;
   accuracy?: number;
   type?: string;
+  created_at?: string;
+  updated_at?: string;
+  started_at?: string;
+  completed_at?: string;
 }
 
 interface BinLocation {
@@ -271,6 +275,7 @@ const CountCard = ({ count, onPress }: { count: StockCount; onPress: () => void 
       </View>
       <View style={styles.countCardMeta}>
         <Text style={styles.countCardItems}>{count.total_items || count.items?.length || 0} items</Text>
+        {count.created_at && <Text style={{ fontSize: 11, color: COLORS.gray400 }}>{new Date(count.created_at).toLocaleDateString()}</Text>}
         {count.due_date && <Text style={styles.countCardDue}>Due: {count.due_date}</Text>}
       </View>
       {['in_progress', 'recount'].includes(count.status) && (
@@ -335,16 +340,16 @@ const ItemRow = ({ item, onPress, showVariance = false }: { item: StockCountItem
 };
 
 // ScheduleBanner
-const ScheduleBanner = ({ days }: { days: { name: string; status: 'done' | 'today' | 'upcoming' }[] }) => (
+const ScheduleBanner = ({ days, selectedDay, onDayPress }: { days: { name: string; status: 'done' | 'today' | 'upcoming'; date: string }[]; selectedDay?: string | null; onDayPress?: (date: string, name: string) => void }) => (
   <View style={styles.scheduleBanner}>
     <Text style={styles.scheduleBannerTitle}>This Week's Schedule</Text>
     <View style={styles.scheduleDays}>
       {days.map((d, i) => (
-        <View key={i} style={[styles.scheduleDay, d.status === 'done' && styles.scheduleDayDone, d.status === 'today' && styles.scheduleDayToday]}>
-          <Text style={[styles.scheduleDayText, d.status === 'today' && styles.scheduleDayTextToday]}>{d.name}</Text>
+        <TouchableOpacity key={i} onPress={() => onDayPress?.(d.date, d.name)} style={[styles.scheduleDay, d.status === 'done' && styles.scheduleDayDone, d.status === 'today' && styles.scheduleDayToday, selectedDay === d.date && { borderWidth: 2, borderColor: COLORS.primary }]}>
+          <Text style={[styles.scheduleDayText, d.status === 'today' && styles.scheduleDayTextToday, selectedDay === d.date && { color: COLORS.primary, fontWeight: '700' }]}>{d.name}</Text>
           {d.status === 'done' && <Text style={styles.scheduleDayCheck}>✓</Text>}
           {d.status === 'today' && <View style={styles.scheduleDayDot} />}
-        </View>
+        </TouchableOpacity>
       ))}
     </View>
   </View>
@@ -436,6 +441,8 @@ function CounterDashboard({ navigation }: any) {
   const [counts, setCounts] = useState<StockCount[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [selectedDay, setSelectedDay] = useState<string | null>(null);
+  const [selectedDayName, setSelectedDayName] = useState<string | null>(null);
 
   const fetchData = async () => {
     try {
@@ -447,17 +454,56 @@ function CounterDashboard({ navigation }: any) {
 
   useFocusEffect(useCallback(() => { fetchData(); }, []));
 
+  // Today's date string for filtering
+  const todayStr = new Date().toISOString().split('T')[0];
+
   const activeCounts = counts.filter(c => ['pending', 'draft', 'in_progress', 'recount'].includes(c.status));
+  // Only show today's assigned counts by default
+  const todayActiveCounts = activeCounts.filter(c => {
+    const createdDate = c.created_at ? c.created_at.split('T')[0] : null;
+    const dueDate = c.due_date ? c.due_date.split('T')[0] : null;
+    return dueDate === todayStr || createdDate === todayStr || c.status === 'in_progress';
+  });
   const pendingReview = counts.filter(c => c.status === 'submitted').length;
   const completed = counts.filter(c => c.status === 'approved').length;
 
-  // Dynamic schedule based on actual current day
+  // Dynamic schedule based on actual current day with dates
   const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-  const todayIndex = new Date().getDay(); // 0=Sun, 1=Mon, ... 6=Sat
-  const schedule = dayNames.map((name, i) => ({
-    name,
-    status: (i === todayIndex ? 'today' : i < todayIndex ? 'done' : 'upcoming') as 'done' | 'today' | 'upcoming',
-  }));
+  const now = new Date();
+  const todayIndex = now.getDay();
+  const schedule = dayNames.map((name, i) => {
+    const diff = i - todayIndex;
+    const dayDate = new Date(now);
+    dayDate.setDate(now.getDate() + diff);
+    return {
+      name,
+      date: dayDate.toISOString().split('T')[0],
+      status: (i === todayIndex ? 'today' : i < todayIndex ? 'done' : 'upcoming') as 'done' | 'today' | 'upcoming',
+    };
+  });
+
+  // Filter counts for selected day
+  const getCountsForDay = (dateStr: string) => {
+    return counts.filter(c => {
+      const createdDate = c.created_at ? c.created_at.split('T')[0] : null;
+      const dueDate = c.due_date ? c.due_date.split('T')[0] : null;
+      const completedDate = c.completed_at ? c.completed_at.split('T')[0] : null;
+      const startedDate = c.started_at ? c.started_at.split('T')[0] : null;
+      return createdDate === dateStr || dueDate === dateStr || completedDate === dateStr || startedDate === dateStr;
+    });
+  };
+
+  const handleDayPress = (date: string, name: string) => {
+    if (selectedDay === date) {
+      setSelectedDay(null);
+      setSelectedDayName(null);
+    } else {
+      setSelectedDay(date);
+      setSelectedDayName(name);
+    }
+  };
+
+  const selectedDayCounts = selectedDay ? getCountsForDay(selectedDay) : null;
 
   if (loading) return <View style={styles.centered}><ActivityIndicator size="large" color={COLORS.primary} /></View>;
 
@@ -480,15 +526,35 @@ function CounterDashboard({ navigation }: any) {
           <StatCard value={completed} label="Done" color="success" icon="✓" />
         </View>
 
-        <ScheduleBanner days={schedule} />
+        <ScheduleBanner days={schedule} selectedDay={selectedDay} onDayPress={handleDayPress} />
 
-        <Text style={styles.sectionTitle}>My Assigned Counts</Text>
-        {activeCounts.length === 0 ? (
-          <View style={styles.emptyState}><Text style={styles.emptyStateIcon}>📭</Text><Text style={styles.emptyStateText}>No active counts assigned</Text></View>
+        {selectedDayCounts ? (
+          <>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 16, paddingHorizontal: 4 }}>
+              <Text style={styles.sectionTitle}>{selectedDayName} — {selectedDay}</Text>
+              <TouchableOpacity onPress={() => { setSelectedDay(null); setSelectedDayName(null); }}>
+                <Text style={{ color: COLORS.primary, fontSize: 13, fontWeight: '600' }}>Clear</Text>
+              </TouchableOpacity>
+            </View>
+            {selectedDayCounts.length === 0 ? (
+              <View style={styles.emptyState}><Text style={styles.emptyStateIcon}>📭</Text><Text style={styles.emptyStateText}>No counts for {selectedDayName}</Text></View>
+            ) : (
+              selectedDayCounts.map(count => (
+                <CountCard key={count.id} count={count} onPress={() => navigation.navigate('CountDetail', { countId: count.id })} />
+              ))
+            )}
+          </>
         ) : (
-          activeCounts.map(count => (
-            <CountCard key={count.id} count={count} onPress={() => navigation.navigate('CountDetail', { countId: count.id })} />
-          ))
+          <>
+            <Text style={styles.sectionTitle}>Today's Assigned Counts</Text>
+            {todayActiveCounts.length === 0 ? (
+              <View style={styles.emptyState}><Text style={styles.emptyStateIcon}>📭</Text><Text style={styles.emptyStateText}>No counts assigned for today</Text></View>
+            ) : (
+              todayActiveCounts.map(count => (
+                <CountCard key={count.id} count={count} onPress={() => navigation.navigate('CountDetail', { countId: count.id })} />
+              ))
+            )}
+          </>
         )}
 
         <Text style={styles.sectionTitle}>Quick Actions</Text>
@@ -1433,6 +1499,7 @@ function CountHistoryScreen({ navigation }: any) {
   const { user } = useAuth();
   const [counts, setCounts] = useState<StockCount[]>([]);
   const [loading, setLoading] = useState(true);
+  const [filterType, setFilterType] = useState<'all' | 'today' | 'week' | 'month'>('all');
 
   useFocusEffect(useCallback(() => {
     api.get(`/stock-counts?assigned_to=${user?.id}`)
@@ -1441,17 +1508,76 @@ function CountHistoryScreen({ navigation }: any) {
       .finally(() => setLoading(false));
   }, []));
 
+  const getFilteredCounts = () => {
+    if (filterType === 'all') return counts;
+    const now = new Date();
+    const todayStr = now.toISOString().split('T')[0];
+    return counts.filter(c => {
+      const dateStr = c.completed_at ? c.completed_at.split('T')[0] : c.updated_at ? c.updated_at.split('T')[0] : c.created_at ? c.created_at.split('T')[0] : null;
+      if (!dateStr) return false;
+      if (filterType === 'today') return dateStr === todayStr;
+      if (filterType === 'week') {
+        const d = new Date(dateStr);
+        const diffDays = Math.floor((now.getTime() - d.getTime()) / (1000 * 60 * 60 * 24));
+        return diffDays <= 7;
+      }
+      if (filterType === 'month') {
+        const d = new Date(dateStr);
+        const diffDays = Math.floor((now.getTime() - d.getTime()) / (1000 * 60 * 60 * 24));
+        return diffDays <= 30;
+      }
+      return true;
+    });
+  };
+
+  // Group by date
+  const groupByDate = (items: StockCount[]) => {
+    const groups: { date: string; counts: StockCount[] }[] = [];
+    const map = new Map<string, StockCount[]>();
+    items.forEach(c => {
+      const dateStr = c.completed_at ? c.completed_at.split('T')[0] : c.updated_at ? c.updated_at.split('T')[0] : c.created_at ? c.created_at.split('T')[0] : 'Unknown';
+      if (!map.has(dateStr)) map.set(dateStr, []);
+      map.get(dateStr)!.push(c);
+    });
+    map.forEach((v, k) => groups.push({ date: k, counts: v }));
+    groups.sort((a, b) => b.date.localeCompare(a.date));
+    return groups;
+  };
+
   if (loading) return <View style={styles.centered}><ActivityIndicator size="large" color={COLORS.primary} /></View>;
+
+  const filteredCounts = getFilteredCounts();
+  const grouped = groupByDate(filteredCounts);
 
   return (
     <View style={styles.container}>
       <View style={styles.screenHeader}><Text style={styles.screenHeaderTitle}>Count History</Text></View>
+      <View style={{ flexDirection: 'row', paddingHorizontal: 16, paddingVertical: 8, gap: 8 }}>
+        {(['all', 'today', 'week', 'month'] as const).map(f => (
+          <TouchableOpacity key={f} onPress={() => setFilterType(f)} style={{ paddingHorizontal: 12, paddingVertical: 6, borderRadius: 16, backgroundColor: filterType === f ? COLORS.primary : COLORS.gray100 }}>
+            <Text style={{ fontSize: 13, fontWeight: '600', color: filterType === f ? COLORS.white : COLORS.gray600 }}>
+              {f === 'all' ? 'All' : f === 'today' ? 'Today' : f === 'week' ? 'This Week' : 'This Month'}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </View>
       <FlatList
-        data={counts}
-        keyExtractor={c => c.id}
-        renderItem={({ item }) => <CountCard count={item} onPress={() => navigation.navigate('CountDetail', { countId: item.id })} />}
+        data={grouped}
+        keyExtractor={g => g.date}
+        renderItem={({ item: group }) => (
+          <View>
+            <View style={{ paddingHorizontal: 20, paddingTop: 12, paddingBottom: 4 }}>
+              <Text style={{ fontSize: 13, fontWeight: '700', color: COLORS.gray500, textTransform: 'uppercase' }}>
+                {group.date === new Date().toISOString().split('T')[0] ? 'Today' : new Date(group.date + 'T00:00:00').toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })}
+              </Text>
+            </View>
+            {group.counts.map(count => (
+              <CountCard key={count.id} count={count} onPress={() => navigation.navigate('CountDetail', { countId: count.id })} />
+            ))}
+          </View>
+        )}
         contentContainerStyle={styles.listContent}
-        ListEmptyComponent={<View style={styles.emptyState}><Text style={styles.emptyStateIcon}>📋</Text><Text style={styles.emptyStateText}>No completed counts yet</Text></View>}
+        ListEmptyComponent={<View style={styles.emptyState}><Text style={styles.emptyStateIcon}>📋</Text><Text style={styles.emptyStateText}>No counts found for this period</Text></View>}
       />
     </View>
   );
@@ -1936,7 +2062,7 @@ function BinsScreen({ navigation }: any) {
 
 // Find Bin Screen - Scan barcode to find which bin an item is in
 function FindBinScreen({ navigation }: any) {
-  const [scanResult, setScanResult] = useState<{ item: any; bins: any[] } | null>(null);
+  const [scanResult, setScanResult] = useState<{ item: any; bins: any[]; isSerialMatch?: boolean; matchedSerial?: string | null } | null>(null);
   const [scanError, setScanError] = useState<string | null>(null);
   const [scanLoading, setScanLoading] = useState(false);
   const [scanned, setScanned] = useState(false);
@@ -1963,7 +2089,7 @@ function FindBinScreen({ navigation }: any) {
           if (item2 && item2.id) {
             const binRes = await api.get(`/bin-locations/item/${item2.id}`);
             const itemBins = (binRes.success ? binRes.data : binRes) || [];
-            setScanResult({ item: item2, bins: itemBins });
+            setScanResult({ item: item2, bins: itemBins, isSerialMatch: false, matchedSerial: null });
             Vibration.vibrate([0, 50, 50, 50]);
             setScanLoading(false);
             return;
@@ -1975,9 +2101,27 @@ function FindBinScreen({ navigation }: any) {
         return;
       }
 
+      // If serial number matched and has exact bin info, show that directly
+      if (item.serial_bin) {
+        setScanResult({
+          item,
+          bins: [{
+            bin_code: item.serial_bin.bin_code,
+            location_name: item.serial_bin.location_name,
+            quantity: item.serial_bin.quantity,
+            bin_location_id: item.serial_bin.bin_location_id,
+          }],
+          isSerialMatch: true,
+          matchedSerial: item.matched_serial,
+        });
+        Vibration.vibrate([0, 50, 50, 50]);
+        setScanLoading(false);
+        return;
+      }
+
       const binRes = await api.get(`/bin-locations/item/${item.id}`);
       const itemBins = (binRes.success ? binRes.data : binRes) || [];
-      setScanResult({ item, bins: itemBins });
+      setScanResult({ item, bins: itemBins, isSerialMatch: false, matchedSerial: item.matched_serial || null });
       Vibration.vibrate([0, 50, 50, 50]);
     } catch (e: any) {
       Vibration.vibrate([0, 100, 50, 100]);
@@ -2054,6 +2198,11 @@ function FindBinScreen({ navigation }: any) {
             <Text style={{ fontSize: 18, fontWeight: '700', color: COLORS.gray900 }}>
               {scanResult.item.item_name || scanResult.item.name}
             </Text>
+            {scanResult.matchedSerial && (
+              <View style={{ backgroundColor: COLORS.purpleLight, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6, marginTop: 6, alignSelf: 'flex-start' }}>
+                <Text style={{ fontSize: 12, fontWeight: '600', color: COLORS.purple }}>SN: {scanResult.matchedSerial}</Text>
+              </View>
+            )}
             {scanResult.item.sku && (
               <Text style={{ fontSize: 13, color: COLORS.gray500, marginTop: 4 }}>SKU: {scanResult.item.sku}</Text>
             )}
@@ -2065,7 +2214,7 @@ function FindBinScreen({ navigation }: any) {
           </View>
 
           <Text style={[styles.sectionTitle, { marginTop: 0 }]}>
-            Bin Locations ({scanResult.bins.length})
+            {scanResult.isSerialMatch ? 'Exact Bin Location' : `Bin Locations (${scanResult.bins.length})`}
           </Text>
           {scanResult.bins.length === 0 ? (
             <View style={{ backgroundColor: COLORS.warningLight, borderRadius: 12, padding: 16, alignItems: 'center' }}>

@@ -634,7 +634,7 @@ const InvoicesPage = () => {
                       {getStatusBadge(invoice.status, invoice.payment_status)}
                     </td>
                     <td className="px-4 py-4">
-                      {getPaymentStatusBadge(invoice.payment_status, invoice.balance_due)}
+                      {invoice.payment_status ? getPaymentStatusBadge(invoice.payment_status, invoice.balance_due) : null}
                     </td>
                     <td className="px-4 py-4 text-sm text-slate-600">
                       {formatDate(invoice.due_date || '')}

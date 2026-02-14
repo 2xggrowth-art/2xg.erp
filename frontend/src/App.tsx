@@ -64,6 +64,7 @@ import TransferOrderDetailPage from './pages/TransferOrderDetailPage';
 import BinLocationsPage from './pages/BinLocationsPage';
 import BrandManufacturerManagementPage from './pages/BrandManufacturerManagementPage';
 import DamageReportsPage from './pages/DamageReportsPage';
+import StockCountPage from './pages/StockCountPage';
 
 function App() {
   return (
@@ -84,6 +85,7 @@ function App() {
             {/* Items Routes */}
             <Route path="/items" element={<ProtectedRoute><DashboardLayout><ItemsPage /></DashboardLayout></ProtectedRoute>} />
             <Route path="/items/new" element={<ProtectedRoute><DashboardLayout><NewItemForm /></DashboardLayout></ProtectedRoute>} />
+            <Route path="/items/stock-count" element={<ProtectedRoute><DashboardLayout><StockCountPage /></DashboardLayout></ProtectedRoute>} />
             <Route path="/brands-manufacturers" element={<ProtectedRoute><DashboardLayout><BrandManufacturerManagementPage /></DashboardLayout></ProtectedRoute>} />
             <Route path="/items/:id" element={<ProtectedRoute><DashboardLayout><ItemDetailPage /></DashboardLayout></ProtectedRoute>} />
             <Route path="/items/:id/edit" element={<ProtectedRoute><DashboardLayout><NewItemForm /></DashboardLayout></ProtectedRoute>} />

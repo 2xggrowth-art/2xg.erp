@@ -281,6 +281,25 @@ export const billsService = {
       throw error;
     }
   },
+  /**
+   * Upload files for bill attachment
+   */
+  uploadFiles: async (files: File[]): Promise<APIResponse<{ url: string; filename: string }[]>> => {
+    try {
+      const formData = new FormData();
+      files.forEach(file => formData.append('files', file));
+      const response = await apiClient.post<APIResponse<{ url: string; filename: string }[]>>(
+        '/bills/upload',
+        formData,
+        { headers: { 'Content-Type': 'multipart/form-data' } }
+      );
+      return response.data;
+    } catch (error) {
+      console.error('Error uploading bill files:', error);
+      throw error;
+    }
+  },
+
   getLastSerialNumber: async (itemId: string): Promise<number> => {
     try {
       const response = await apiClient.get<APIResponse<{ last_serial: number }>>(`/bills/last-serial/${itemId}`);

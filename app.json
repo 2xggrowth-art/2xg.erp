@@ -1,3 +1,12 @@
 {
-  "expo": {}
+  "expo": {
+    "extra": {
+      "eas": {
+        "projectId": "5cb77243-8e76-495f-802d-0c565d035610"
+      }
+    },
+    "android": {
+      "package": "com.twoxg.stockcount"
+    }
+  }
 }

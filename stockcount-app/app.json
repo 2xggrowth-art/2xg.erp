@@ -25,7 +25,10 @@
       },
       "package": "com.twoxg.stockcount",
       "permissions": [
-        "android.permission.CAMERA"
+        "android.permission.CAMERA",
+        "android.permission.RECORD_AUDIO",
+        "android.permission.CAMERA",
+        "android.permission.RECORD_AUDIO"
       ]
     },
     "web": {
@@ -43,9 +46,15 @@
     ],
     "extra": {
       "eas": {
-        "projectId": "1a0e7bae-6808-4f53-a367-6d5021cfcdc6"
+        "projectId": "0b847d8b-bebc-4038-acb2-08115af7ffb2"
       }
     },
-    "owner": "mohd.zaheer"
+    "owner": "tech2xg",
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/0b847d8b-bebc-4038-acb2-08115af7ffb2"
+    }
   }
 }

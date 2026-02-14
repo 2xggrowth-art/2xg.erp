@@ -72,6 +72,7 @@ const PosCreate: React.FC = () => {
   const [sessions, setSessions] = useState<PosSession[]>([]);
   const [activeSession, setActiveSession] = useState<PosSession | null>(null);
   const [showStartSessionModal, setShowStartSessionModal] = useState(false);
+  const [sessionChecked, setSessionChecked] = useState(false);
   const [showCloseSessionModal, setShowCloseSessionModal] = useState(false);
   const [sessionLoading, setSessionLoading] = useState(false);
   const [startSessionData, setStartSessionData] = useState({
@@ -97,6 +98,15 @@ const PosCreate: React.FC = () => {
   const [selectedPaymentMode, setSelectedPaymentMode] = useState<'CASH' | 'HDFC BANK' | 'ICICI BANK' | 'BAJAJ/ICICI' | 'CREDIT SALE' | 'D/B CREDIT CARD' | ''>('');
   const [referenceNumber, setReferenceNumber] = useState('');
   const [paidAmount, setPaidAmount] = useState<number>(0);
+
+  // Discount states
+  const [showDiscountModal, setShowDiscountModal] = useState(false);
+  const [discountType, setDiscountType] = useState<'percentage' | 'amount'>('percentage');
+  const [discountValue, setDiscountValue] = useState<number>(0);
+
+  // Delivery option states
+  const [deliveryOption, setDeliveryOption] = useState<'self_pickup' | 'delivery'>('self_pickup');
+  const [showDeliveryDropdown, setShowDeliveryDropdown] = useState(false);
   const [processingPayment, setProcessingPayment] = useState(false);
   const [showBillSuccess, setShowBillSuccess] = useState(false);
   const [generatedInvoice, setGeneratedInvoice] = useState<any>(null);
@@ -111,6 +121,7 @@ const PosCreate: React.FC = () => {
     gstin: '',
     payment_terms: 'Due on Receipt',
   });
+  const [gstTreatment, setGstTreatment] = useState<'Consumer' | 'Registered'>('Consumer');
 
   const fetchItems = async () => {
     try {
@@ -138,12 +149,12 @@ const PosCreate: React.FC = () => {
     fetchActiveSession();
   }, []);
 
-  // Check for active session when on newsale tab
+  // Check for active session when on newsale tab (only after session check completes)
   useEffect(() => {
-    if (activeTab === 'newsale' && !activeSession && !showStartSessionModal) {
+    if (sessionChecked && activeTab === 'newsale' && !activeSession && !showStartSessionModal) {
       setShowStartSessionModal(true);
     }
-  }, [activeTab, activeSession]);
+  }, [activeTab, activeSession, sessionChecked]);
 
   const fetchSalespersons = () => {
     try {
@@ -173,6 +184,8 @@ const PosCreate: React.FC = () => {
       }
     } catch (err: any) {
       console.error('Error fetching active session:', err);
+    } finally {
+      setSessionChecked(true);
     }
   };
 
@@ -366,8 +379,10 @@ const PosCreate: React.FC = () => {
           city: '',
           state: 'Karnataka',
           gstin: '',
+          company_name: '',
           payment_terms: 'Due on Receipt',
         });
+        setGstTreatment('Consumer');
         setPhoneNumberFromSearch('');
       }
     } catch (error) {
@@ -523,6 +538,10 @@ const PosCreate: React.FC = () => {
       if (amountPaid >= total) {
         invoiceStatus = 'paid';
         paymentStatus = 'Paid';
+      } else if (mode === 'CREDIT SALE') {
+        // Credit sale is always partially paid (even if 0 paid now)
+        invoiceStatus = 'partially_paid';
+        paymentStatus = amountPaid > 0 ? 'Partially Paid' : 'Unpaid';
       } else if (amountPaid > 0) {
         invoiceStatus = 'partially_paid';
         paymentStatus = 'Partially Paid';
@@ -543,12 +562,12 @@ const PosCreate: React.FC = () => {
         payment_terms: 'Due on Receipt',
         salesperson_id: selectedSalesperson?.id || null,
         salesperson_name: selectedSalesperson?.name || null,
-        discount_type: 'percentage' as const,
-        discount_value: 0,
+        discount_type: discountType as 'percentage' | 'amount',
+        discount_value: discountValue,
         tds_tcs_type: null,
         tds_tcs_rate: 0,
         adjustment: 0,
-        sub_total: total,
+        sub_total: subtotal,
         total_amount: total,
         amount_paid: amountPaid,
         balance_due: balanceDue,
@@ -556,7 +575,7 @@ const PosCreate: React.FC = () => {
         payment_status: paymentStatus,
         subject: 'POS',  // Mark this as a POS transaction
         pos_session_id: activeSession?.id || null,
-        customer_notes: `Payment Mode: ${mode}${refNumber ? `\nReference Number: ${refNumber}` : ''}${mode === 'CREDIT SALE' ? `\nAmount Paid: ₹${amountPaid.toFixed(2)}\nBalance Due: ₹${balanceDue.toFixed(2)}` : ''}`,
+        customer_notes: `Payment Mode: ${mode}${refNumber ? `\nReference Number: ${refNumber}` : ''}${discountValue > 0 ? `\nDiscount: ${discountType === 'percentage' ? `${discountValue}%` : `₹${discountValue}`} (-₹${discountAmount.toFixed(2)})` : ''}${deliveryOption === 'delivery' ? '\nDelivery: Delivery' : '\nDelivery: Self Pickup'}${mode === 'CREDIT SALE' ? `\nAmount Paid: ₹${amountPaid.toFixed(2)}\nBalance Due: ₹${balanceDue.toFixed(2)}` : ''}`,
         terms_and_conditions: null,
         items: cart.map(item => ({
           item_id: item.item_id,
@@ -629,19 +648,26 @@ const PosCreate: React.FC = () => {
       const invoiceNumberRes = await invoicesService.generateInvoiceNumber();
       const invoiceNumber = invoiceNumberRes.data?.invoice_number || `INV-${Date.now()}`;
 
-      // Calculate balance due
-      const balanceDue = total - totalPaid;
+      // Credit Sale entries are not actual payments received - they are deferred
+      const creditAmount = payments
+        .filter((p: any) => p.mode === 'CREDIT SALE')
+        .reduce((sum: number, p: any) => sum + p.amount, 0);
+      const actualPaid = totalPaid - creditAmount;
 
-      // Determine invoice status based on payment
+      // Calculate balance due (amount not actually received)
+      const balanceDue = total - actualPaid;
+
+      // Determine invoice status based on actual payment received
       let invoiceStatus: 'paid' | 'partially_paid' | 'sent';
       let paymentStatus: 'Paid' | 'Partially Paid' | 'Unpaid';
 
-      if (totalPaid >= total) {
+      if (actualPaid >= total) {
         invoiceStatus = 'paid';
         paymentStatus = 'Paid';
-      } else if (totalPaid > 0) {
+      } else if (creditAmount > 0 || actualPaid < total) {
+        // Has credit sale component or not fully paid = partially paid
         invoiceStatus = 'partially_paid';
-        paymentStatus = 'Partially Paid';
+        paymentStatus = actualPaid > 0 ? 'Partially Paid' : 'Unpaid';
       } else {
         invoiceStatus = 'sent';
         paymentStatus = 'Unpaid';
@@ -664,20 +690,20 @@ const PosCreate: React.FC = () => {
         payment_terms: 'Due on Receipt',
         salesperson_id: selectedSalesperson?.id || null,
         salesperson_name: selectedSalesperson?.name || null,
-        discount_type: 'percentage' as const,
-        discount_value: 0,
+        discount_type: discountType as 'percentage' | 'amount',
+        discount_value: discountValue,
         tds_tcs_type: null,
         tds_tcs_rate: 0,
         adjustment: 0,
-        sub_total: total,
+        sub_total: subtotal,
         total_amount: total,
-        amount_paid: totalPaid,
+        amount_paid: actualPaid,
         balance_due: balanceDue,
         status: invoiceStatus,
         payment_status: paymentStatus,
         subject: 'POS',  // Mark this as a POS transaction
         pos_session_id: activeSession?.id || null,
-        customer_notes: `SPLIT PAYMENT (${payments.length} payments)\n${paymentDetails}${balanceDue > 0 ? `\n\nAmount Paid: ₹${totalPaid.toFixed(2)}\nBalance Due: ₹${balanceDue.toFixed(2)}` : ''}`,
+        customer_notes: `SPLIT PAYMENT (${payments.length} payments)\n${paymentDetails}${discountValue > 0 ? `\nDiscount: ${discountType === 'percentage' ? `${discountValue}%` : `₹${discountValue}`} (-₹${discountAmount.toFixed(2)})` : ''}${deliveryOption === 'delivery' ? '\nDelivery: Delivery' : '\nDelivery: Self Pickup'}${balanceDue > 0 ? `\n\nAmount Received: ₹${actualPaid.toFixed(2)}${creditAmount > 0 ? `\nCredit Sale: ₹${creditAmount.toFixed(2)}` : ''}\nBalance Due: ₹${balanceDue.toFixed(2)}` : ''}`,
         terms_and_conditions: null,
         items: cart.map(item => ({
           item_id: item.item_id,
@@ -702,7 +728,7 @@ const PosCreate: React.FC = () => {
           id: response.data?.id,
           paymentMode: `SPLIT (${payments.length} payments)`,
           referenceNumber: '',
-          amountPaid: totalPaid,
+          amountPaid: actualPaid,
           balanceDue: balanceDue,
           splitPayments: payments,
           createdAt: new Date().toLocaleString('en-IN', {
@@ -749,6 +775,9 @@ const PosCreate: React.FC = () => {
     setActiveHeldCartId(null);
     setShowBillSuccess(false);
     setGeneratedInvoice(null);
+    setDiscountType('percentage');
+    setDiscountValue(0);
+    setDeliveryOption('self_pickup');
   };
 
   const handlePrintBill = () => {
@@ -790,7 +819,11 @@ const PosCreate: React.FC = () => {
     }
   }, [customerSearch]);
 
-  const total = cart.reduce((acc, item) => acc + (item.qty * item.rate), 0);
+  const subtotal = cart.reduce((acc, item) => acc + (item.qty * item.rate), 0);
+  const discountAmount = discountType === 'percentage'
+    ? (subtotal * discountValue / 100)
+    : discountValue;
+  const total = Math.max(0, subtotal - discountAmount);
   const totalQty = cart.reduce((acc, item) => acc + item.qty, 0);
 
   return (
@@ -1449,12 +1482,38 @@ const PosCreate: React.FC = () => {
             )}
 
             <div className="space-y-2 text-sm font-medium text-gray-600">
-              <button className="w-full text-left px-4 py-2.5 rounded-lg hover:bg-gray-100 transition-colors">
-                Discount [Alt+Shift+P]
+              <button
+                onClick={() => setShowDiscountModal(true)}
+                className={`w-full text-left px-4 py-2.5 rounded-lg hover:bg-gray-100 transition-colors ${discountValue > 0 ? 'bg-green-50 text-green-700 border border-green-200' : ''}`}
+              >
+                {discountValue > 0
+                  ? `Discount: ${discountType === 'percentage' ? `${discountValue}%` : `₹${discountValue}`} (-₹${discountAmount.toFixed(2)})`
+                  : 'Discount [Alt+Shift+P]'}
               </button>
-              <button className="w-full text-left px-4 py-2.5 rounded-lg hover:bg-gray-100 transition-colors">
-                Delivery Options [Alt+Shift+D]
-              </button>
+              <div className="relative">
+                <button
+                  onClick={() => setShowDeliveryDropdown(!showDeliveryDropdown)}
+                  className={`w-full text-left px-4 py-2.5 rounded-lg hover:bg-gray-100 transition-colors ${deliveryOption === 'delivery' ? 'bg-blue-50 text-blue-700 border border-blue-200' : ''}`}
+                >
+                  {deliveryOption === 'delivery' ? 'Delivery: Delivery' : 'Delivery: Self Pickup'} [Alt+Shift+D]
+                </button>
+                {showDeliveryDropdown && (
+                  <div className="absolute left-0 right-0 top-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg z-10">
+                    <button
+                      onClick={() => { setDeliveryOption('self_pickup'); setShowDeliveryDropdown(false); }}
+                      className={`w-full text-left px-4 py-2.5 hover:bg-gray-100 transition-colors text-sm ${deliveryOption === 'self_pickup' ? 'bg-blue-50 text-blue-700 font-semibold' : ''}`}
+                    >
+                      Self Pickup
+                    </button>
+                    <button
+                      onClick={() => { setDeliveryOption('delivery'); setShowDeliveryDropdown(false); }}
+                      className={`w-full text-left px-4 py-2.5 hover:bg-gray-100 transition-colors text-sm ${deliveryOption === 'delivery' ? 'bg-blue-50 text-blue-700 font-semibold' : ''}`}
+                    >
+                      Delivery
+                    </button>
+                  </div>
+                )}
+              </div>
               <button
                 onClick={() => setShowSalespersonModal(true)}
                 className="w-full text-left px-4 py-2.5 rounded-lg hover:bg-gray-100 transition-colors"
@@ -1465,10 +1524,19 @@ const PosCreate: React.FC = () => {
           </div>
 
           <div className="mt-auto p-5 bg-gray-50 border-t border-gray-200">
-            <div className="flex justify-between items-end mb-5">
-              <div className="text-xl font-bold text-gray-800">Total</div>
-              <div className="text-right">
-                <div className="text-xs text-gray-500 mb-1">(Items: {cart.length}, Qty: {totalQty})</div>
+            <div className="mb-5">
+              <div className="flex justify-between items-center text-sm text-gray-500 mb-1">
+                <span>Subtotal ({cart.length} items, {totalQty} qty)</span>
+                <span>₹{subtotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+              </div>
+              {discountValue > 0 && (
+                <div className="flex justify-between items-center text-sm text-green-600 mb-1">
+                  <span>Discount ({discountType === 'percentage' ? `${discountValue}%` : `₹${discountValue}`})</span>
+                  <span>-₹{discountAmount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                </div>
+              )}
+              <div className="flex justify-between items-end mt-2">
+                <div className="text-xl font-bold text-gray-800">Total</div>
                 <div className="text-3xl font-bold text-gray-900">₹{total.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</div>
               </div>
             </div>
@@ -2017,7 +2085,7 @@ const PosCreate: React.FC = () => {
             <div className="bg-white rounded-xl w-[650px] max-h-[90vh] overflow-y-auto shadow-2xl">
               <div className="flex justify-between items-center p-6 border-b border-gray-200 sticky top-0 bg-white z-10 rounded-t-xl">
                 <h2 className="text-2xl font-bold text-gray-800">Add Customer</h2>
-                <button onClick={() => { setShowAddCustomerModal(false); setPhoneNumberFromSearch(''); }}>
+                <button onClick={() => { setShowAddCustomerModal(false); setPhoneNumberFromSearch(''); setGstTreatment('Consumer'); }}>
                   <X size={22} className="text-gray-400 hover:text-gray-600 cursor-pointer transition-colors" />
                 </button>
               </div>
@@ -2113,10 +2181,12 @@ const PosCreate: React.FC = () => {
                     </label>
                     <select
                       required
-                      value={newCustomer.gstin ? 'Registered' : 'Consumer'}
+                      value={gstTreatment}
                       onChange={(e) => {
-                        if (e.target.value === 'Consumer') {
-                          setNewCustomer({ ...newCustomer, gstin: '' });
+                        const value = e.target.value as 'Consumer' | 'Registered';
+                        setGstTreatment(value);
+                        if (value === 'Consumer') {
+                          setNewCustomer({ ...newCustomer, gstin: '', company_name: '' });
                         }
                       }}
                       className="w-full bg-white border border-gray-300 rounded-lg px-4 py-2.5 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
@@ -2129,7 +2199,7 @@ const PosCreate: React.FC = () => {
                 <div className="flex justify-end gap-3 pt-5 border-t border-gray-200">
                   <button
                     type="button"
-                    onClick={() => { setShowAddCustomerModal(false); setPhoneNumberFromSearch(''); }}
+                    onClick={() => { setShowAddCustomerModal(false); setPhoneNumberFromSearch(''); setGstTreatment('Consumer'); }}
                     className="px-6 py-2.5 bg-white border border-gray-300 hover:bg-gray-100 text-gray-700 rounded-lg text-sm font-medium transition-colors"
                   >
                     Cancel
@@ -2382,6 +2452,84 @@ const PosCreate: React.FC = () => {
           </div>
         )}
       </div>
+
+      {/* Discount Modal */}
+      {showDiscountModal && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl w-[400px] shadow-2xl">
+            <div className="flex justify-between items-center p-5 border-b border-gray-200">
+              <h3 className="text-lg font-semibold text-gray-800">Apply Discount</h3>
+              <button onClick={() => setShowDiscountModal(false)} className="text-gray-400 hover:text-gray-600">
+                <X size={20} />
+              </button>
+            </div>
+            <div className="p-5">
+              <div className="text-sm text-gray-500 mb-4">
+                Subtotal: ₹{subtotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+              </div>
+              <div className="flex gap-2 mb-4">
+                <button
+                  onClick={() => setDiscountType('percentage')}
+                  className={`flex-1 py-2.5 rounded-lg text-sm font-semibold transition-colors ${discountType === 'percentage' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
+                >
+                  Percentage (%)
+                </button>
+                <button
+                  onClick={() => setDiscountType('amount')}
+                  className={`flex-1 py-2.5 rounded-lg text-sm font-semibold transition-colors ${discountType === 'amount' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
+                >
+                  Amount (₹)
+                </button>
+              </div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                {discountType === 'percentage' ? 'Discount %' : 'Discount Amount (₹)'}
+              </label>
+              <input
+                type="number"
+                min="0"
+                max={discountType === 'percentage' ? 100 : subtotal}
+                step="0.01"
+                value={discountValue || ''}
+                onChange={(e) => {
+                  let val = parseFloat(e.target.value) || 0;
+                  if (discountType === 'percentage' && val > 100) val = 100;
+                  if (discountType === 'amount' && val > subtotal) val = subtotal;
+                  setDiscountValue(val);
+                }}
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg text-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                placeholder={discountType === 'percentage' ? 'Enter percentage' : 'Enter amount'}
+                autoFocus
+              />
+              {discountValue > 0 && (
+                <div className="mt-3 p-3 bg-green-50 rounded-lg text-sm">
+                  <div className="flex justify-between text-gray-600">
+                    <span>Discount:</span>
+                    <span className="text-green-700 font-medium">-₹{(discountType === 'percentage' ? (subtotal * discountValue / 100) : discountValue).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                  </div>
+                  <div className="flex justify-between font-semibold text-gray-800 mt-1">
+                    <span>New Total:</span>
+                    <span>₹{Math.max(0, subtotal - (discountType === 'percentage' ? (subtotal * discountValue / 100) : discountValue)).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                  </div>
+                </div>
+              )}
+            </div>
+            <div className="flex justify-end gap-3 p-5 border-t border-gray-200">
+              <button
+                onClick={() => { setDiscountValue(0); setShowDiscountModal(false); }}
+                className="px-4 py-2.5 border border-gray-300 text-gray-700 rounded-lg text-sm font-medium hover:bg-gray-100 transition-colors"
+              >
+                Remove Discount
+              </button>
+              <button
+                onClick={() => setShowDiscountModal(false)}
+                className="px-4 py-2.5 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors"
+              >
+                Apply
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 };

@@ -4,11 +4,16 @@ import fs from 'fs';
 import sharp from 'sharp';
 import { Request, Response, NextFunction } from 'express';
 
-// Ensure uploads directory exists
-const uploadDir = path.join(__dirname, '../../uploads/expenses');
-if (!fs.existsSync(uploadDir)) {
-  fs.mkdirSync(uploadDir, { recursive: true });
+// Ensure uploads directories exist
+const expenseUploadDir = path.join(__dirname, '../../uploads/expenses');
+const billUploadDir = path.join(__dirname, '../../uploads/bills');
+if (!fs.existsSync(expenseUploadDir)) {
+  fs.mkdirSync(expenseUploadDir, { recursive: true });
 }
+if (!fs.existsSync(billUploadDir)) {
+  fs.mkdirSync(billUploadDir, { recursive: true });
+}
+const uploadDir = expenseUploadDir;
 
 // Use memory storage to process images before saving
 const memoryStorage = multer.memoryStorage();
@@ -106,6 +111,74 @@ export const uploadExpenseVoucher = {
     return [
       upload.single(fieldName),
       compressImage
+    ];
+  }
+};
+
+// Bill file upload - multiple files (up to 5, 10MB each)
+const billUpload = multer({
+  storage: memoryStorage,
+  fileFilter: fileFilter,
+  limits: {
+    fileSize: 10 * 1024 * 1024 // 10MB limit per file
+  }
+});
+
+// Process multiple uploaded files (compress images, save PDFs)
+const compressBillFiles = async (req: Request, res: Response, next: NextFunction) => {
+  if (!req.files || !Array.isArray(req.files) || req.files.length === 0) {
+    return next();
+  }
+
+  try {
+    const processedFiles: { filename: string; originalname: string; url: string }[] = [];
+
+    for (const file of req.files) {
+      const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+      const originalExt = path.extname(file.originalname);
+      const nameWithoutExt = path.basename(file.originalname, originalExt);
+      const isImage = file.mimetype.startsWith('image/');
+
+      if (isImage) {
+        const compressedFilename = `${nameWithoutExt}-${uniqueSuffix}.jpg`;
+        const outputPath = path.join(billUploadDir, compressedFilename);
+
+        await sharp(file.buffer)
+          .resize(1920, 1920, { fit: 'inside', withoutEnlargement: true })
+          .jpeg({ quality: 75, progressive: true })
+          .toFile(outputPath);
+
+        processedFiles.push({
+          filename: compressedFilename,
+          originalname: file.originalname,
+          url: `/uploads/bills/${compressedFilename}`,
+        });
+      } else {
+        const pdfFilename = `${nameWithoutExt}-${uniqueSuffix}${originalExt}`;
+        const outputPath = path.join(billUploadDir, pdfFilename);
+        fs.writeFileSync(outputPath, file.buffer);
+
+        processedFiles.push({
+          filename: pdfFilename,
+          originalname: file.originalname,
+          url: `/uploads/bills/${pdfFilename}`,
+        });
+      }
+    }
+
+    (req as any).processedFiles = processedFiles;
+    next();
+  } catch (error) {
+    console.error('Error processing bill files:', error);
+    next(error);
+  }
+};
+
+export const uploadBillFiles = {
+  array: (fieldName: string, maxCount: number) => {
+    return [
+      billUpload.array(fieldName, maxCount),
+      compressBillFiles
     ];
   }
 };

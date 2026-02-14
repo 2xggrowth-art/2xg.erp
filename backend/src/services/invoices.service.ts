@@ -47,6 +47,9 @@ export interface CreateInvoiceData {
   shipping_charges?: number;
   adjustment?: number;
   total_amount: number;
+  amount_paid?: number;
+  balance_due?: number;
+  payment_status?: string;
   customer_notes?: string;
   terms_and_conditions?: string;
   pos_session_id?: string;
@@ -161,7 +164,7 @@ export class InvoicesService {
         shipping_charges: Number(invoiceData.shipping_charges) || 0,
         adjustment: Number(invoiceData.adjustment) || 0,
         total_amount: Number(invoiceData.total_amount) || 0,
-        balance_due: Number(invoiceData.total_amount) || 0,
+        balance_due: invoiceData.balance_due !== undefined ? Number(invoiceData.balance_due) : Number(invoiceData.total_amount) || 0,
         customer_notes: invoiceData.customer_notes || null,
         terms_and_conditions: invoiceData.terms_and_conditions || null,
         pos_session_id: invoiceData.pos_session_id || null

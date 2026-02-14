@@ -117,6 +117,7 @@ const InvoiceDetailPage: React.FC = () => {
       sent: { bg: 'bg-blue-100', text: 'text-blue-700', icon: <Send size={16} />, label: 'Sent' },
       viewed: { bg: 'bg-purple-100', text: 'text-purple-700', icon: <CheckCircle size={16} />, label: 'Viewed' },
       partial: { bg: 'bg-yellow-100', text: 'text-yellow-700', icon: <Clock size={16} />, label: 'Partially Paid' },
+      partially_paid: { bg: 'bg-yellow-100', text: 'text-yellow-700', icon: <Clock size={16} />, label: 'Partially Paid' },
       paid: { bg: 'bg-green-100', text: 'text-green-700', icon: <CheckCircle size={16} />, label: 'Paid' },
       overdue: { bg: 'bg-red-100', text: 'text-red-700', icon: <XCircle size={16} />, label: 'Overdue' },
       cancelled: { bg: 'bg-gray-100', text: 'text-gray-700', icon: <XCircle size={16} />, label: 'Cancelled' },

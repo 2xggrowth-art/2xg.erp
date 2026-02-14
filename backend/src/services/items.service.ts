@@ -890,7 +890,7 @@ export class ItemsService {
       unit_price: parseFloat(itemData.unit_price) || 0,
       cost_price: parseFloat(itemData.cost_price) || 0,
       current_stock: parseInt(itemData.current_stock) || 0,
-      reorder_point: parseInt(itemData.reorder_point) || 10,
+      reorder_point: itemData.reorder_point !== undefined && itemData.reorder_point !== null ? parseInt(itemData.reorder_point) : 0,
       max_stock: parseInt(itemData.max_stock) || null,
       manufacturer: itemData.manufacturer || null,
       weight: parseFloat(itemData.weight) || null,
@@ -964,7 +964,7 @@ export class ItemsService {
     if (itemData.unit_price !== undefined) updateData.unit_price = parseFloat(itemData.unit_price) || 0;
     if (itemData.cost_price !== undefined) updateData.cost_price = parseFloat(itemData.cost_price) || 0;
     if (itemData.current_stock !== undefined) updateData.current_stock = parseInt(itemData.current_stock) || 0;
-    if (itemData.reorder_point !== undefined) updateData.reorder_point = parseInt(itemData.reorder_point) || 10;
+    if (itemData.reorder_point !== undefined) updateData.reorder_point = parseInt(itemData.reorder_point) || 0;
     if (itemData.max_stock !== undefined) updateData.max_stock = parseInt(itemData.max_stock) || null;
     if (itemData.manufacturer !== undefined) updateData.manufacturer = itemData.manufacturer || null;
     if (itemData.weight !== undefined) updateData.weight = parseFloat(itemData.weight) || null;
@@ -1152,16 +1152,34 @@ export class ItemsService {
     if (error) throw error;
     if (data && data.length > 0) return { ...data[0], matched_serial: null };
 
-    // Try serial number lookup in bill_items
+    // Try serial number lookup in bill_items (include id for bin allocation lookup)
     const { data: billItems, error: billError } = await supabaseAdmin
       .from('bill_items')
-      .select('item_id, item_name, serial_numbers')
+      .select('id, item_id, item_name, serial_numbers')
       .not('serial_numbers', 'eq', '[]');
 
     if (!billError && billItems) {
       for (const billItem of billItems) {
         const serials = billItem.serial_numbers || [];
         if (serials.includes(barcode)) {
+          // Look up which bin this bill_item was allocated to
+          let serial_bin = null;
+          const { data: binAlloc } = await supabaseAdmin
+            .from('bill_item_bin_allocations')
+            .select('bin_location_id, quantity, bin_locations(id, bin_code, location_id, locations(name))')
+            .eq('bill_item_id', billItem.id)
+            .limit(1)
+            .single();
+          if (binAlloc) {
+            const loc = binAlloc.bin_locations as any;
+            serial_bin = {
+              bin_location_id: binAlloc.bin_location_id,
+              bin_code: loc?.bin_code,
+              location_name: loc?.locations?.name || null,
+              quantity: binAlloc.quantity,
+            };
+          }
+
           // Found the serial number, get the full item
           if (billItem.item_id) {
             const { data: item } = await supabaseAdmin
@@ -1170,7 +1188,7 @@ export class ItemsService {
               .eq('id', billItem.item_id)
               .single();
             if (item) {
-              return { ...item, matched_serial: barcode };
+              return { ...item, matched_serial: barcode, serial_bin };
             }
           }
           // Return minimal info if no item_id
@@ -1178,6 +1196,7 @@ export class ItemsService {
             id: billItem.item_id,
             item_name: billItem.item_name,
             matched_serial: barcode,
+            serial_bin,
           };
         }
       }

@@ -14,16 +14,39 @@ const PaymentsReceivedPage = () => {
   const [loading, setLoading] = useState(true);
   const [selectedPayments, setSelectedPayments] = useState<string[]>([]);
   const [filterPaymentMode, setFilterPaymentMode] = useState<string>('all');
+  const [filterPeriod, setFilterPeriod] = useState<string>('all');
   const [showActionMenu, setShowActionMenu] = useState<string | null>(null);
 
   useEffect(() => {
     fetchPayments();
-  }, [filterPaymentMode]);
+  }, [filterPaymentMode, filterPeriod]);
+
+  const getDateRange = (period: string): { from_date?: string; to_date?: string } => {
+    const now = new Date();
+    const todayStr = now.toISOString().split('T')[0];
+    if (period === 'today') return { from_date: todayStr, to_date: todayStr };
+    if (period === 'week') {
+      const weekAgo = new Date(now);
+      weekAgo.setDate(now.getDate() - 7);
+      return { from_date: weekAgo.toISOString().split('T')[0], to_date: todayStr };
+    }
+    if (period === 'month') {
+      const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+      return { from_date: monthStart.toISOString().split('T')[0], to_date: todayStr };
+    }
+    if (period === 'year') {
+      const yearStart = new Date(now.getFullYear(), 0, 1);
+      return { from_date: yearStart.toISOString().split('T')[0], to_date: todayStr };
+    }
+    return {};
+  };
 
   const fetchPayments = async () => {
     try {
       setLoading(true);
-      const filters = filterPaymentMode !== 'all' ? { payment_mode: filterPaymentMode } : {};
+      const dateRange = getDateRange(filterPeriod);
+      const filters: any = { ...dateRange };
+      if (filterPaymentMode !== 'all') filters.payment_mode = filterPaymentMode;
       const response = await paymentsReceivedService.getAllPaymentsReceived(filters);
 
       if (response.success && response.data) {
@@ -224,7 +247,7 @@ const PaymentsReceivedPage = () => {
         {/* Filters and Actions */}
         <div className="bg-white rounded-lg shadow-md p-4">
           <div className="flex items-center justify-between gap-4">
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-3 flex-wrap">
               <Filter size={18} className="text-slate-500" />
               <select
                 value={filterPaymentMode}
@@ -232,11 +255,28 @@ const PaymentsReceivedPage = () => {
                 className="px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               >
                 <option value="all">All Payment Modes</option>
-                <option value="Cash">Cash</option>
+                <option value="CASH">Cash</option>
+                <option value="HDFC BANK">HDFC Bank</option>
+                <option value="ICICI BANK">ICICI Bank</option>
+                <option value="BAJAJ/ICICI">Bajaj / ICICI</option>
+                <option value="CREDIT SALE">Credit Sale</option>
+                <option value="D/B CREDIT CARD">D/B Credit Card</option>
                 <option value="HDFC (Hub)">HDFC (Hub)</option>
+                <option value="HDFC (Center)">HDFC (Center)</option>
                 <option value="ICICI">ICICI</option>
                 <option value="Dhanalakhmi">Dhanalakhmi</option>
-                <option value="HDFC (Center)">HDFC (Center)</option>
+                <option value="Cash">Cash (Manual)</option>
+              </select>
+              <select
+                value={filterPeriod}
+                onChange={(e) => setFilterPeriod(e.target.value)}
+                className="px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              >
+                <option value="all">All Time</option>
+                <option value="today">Today</option>
+                <option value="week">Last 7 Days</option>
+                <option value="month">This Month</option>
+                <option value="year">This Year</option>
               </select>
             </div>
 
@@ -275,19 +315,23 @@ const PaymentsReceivedPage = () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-200">
-                {payments.map((payment) => (
+                {payments.map((payment: any) => {
+                  const isPos = payment.is_pos || payment.id?.startsWith('pos-');
+                  return (
                   <tr
                     key={payment.id}
                     className="hover:bg-slate-50 transition-colors cursor-pointer"
-                    onClick={() => handleViewPayment(payment.id!)}
+                    onClick={() => !isPos && handleViewPayment(payment.id!)}
                   >
                     <td className="px-4 py-4" onClick={(e) => e.stopPropagation()}>
-                      <input
-                        type="checkbox"
-                        checked={selectedPayments.includes(payment.id!)}
-                        onChange={() => handleSelectPayment(payment.id!)}
-                        className="rounded"
-                      />
+                      {!isPos && (
+                        <input
+                          type="checkbox"
+                          checked={selectedPayments.includes(payment.id!)}
+                          onChange={() => handleSelectPayment(payment.id!)}
+                          className="rounded"
+                        />
+                      )}
                     </td>
                     <td className="px-4 py-4 text-sm text-slate-800">
                       {formatDate(payment.payment_date)}
@@ -296,6 +340,9 @@ const PaymentsReceivedPage = () => {
                       <span className="text-sm font-medium text-blue-600 hover:text-blue-700">
                         {payment.payment_number}
                       </span>
+                      {isPos && (
+                        <span className="ml-2 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-100 text-amber-700">POS</span>
+                      )}
                     </td>
                     <td className="px-4 py-4 text-sm text-slate-600">
                       {payment.reference_number || '-'}
@@ -310,6 +357,8 @@ const PaymentsReceivedPage = () => {
                       {formatCurrency(payment.amount_received)}
                     </td>
                     <td className="px-4 py-4 relative" onClick={(e) => e.stopPropagation()}>
+                      {!isPos && (
+                        <>
                       <button
                         onClick={() => setShowActionMenu(showActionMenu === payment.id ? null : payment.id!)}
                         className="p-1 text-slate-600 hover:bg-slate-100 rounded transition-colors"
@@ -358,9 +407,12 @@ const PaymentsReceivedPage = () => {
                           </div>
                         </>
                       )}
+                        </>
+                      )}
                     </td>
                   </tr>
-                ))}
+                  );
+                })}
               </tbody>
             </table>
           </div>

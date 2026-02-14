@@ -87,8 +87,9 @@ export class PaymentsReceivedController {
         payment_mode: req.query.payment_mode as string,
         from_date: req.query.from_date as string,
         to_date: req.query.to_date as string,
+        include_pos: (req.query.include_pos as string) || 'true',
         page: req.query.page ? parseInt(req.query.page as string) : 1,
-        limit: req.query.limit ? parseInt(req.query.limit as string) : 50
+        limit: req.query.limit ? parseInt(req.query.limit as string) : 200
       };
 
       const result = await this.paymentsReceivedService.getAllPaymentsReceived(filters);

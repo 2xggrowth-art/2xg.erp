@@ -30,10 +30,14 @@ const NewPaymentReceivedForm = () => {
 
   const [paymentModes] = useState<string[]>([
     'Cash',
+    'HDFC BANK',
+    'ICICI BANK',
+    'BAJAJ/ICICI',
+    'D/B CREDIT CARD',
     'HDFC (Hub)',
+    'HDFC (Center)',
     'ICICI',
     'Dhanalakhmi',
-    'HDFC (Center)'
   ]);
 
   const [depositAccounts] = useState<string[]>([

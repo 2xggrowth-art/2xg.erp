@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { BillsController } from '../controllers/bills.controller';
+import { uploadBillFiles } from '../middleware/upload.middleware';
 
 const router = Router();
 const billsController = new BillsController();
@@ -12,6 +13,9 @@ router.get('/summary', billsController.getBillsSummary);
 
 // Get last serial number for an item
 router.get('/last-serial/:itemId', billsController.getLastSerialNumber);
+
+// File upload for bills (up to 5 files)
+router.post('/upload', ...uploadBillFiles.array('files', 5), billsController.uploadFiles);
 
 // CRUD operations
 router.post('/', billsController.createBill);
