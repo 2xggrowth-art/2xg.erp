@@ -61,6 +61,12 @@ export class BillsController {
       });
     } catch (error: any) {
       console.error('Error creating bill:', error);
+      if (error.code === '23505' || (error.message && error.message.includes('duplicate key'))) {
+        return res.status(409).json({
+          success: false,
+          error: 'Bill number already exists. Please use a different bill number.'
+        });
+      }
       res.status(500).json({
         success: false,
         error: error.message

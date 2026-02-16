@@ -54,25 +54,24 @@ export class BillsService {
    */
   async generateBillNumber(): Promise<string> {
     try {
-      // Get the latest bill number
-      const { data: latestBill, error } = await supabase
+      // Get the highest BILL-XXXX number (filter by prefix, not just latest by date)
+      const { data: bills, error } = await supabase
         .from('bills')
         .select('bill_number')
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .single();
+        .like('bill_number', 'BILL-%')
+        .order('bill_number', { ascending: false })
+        .limit(1);
 
-      if (error && error.code !== 'PGRST116') {
-        // PGRST116 means no rows found, which is okay
+      if (error) {
         throw error;
       }
 
-      if (!latestBill) {
+      if (!bills || bills.length === 0) {
         return 'BILL-0001';
       }
 
-      // Extract number from bill_number (e.g., "BILL-0001" -> 1)
-      const match = latestBill.bill_number.match(/BILL-(\d+)/);
+      // Extract number from bill_number (e.g., "BILL-0002" -> 2)
+      const match = bills[0].bill_number.match(/BILL-(\d+)/);
       if (match) {
         const nextNumber = parseInt(match[1]) + 1;
         return `BILL-${nextNumber.toString().padStart(4, '0')}`;
