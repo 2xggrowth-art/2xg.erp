@@ -198,7 +198,7 @@ export class PaymentsReceivedService {
         query = query.eq('customer_id', filters.customer_id);
       }
       if (filters?.payment_mode) {
-        query = query.ilike('payment_mode', filters.payment_mode);
+        query = query.ilike('payment_mode', `%${filters.payment_mode}%`);
       }
       if (filters?.from_date) {
         query = query.gte('payment_date', filters.from_date);
