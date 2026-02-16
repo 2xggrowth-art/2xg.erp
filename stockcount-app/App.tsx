@@ -953,8 +953,22 @@ function CounterDashboard({ navigation }: any) {
 
   if (loading) return <View style={styles.centered}><ActivityIndicator size="large" color={COLORS.primary} /></View>;
 
-  // If placement module is active, show PlacementDashboardScreen
-  if (activeModule === 'placement') return <PlacementDashboardScreen navigation={navigation} />;
+  // If placement module is active, show PlacementDashboardScreen with header + switcher
+  if (activeModule === 'placement') return (
+    <View style={styles.container}>
+      <View style={styles.dashboardHeader}>
+        <View>
+          <Text style={styles.greeting}>Hello,</Text>
+          <Text style={styles.userName}>{user?.employee_name || 'Counter'}</Text>
+        </View>
+        <TouchableOpacity onPress={() => Alert.alert('Logout', 'Are you sure?', [{ text: 'Cancel' }, { text: 'Logout', style: 'destructive', onPress: logout }])} style={styles.logoutBtn}>
+          <Text style={styles.logoutBtnText}>Logout</Text>
+        </TouchableOpacity>
+      </View>
+      <ModuleSwitcher />
+      <PlacementDashboardScreen navigation={navigation} />
+    </View>
+  );
 
   return (
     <View style={styles.container}>
@@ -2466,7 +2480,7 @@ function PlacementDashboardScreen({ navigation }: any) {
   if (loading) return <View style={styles.centered}><ActivityIndicator size="large" color={COLORS.primary} /></View>;
 
   return (
-    <ScrollView style={[styles.container, { flex: 1 }]} contentContainerStyle={{ padding: 16, paddingBottom: 40 }}
+    <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 16, paddingBottom: 40 }}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); fetchData(); }} />}>
       <View style={styles.statsRow}>
         <StatCard value={placedToday} label="Placed Today" color="success" icon="📦" />
