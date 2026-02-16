@@ -774,8 +774,10 @@ function ScannerScreen({ navigation, route }: any) {
   const [flashOn, setFlashOn] = useState(false);
   const [lookingUp, setLookingUp] = useState(false);
   const [lastScanned, setLastScanned] = useState<string | null>(null);
-  const [scannedBarcodes, setScannedBarcodes] = useState<Set<string>>(new Set()); // Track all scanned barcodes
-  const [scannedItemIds, setScannedItemIds] = useState<Set<string>>(new Set()); // Track counted item IDs (for serial items)
+  // Use refs (not state) so updates are synchronous and avoid stale closures
+  const scannedBarcodesRef = useRef<Set<string>>(new Set());
+  const scannedItemIdsRef = useRef<Set<string>>(new Set());
+  const itemCountsRef = useRef<Record<string, number>>({});
   const [scannedItems, setScannedItems] = useState<{ id: string; name: string; serial?: string; time: Date; item?: StockCountItem }[]>([]);
   const [itemCounts, setItemCounts] = useState<Record<string, number>>({});
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -784,20 +786,17 @@ function ScannerScreen({ navigation, route }: any) {
   // Initialize counts from existing data + pre-populate scanned serial IDs
   useEffect(() => {
     const counts: Record<string, number> = {};
-    const alreadyCounted = new Set<string>();
     initialItems.forEach((item: StockCountItem) => {
       if (item.counted_quantity !== null && item.counted_quantity > 0) {
         counts[item.id] = item.counted_quantity;
         // Mark serial items as already scanned so they can't be double-counted
         if (item.serial_number) {
-          alreadyCounted.add(item.id);
+          scannedItemIdsRef.current.add(item.id);
         }
       }
     });
     setItemCounts(counts);
-    if (alreadyCounted.size > 0) {
-      setScannedItemIds(alreadyCounted);
-    }
+    itemCountsRef.current = counts;
   }, []);
 
   useEffect(() => {
@@ -831,8 +830,13 @@ function ScannerScreen({ navigation, route }: any) {
   const handleBarCodeScanned = async ({ data }: BarcodeScanningResult) => {
     if (scanned || lookingUp) return;
 
-    // Note: Duplicate prevention for serial items is handled in the match sections below
-    // (they find the next uncounted serial unit, or show "all counted" if none left)
+    // Block duplicate scans of the SAME barcode (prevents auto-fire when camera stays pointed at barcode)
+    if (scannedBarcodesRef.current.has(data)) {
+      setScanned(true);
+      Vibration.vibrate([0, 50, 30, 50]);
+      setErrorMessage(`Already scanned: ${data}`);
+      return;
+    }
 
     setScanned(true);
     setLookingUp(true);
@@ -848,7 +852,7 @@ function ScannerScreen({ navigation, route }: any) {
         i.serial_number && i.serial_number.toLowerCase() === scannedLower
       );
       if (serialMatched) {
-        await countItem(serialMatched, true);
+        await countItem(serialMatched, true, data);
         return;
       }
 
@@ -872,15 +876,15 @@ function ScannerScreen({ navigation, route }: any) {
         if (isSerialItem) {
           // Find all serial items with this SKU that haven't been counted yet
           const allSkuSerials = initialItems.filter((i: StockCountItem) => skuMatchFn(i) && i.serial_number);
-          const uncounted = allSkuSerials.find((i: StockCountItem) => !scannedItemIds.has(i.id) && !(itemCounts[i.id] > 0));
+          const uncounted = allSkuSerials.find((i: StockCountItem) => !scannedItemIdsRef.current.has(i.id) && !(itemCountsRef.current[i.id] > 0));
           if (uncounted) {
-            await countItem(uncounted, true);
+            await countItem(uncounted, true, data);
           } else {
             Vibration.vibrate([0, 50, 30, 50]);
-            setErrorMessage(`⚠️ All ${allSkuSerials.length} serial units of "${skuMatched.item_name}" already counted`);
+            setErrorMessage(`All ${allSkuSerials.length} serial units of "${skuMatched.item_name}" already counted`);
           }
         } else {
-          await countItem(skuMatched, false);
+          await countItem(skuMatched, false, data);
         }
         return;
       }
@@ -913,15 +917,15 @@ function ScannerScreen({ navigation, route }: any) {
           const isSerialBase = !!baseMatch.serial_number;
           if (isSerialBase) {
             const allBaseSerials = initialItems.filter((i: StockCountItem) => baseMatchFn(i) && i.serial_number);
-            const uncountedBase = allBaseSerials.find((i: StockCountItem) => !scannedItemIds.has(i.id) && !(itemCounts[i.id] > 0));
+            const uncountedBase = allBaseSerials.find((i: StockCountItem) => !scannedItemIdsRef.current.has(i.id) && !(itemCountsRef.current[i.id] > 0));
             if (uncountedBase) {
-              await countItem(uncountedBase, true);
+              await countItem(uncountedBase, true, data);
             } else {
               Vibration.vibrate([0, 50, 30, 50]);
-              setErrorMessage(`⚠️ All serial units of "${baseMatch.item_name}" already counted`);
+              setErrorMessage(`All serial units of "${baseMatch.item_name}" already counted`);
             }
           } else {
-            await countItem(baseMatch, false);
+            await countItem(baseMatch, false, data);
           }
           return;
         }
@@ -940,7 +944,7 @@ function ScannerScreen({ navigation, route }: any) {
           i.serial_number === apiItem.matched_serial
         );
         if (serialItem) {
-          await countItem(serialItem, true);
+          await countItem(serialItem, true, data);
           return;
         }
       }
@@ -952,15 +956,15 @@ function ScannerScreen({ navigation, route }: any) {
         if (isSerialApi) {
           // Find uncounted serial item with same item_id
           const allApiSerials = initialItems.filter((i: StockCountItem) => i.item_id === apiItem.id && i.serial_number);
-          const uncountedApi = allApiSerials.find((i: StockCountItem) => !scannedItemIds.has(i.id) && !(itemCounts[i.id] > 0));
+          const uncountedApi = allApiSerials.find((i: StockCountItem) => !scannedItemIdsRef.current.has(i.id) && !(itemCountsRef.current[i.id] > 0));
           if (uncountedApi) {
-            await countItem(uncountedApi, true);
+            await countItem(uncountedApi, true, data);
           } else {
             Vibration.vibrate([0, 50, 30, 50]);
-            setErrorMessage(`⚠️ All serial units of "${apiMatched.item_name}" already counted`);
+            setErrorMessage(`All serial units of "${apiMatched.item_name}" already counted`);
           }
         } else {
-          await countItem(apiMatched, false);
+          await countItem(apiMatched, false, data);
         }
       } else {
         // Item exists in the system but NOT in this count's bin — show wrong bin with correct bin info
@@ -987,25 +991,24 @@ function ScannerScreen({ navigation, route }: any) {
     }
   };
 
-  const countItem = async (item: StockCountItem, isSerial: boolean) => {
+  const countItem = async (item: StockCountItem, isSerial: boolean, barcode: string) => {
     // For serial items, block if this specific item was already counted
-    if (isSerial && scannedItemIds.has(item.id)) {
+    if (isSerial && scannedItemIdsRef.current.has(item.id)) {
       Vibration.vibrate([0, 50, 30, 50]);
-      setErrorMessage(`⚠️ Already counted: ${item.serial_number || item.item_name}`);
+      setErrorMessage(`Already counted: ${item.serial_number || item.item_name}`);
       return;
     }
 
-    const newCount = (itemCounts[item.id] || 0) + 1;
+    const newCount = (itemCountsRef.current[item.id] || 0) + 1;
 
-    // Track scanned barcode and item ID to prevent duplicates
-    if (lastScanned) {
-      setScannedBarcodes(prev => new Set(prev).add(lastScanned));
-    }
+    // Track barcode and item ID synchronously via refs to prevent duplicates
+    scannedBarcodesRef.current.add(barcode);
     if (isSerial) {
-      setScannedItemIds(prev => new Set(prev).add(item.id));
+      scannedItemIdsRef.current.add(item.id);
     }
+    itemCountsRef.current[item.id] = newCount;
 
-    // Update local state immediately
+    // Update React state for UI
     setItemCounts(prev => ({ ...prev, [item.id]: newCount }));
     setScannedItems(prev => [
       { id: item.id, name: item.item_name, serial: item.serial_number || undefined, time: new Date(), item },
@@ -1023,7 +1026,11 @@ function ScannerScreen({ navigation, route }: any) {
     } catch (e: any) {
       setErrorMessage(`Failed to save: ${e.message}`);
       // Revert on error
-      setItemCounts(prev => ({ ...prev, [item.id]: (itemCounts[item.id] || 0) }));
+      const oldCount = newCount - 1;
+      itemCountsRef.current[item.id] = oldCount;
+      scannedBarcodesRef.current.delete(barcode);
+      if (isSerial) scannedItemIdsRef.current.delete(item.id);
+      setItemCounts(prev => ({ ...prev, [item.id]: oldCount }));
     }
   };
 
