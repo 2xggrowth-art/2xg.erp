@@ -1,5 +1,6 @@
 import { supabaseAdmin as supabase } from '../config/supabase';
 import { BatchesService } from './batches.service';
+import { placementTasksService } from './placementTasks.service';
 
 const batchesService = new BatchesService();
 
@@ -268,6 +269,51 @@ export class BillsService {
             }
           }
         }
+      }
+
+      // Auto-create placement tasks for mobile app putaway workflow
+      try {
+        for (const item of data.items) {
+          if (!item.item_id || item.quantity <= 0) continue;
+
+          // Get item details for colour/size/variant
+          const { data: itemDetails } = await supabase
+            .from('items')
+            .select('sku, color, size, variant')
+            .eq('id', item.item_id)
+            .single();
+
+          if (item.bin_allocations && item.bin_allocations.length > 0) {
+            // One task per bin allocation
+            for (const alloc of item.bin_allocations) {
+              await placementTasksService.create({
+                item_id: item.item_id,
+                item_name: item.item_name,
+                sku: itemDetails?.sku || '',
+                colour: itemDetails?.color || '',
+                size: itemDetails?.size || '',
+                variant: itemDetails?.variant || '',
+                source_po: bill.bill_number,
+                suggested_bin_id: alloc.bin_location_id,
+                suggested_bin_code: alloc.bin_code,
+                suggested_bin_reason: 'Assigned in bill',
+              });
+            }
+          } else {
+            // No bin specified — create task without suggested bin
+            await placementTasksService.create({
+              item_id: item.item_id,
+              item_name: item.item_name,
+              sku: itemDetails?.sku || '',
+              colour: itemDetails?.color || '',
+              size: itemDetails?.size || '',
+              variant: itemDetails?.variant || '',
+              source_po: bill.bill_number,
+            });
+          }
+        }
+      } catch (placementErr) {
+        console.error('Error creating placement tasks (non-blocking):', placementErr);
       }
 
       if (binAllocationWarnings.length > 0) {
