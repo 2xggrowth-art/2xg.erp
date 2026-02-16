@@ -45,14 +45,9 @@ const VendorDetailPage = () => {
   useEffect(() => {
     if (id) {
       fetchVendorDetails();
-    }
-  }, [id]);
-
-  useEffect(() => {
-    if (id && (activeTab === 'transactions' || activeTab === 'documents')) {
       fetchTransactions();
     }
-  }, [id, activeTab]);
+  }, [id]);
 
   const fetchTransactions = async () => {
     try {
@@ -171,19 +166,19 @@ const VendorDetailPage = () => {
         <div class="summary">
           <div class="summary-box">
             <div class="label">Total Billed</div>
-            <div class="value">Rs ${totalBills.toFixed(2)}</div>
+            <div class="value">₹${totalBills.toFixed(2)}</div>
           </div>
           <div class="summary-box">
             <div class="label">Total Paid</div>
-            <div class="value green">Rs ${totalPayments.toFixed(2)}</div>
+            <div class="value green">₹${totalPayments.toFixed(2)}</div>
           </div>
           <div class="summary-box">
             <div class="label">Credits</div>
-            <div class="value blue">Rs ${totalCredits.toFixed(2)}</div>
+            <div class="value blue">₹${totalCredits.toFixed(2)}</div>
           </div>
           <div class="summary-box">
             <div class="label">Balance Due</div>
-            <div class="value ${netBalance > 0 ? 'red' : 'green'}">Rs ${netBalance.toFixed(2)}</div>
+            <div class="value ${netBalance > 0 ? 'red' : 'green'}">₹${netBalance.toFixed(2)}</div>
           </div>
         </div>
 
@@ -206,18 +201,18 @@ const VendorDetailPage = () => {
                 <td>${txn.type === 'bill' ? 'Bill' : txn.type === 'payment' ? 'Payment' : 'Credit'}</td>
                 <td>${txn.number}</td>
                 <td>${txn.status.charAt(0).toUpperCase() + txn.status.slice(1)}</td>
-                <td class="right red">${txn.amount > 0 ? 'Rs ' + txn.amount.toFixed(2) : ''}</td>
-                <td class="right green">${txn.amount < 0 ? 'Rs ' + Math.abs(txn.amount).toFixed(2) : ''}</td>
-                <td class="right bold">Rs ${txn.balance.toFixed(2)}</td>
+                <td class="right red">${txn.amount > 0 ? '₹' + txn.amount.toFixed(2) : ''}</td>
+                <td class="right green">${txn.amount < 0 ? '₹' + Math.abs(txn.amount).toFixed(2) : ''}</td>
+                <td class="right bold">₹${txn.balance.toFixed(2)}</td>
               </tr>
             `).join('')}
           </tbody>
           <tfoot>
             <tr>
               <td colspan="4">Total (${sorted.length} transactions)</td>
-              <td class="right red">Rs ${totalBills.toFixed(2)}</td>
-              <td class="right green">Rs ${(totalPayments + totalCredits).toFixed(2)}</td>
-              <td class="right bold">Rs ${netBalance.toFixed(2)}</td>
+              <td class="right red">₹${totalBills.toFixed(2)}</td>
+              <td class="right green">₹${(totalPayments + totalCredits).toFixed(2)}</td>
+              <td class="right bold">₹${netBalance.toFixed(2)}</td>
             </tr>
           </tfoot>
         </table>
@@ -518,14 +513,31 @@ const VendorDetailPage = () => {
                   <div className="p-4 bg-orange-50 rounded-lg">
                     <p className="text-xs text-orange-600 uppercase font-medium">Current Payable</p>
                     <p className="text-2xl font-bold text-orange-700 mt-1">
-                      Rs {(vendor.current_balance || 0).toFixed(2)}
+                      ₹{(() => {
+                        const totalBills = transactions.filter(t => t.type === 'bill').reduce((s, t) => s + t.amount, 0);
+                        const totalPayments = transactions.filter(t => t.type === 'payment').reduce((s, t) => s + Math.abs(t.amount), 0);
+                        const totalCredits = transactions.filter(t => t.type === 'credit').reduce((s, t) => s + Math.abs(t.amount), 0);
+                        return (totalBills - totalPayments - totalCredits).toFixed(2);
+                      })()}
+                    </p>
+                  </div>
+                  <div className="p-4 bg-blue-50 rounded-lg">
+                    <p className="text-xs text-blue-600 uppercase font-medium">Total Billed</p>
+                    <p className="text-xl font-semibold text-blue-700 mt-1">
+                      ₹{transactions.filter(t => t.type === 'bill').reduce((s, t) => s + t.amount, 0).toFixed(2)}
+                    </p>
+                  </div>
+                  <div className="p-4 bg-green-50 rounded-lg">
+                    <p className="text-xs text-green-600 uppercase font-medium">Total Paid</p>
+                    <p className="text-xl font-semibold text-green-700 mt-1">
+                      ₹{transactions.filter(t => t.type === 'payment').reduce((s, t) => s + Math.abs(t.amount), 0).toFixed(2)}
                     </p>
                   </div>
                   {vendor.credit_limit && (
                     <div className="p-4 bg-gray-50 rounded-lg">
                       <p className="text-xs text-gray-500 uppercase font-medium">Credit Limit</p>
                       <p className="text-xl font-semibold text-gray-700 mt-1">
-                        Rs {vendor.credit_limit.toFixed(2)}
+                        ₹{vendor.credit_limit.toFixed(2)}
                       </p>
                     </div>
                   )}
@@ -631,20 +643,20 @@ const VendorDetailPage = () => {
                   <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
                     <div className="bg-white rounded-lg border border-gray-200 p-4">
                       <p className="text-xs text-gray-500 uppercase font-medium">Total Billed</p>
-                      <p className="text-xl font-bold text-gray-900 mt-1">Rs {totalBills.toFixed(2)}</p>
+                      <p className="text-xl font-bold text-gray-900 mt-1">₹{totalBills.toFixed(2)}</p>
                     </div>
                     <div className="bg-white rounded-lg border border-gray-200 p-4">
                       <p className="text-xs text-gray-500 uppercase font-medium">Total Paid</p>
-                      <p className="text-xl font-bold text-green-700 mt-1">Rs {totalPayments.toFixed(2)}</p>
+                      <p className="text-xl font-bold text-green-700 mt-1">₹{totalPayments.toFixed(2)}</p>
                     </div>
                     <div className="bg-white rounded-lg border border-gray-200 p-4">
                       <p className="text-xs text-gray-500 uppercase font-medium">Credits</p>
-                      <p className="text-xl font-bold text-blue-700 mt-1">Rs {totalCredits.toFixed(2)}</p>
+                      <p className="text-xl font-bold text-blue-700 mt-1">₹{totalCredits.toFixed(2)}</p>
                     </div>
                     <div className="bg-white rounded-lg border border-gray-200 p-4">
                       <p className="text-xs text-gray-500 uppercase font-medium">Balance Due</p>
                       <p className={`text-xl font-bold mt-1 ${netBalance > 0 ? 'text-red-700' : 'text-green-700'}`}>
-                        Rs {netBalance.toFixed(2)}
+                        ₹{netBalance.toFixed(2)}
                       </p>
                     </div>
                   </div>
@@ -717,13 +729,13 @@ const VendorDetailPage = () => {
                                 </span>
                               </td>
                               <td className="px-4 py-3 text-sm text-right whitespace-nowrap font-medium text-red-600">
-                                {txn.amount > 0 ? `Rs ${txn.amount.toFixed(2)}` : ''}
+                                {txn.amount > 0 ? `₹${txn.amount.toFixed(2)}` : ''}
                               </td>
                               <td className="px-4 py-3 text-sm text-right whitespace-nowrap font-medium text-green-600">
-                                {txn.amount < 0 ? `Rs ${Math.abs(txn.amount).toFixed(2)}` : ''}
+                                {txn.amount < 0 ? `₹${Math.abs(txn.amount).toFixed(2)}` : ''}
                               </td>
                               <td className="px-4 py-3 text-sm text-right whitespace-nowrap font-semibold">
-                                Rs {txn.balance.toFixed(2)}
+                                ₹{txn.balance.toFixed(2)}
                               </td>
                             </tr>
                           ))}
@@ -789,20 +801,20 @@ const VendorDetailPage = () => {
                   <div className="grid grid-cols-4 gap-4 mb-6">
                     <div className="text-center p-3 bg-gray-50 rounded-lg">
                       <p className="text-xs text-gray-500 uppercase">Billed</p>
-                      <p className="text-lg font-bold text-gray-900">Rs {totalBills.toFixed(2)}</p>
+                      <p className="text-lg font-bold text-gray-900">₹{totalBills.toFixed(2)}</p>
                     </div>
                     <div className="text-center p-3 bg-gray-50 rounded-lg">
                       <p className="text-xs text-gray-500 uppercase">Paid</p>
-                      <p className="text-lg font-bold text-green-700">Rs {totalPayments.toFixed(2)}</p>
+                      <p className="text-lg font-bold text-green-700">₹{totalPayments.toFixed(2)}</p>
                     </div>
                     <div className="text-center p-3 bg-gray-50 rounded-lg">
                       <p className="text-xs text-gray-500 uppercase">Credits</p>
-                      <p className="text-lg font-bold text-blue-700">Rs {totalCredits.toFixed(2)}</p>
+                      <p className="text-lg font-bold text-blue-700">₹{totalCredits.toFixed(2)}</p>
                     </div>
                     <div className="text-center p-3 bg-gray-50 rounded-lg">
                       <p className="text-xs text-gray-500 uppercase">Balance</p>
                       <p className={`text-lg font-bold ${netBalance > 0 ? 'text-red-700' : 'text-green-700'}`}>
-                        Rs {netBalance.toFixed(2)}
+                        ₹{netBalance.toFixed(2)}
                       </p>
                     </div>
                   </div>
@@ -832,12 +844,12 @@ const VendorDetailPage = () => {
                           <td className="px-3 py-2 font-medium text-gray-900">{txn.number}</td>
                           <td className="px-3 py-2 text-gray-600 capitalize">{txn.status.replace('_', ' ')}</td>
                           <td className="px-3 py-2 text-right text-red-600 font-medium">
-                            {txn.amount > 0 ? `Rs ${txn.amount.toFixed(2)}` : ''}
+                            {txn.amount > 0 ? `₹${txn.amount.toFixed(2)}` : ''}
                           </td>
                           <td className="px-3 py-2 text-right text-green-600 font-medium">
-                            {txn.amount < 0 ? `Rs ${Math.abs(txn.amount).toFixed(2)}` : ''}
+                            {txn.amount < 0 ? `₹${Math.abs(txn.amount).toFixed(2)}` : ''}
                           </td>
-                          <td className="px-3 py-2 text-right font-semibold">Rs {txn.balance.toFixed(2)}</td>
+                          <td className="px-3 py-2 text-right font-semibold">₹{txn.balance.toFixed(2)}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -846,9 +858,9 @@ const VendorDetailPage = () => {
                         <td colSpan={4} className="px-3 py-2 font-semibold text-gray-700">
                           Total ({sorted.length} transactions)
                         </td>
-                        <td className="px-3 py-2 text-right font-bold text-red-600">Rs {totalBills.toFixed(2)}</td>
-                        <td className="px-3 py-2 text-right font-bold text-green-600">Rs {(totalPayments + totalCredits).toFixed(2)}</td>
-                        <td className="px-3 py-2 text-right font-bold text-gray-900">Rs {netBalance.toFixed(2)}</td>
+                        <td className="px-3 py-2 text-right font-bold text-red-600">₹{totalBills.toFixed(2)}</td>
+                        <td className="px-3 py-2 text-right font-bold text-green-600">₹{(totalPayments + totalCredits).toFixed(2)}</td>
+                        <td className="px-3 py-2 text-right font-bold text-gray-900">₹{netBalance.toFixed(2)}</td>
                       </tr>
                     </tfoot>
                   </table>
