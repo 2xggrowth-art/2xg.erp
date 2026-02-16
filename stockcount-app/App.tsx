@@ -774,20 +774,30 @@ function ScannerScreen({ navigation, route }: any) {
   const [flashOn, setFlashOn] = useState(false);
   const [lookingUp, setLookingUp] = useState(false);
   const [lastScanned, setLastScanned] = useState<string | null>(null);
+  const [scannedBarcodes, setScannedBarcodes] = useState<Set<string>>(new Set()); // Track all scanned barcodes
+  const [scannedItemIds, setScannedItemIds] = useState<Set<string>>(new Set()); // Track counted item IDs (for serial items)
   const [scannedItems, setScannedItems] = useState<{ id: string; name: string; serial?: string; time: Date; item?: StockCountItem }[]>([]);
   const [itemCounts, setItemCounts] = useState<Record<string, number>>({});
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const scanLineAnim = useRef(new Animated.Value(0)).current;
 
-  // Initialize counts from existing data
+  // Initialize counts from existing data + pre-populate scanned serial IDs
   useEffect(() => {
     const counts: Record<string, number> = {};
+    const alreadyCounted = new Set<string>();
     initialItems.forEach((item: StockCountItem) => {
-      if (item.counted_quantity !== null) {
+      if (item.counted_quantity !== null && item.counted_quantity > 0) {
         counts[item.id] = item.counted_quantity;
+        // Mark serial items as already scanned so they can't be double-counted
+        if (item.serial_number) {
+          alreadyCounted.add(item.id);
+        }
       }
     });
     setItemCounts(counts);
+    if (alreadyCounted.size > 0) {
+      setScannedItemIds(alreadyCounted);
+    }
   }, []);
 
   useEffect(() => {
@@ -820,7 +830,23 @@ function ScannerScreen({ navigation, route }: any) {
 
   const handleBarCodeScanned = async ({ data }: BarcodeScanningResult) => {
     if (scanned || lookingUp) return;
-    if (data === lastScanned) return; // Prevent duplicate scans
+
+    // Prevent duplicate scans for serial items — same barcode should not count again
+    // Non-serial items can be scanned multiple times to increment count
+    if (scannedBarcodes.has(data)) {
+      // Check if this barcode matched a serial item — if so, block it
+      const scannedLowerCheck = data.toLowerCase();
+      const isSerialBarcode = initialItems.some((i: StockCountItem) =>
+        i.serial_number && (i.serial_number.toLowerCase() === scannedLowerCheck || data === i.serial_number)
+      );
+      if (isSerialBarcode) {
+        Vibration.vibrate([0, 50, 30, 50]);
+        setErrorMessage(`⚠️ Already scanned: ${data}`);
+        setScanned(true);
+        return;
+      }
+      // For non-serial items, allow re-scanning (count increments)
+    }
 
     setScanned(true);
     setLookingUp(true);
@@ -938,7 +964,22 @@ function ScannerScreen({ navigation, route }: any) {
   };
 
   const countItem = async (item: StockCountItem, isSerial: boolean) => {
+    // For serial items, block if this specific item was already counted
+    if (isSerial && scannedItemIds.has(item.id)) {
+      Vibration.vibrate([0, 50, 30, 50]);
+      setErrorMessage(`⚠️ Already counted: ${item.serial_number || item.item_name}`);
+      return;
+    }
+
     const newCount = (itemCounts[item.id] || 0) + 1;
+
+    // Track scanned barcode and item ID to prevent duplicates
+    if (lastScanned) {
+      setScannedBarcodes(prev => new Set(prev).add(lastScanned));
+    }
+    if (isSerial) {
+      setScannedItemIds(prev => new Set(prev).add(item.id));
+    }
 
     // Update local state immediately
     setItemCounts(prev => ({ ...prev, [item.id]: newCount }));
