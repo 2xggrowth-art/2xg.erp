@@ -39,6 +39,10 @@ import batchesRoutes from './routes/batches.routes';
 import stockCountsRoutes from './routes/stockCounts.routes';
 import mobileAuthRoutes from './routes/mobile-auth.routes';
 import damageReportsRoutes from './routes/damageReports.routes';
+import placementTasksRoutes from './routes/placementTasks.routes';
+import transferTasksRoutes from './routes/transferTasks.routes';
+import placementHistoryRoutes from './routes/placementHistory.routes';
+import adminRoutes from './routes/admin.routes';
 import { readOnlyGuard } from './middleware/readOnly.middleware';
 import { authMiddleware } from './middleware/auth.middleware';
 
@@ -141,6 +145,10 @@ app.use('/api/pos-sessions', posSessionsRoutes);
 app.use('/api/batches', batchesRoutes);
 app.use('/api/stock-counts', stockCountsRoutes);
 app.use('/api/damage-reports', damageReportsRoutes);
+app.use('/api/placement-tasks', placementTasksRoutes);
+app.use('/api/transfer-tasks', transferTasksRoutes);
+app.use('/api/placement-history', placementHistoryRoutes);
+app.use('/api/admin', adminRoutes);
 
 // Health check endpoint for deployment platforms
 app.get('/health', (_req: Request, res: Response) => {

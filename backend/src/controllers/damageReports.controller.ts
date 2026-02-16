@@ -5,7 +5,12 @@ export const damageReportsController = {
   // Create a new damage report
   async create(req: Request, res: Response) {
     try {
-      const report = await damageReportsService.create(req.body);
+      // Normalize: frontend may send 'description' instead of 'damage_description'
+      const body = { ...req.body };
+      if (body.description && !body.damage_description) {
+        body.damage_description = body.description;
+      }
+      const report = await damageReportsService.create(body);
       res.status(201).json({
         success: true,
         data: report,

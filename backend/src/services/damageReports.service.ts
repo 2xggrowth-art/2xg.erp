@@ -8,6 +8,9 @@ interface CreateDamageReportInput {
   bin_location_id?: string;
   bin_code?: string;
   damaged_bin_id?: string;
+  damage_type?: string;
+  severity?: string;
+  quantity?: number;
   damage_description?: string;
   photo_base64?: string;
   reported_by?: string;
@@ -33,6 +36,9 @@ export const damageReportsService = {
         bin_location_id: data.bin_location_id,
         bin_code: data.bin_code,
         damaged_bin_id: data.damaged_bin_id,
+        damage_type: data.damage_type,
+        severity: data.severity,
+        quantity: data.quantity || 1,
         damage_description: data.damage_description,
         photo_base64: data.photo_base64,
         reported_by: data.reported_by,
