@@ -831,22 +831,8 @@ function ScannerScreen({ navigation, route }: any) {
   const handleBarCodeScanned = async ({ data }: BarcodeScanningResult) => {
     if (scanned || lookingUp) return;
 
-    // Prevent duplicate scans for serial items — same barcode should not count again
-    // Non-serial items can be scanned multiple times to increment count
-    if (scannedBarcodes.has(data)) {
-      // Check if this barcode matched a serial item — if so, block it
-      const scannedLowerCheck = data.toLowerCase();
-      const isSerialBarcode = initialItems.some((i: StockCountItem) =>
-        i.serial_number && (i.serial_number.toLowerCase() === scannedLowerCheck || data === i.serial_number)
-      );
-      if (isSerialBarcode) {
-        Vibration.vibrate([0, 50, 30, 50]);
-        setErrorMessage(`⚠️ Already scanned: ${data}`);
-        setScanned(true);
-        return;
-      }
-      // For non-serial items, allow re-scanning (count increments)
-    }
+    // Note: Duplicate prevention for serial items is handled in the match sections below
+    // (they find the next uncounted serial unit, or show "all counted" if none left)
 
     setScanned(true);
     setLookingUp(true);
@@ -871,16 +857,31 @@ function ScannerScreen({ navigation, route }: any) {
       const slashIdx = data.lastIndexOf('/');
       const baseScannedLower = slashIdx > 0 ? data.substring(0, slashIdx).toLowerCase() : null;
 
-      const skuMatched = initialItems.find((i: StockCountItem) => {
+      const skuMatchFn = (i: StockCountItem) => {
         if (!i.sku) return false;
         const skuLower = i.sku.toLowerCase();
         if (skuLower === scannedLower || skuLower.includes(scannedLower) || scannedLower.includes(skuLower) || scannedLower.startsWith(skuLower)) return true;
-        // Also try matching base SKU (without serial suffix)
         if (baseScannedLower && (skuLower === baseScannedLower || baseScannedLower === skuLower)) return true;
         return false;
-      });
+      };
+
+      const skuMatched = initialItems.find(skuMatchFn);
       if (skuMatched) {
-        await countItem(skuMatched, false);
+        // Check if this SKU has serial-tracked items
+        const isSerialItem = !!skuMatched.serial_number;
+        if (isSerialItem) {
+          // Find all serial items with this SKU that haven't been counted yet
+          const allSkuSerials = initialItems.filter((i: StockCountItem) => skuMatchFn(i) && i.serial_number);
+          const uncounted = allSkuSerials.find((i: StockCountItem) => !scannedItemIds.has(i.id) && !(itemCounts[i.id] > 0));
+          if (uncounted) {
+            await countItem(uncounted, true);
+          } else {
+            Vibration.vibrate([0, 50, 30, 50]);
+            setErrorMessage(`⚠️ All ${allSkuSerials.length} serial units of "${skuMatched.item_name}" already counted`);
+          }
+        } else {
+          await countItem(skuMatched, false);
+        }
         return;
       }
 
@@ -906,12 +907,22 @@ function ScannerScreen({ navigation, route }: any) {
 
       // 3b. If API still didn't find, try matching base SKU against local items
       if (!apiItem && baseScannedLower) {
-        const baseMatch = initialItems.find((i: StockCountItem) => {
-          if (!i.sku) return false;
-          return i.sku.toLowerCase() === baseScannedLower;
-        });
+        const baseMatchFn = (i: StockCountItem) => i.sku ? i.sku.toLowerCase() === baseScannedLower : false;
+        const baseMatch = initialItems.find(baseMatchFn);
         if (baseMatch) {
-          await countItem(baseMatch, false);
+          const isSerialBase = !!baseMatch.serial_number;
+          if (isSerialBase) {
+            const allBaseSerials = initialItems.filter((i: StockCountItem) => baseMatchFn(i) && i.serial_number);
+            const uncountedBase = allBaseSerials.find((i: StockCountItem) => !scannedItemIds.has(i.id) && !(itemCounts[i.id] > 0));
+            if (uncountedBase) {
+              await countItem(uncountedBase, true);
+            } else {
+              Vibration.vibrate([0, 50, 30, 50]);
+              setErrorMessage(`⚠️ All serial units of "${baseMatch.item_name}" already counted`);
+            }
+          } else {
+            await countItem(baseMatch, false);
+          }
           return;
         }
       }
@@ -937,7 +948,20 @@ function ScannerScreen({ navigation, route }: any) {
       // 5. Match by item_id against items in this count
       const apiMatched = initialItems.find((i: StockCountItem) => i.item_id === apiItem.id);
       if (apiMatched) {
-        await countItem(apiMatched, false);
+        const isSerialApi = !!apiMatched.serial_number;
+        if (isSerialApi) {
+          // Find uncounted serial item with same item_id
+          const allApiSerials = initialItems.filter((i: StockCountItem) => i.item_id === apiItem.id && i.serial_number);
+          const uncountedApi = allApiSerials.find((i: StockCountItem) => !scannedItemIds.has(i.id) && !(itemCounts[i.id] > 0));
+          if (uncountedApi) {
+            await countItem(uncountedApi, true);
+          } else {
+            Vibration.vibrate([0, 50, 30, 50]);
+            setErrorMessage(`⚠️ All serial units of "${apiMatched.item_name}" already counted`);
+          }
+        } else {
+          await countItem(apiMatched, false);
+        }
       } else {
         // Item exists in the system but NOT in this count's bin — show wrong bin with correct bin info
         Vibration.vibrate([0, 100, 50, 100]);
