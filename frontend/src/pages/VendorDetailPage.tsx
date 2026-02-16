@@ -13,9 +13,23 @@ import {
   Calendar,
   DollarSign,
   User,
-  ShieldCheck
+  ShieldCheck,
+  Download
 } from 'lucide-react';
 import { vendorsService, Vendor } from '../services/vendors.service';
+import { billsService, Bill } from '../services/bills.service';
+import { paymentsService, PaymentMade } from '../services/payments.service';
+import { vendorCreditsService, VendorCredit } from '../services/vendor-credits.service';
+
+interface TransactionRow {
+  date: string;
+  type: 'bill' | 'payment' | 'credit';
+  number: string;
+  status: string;
+  amount: number;       // positive = payable increased, negative = payable decreased
+  balance: number;      // running balance (computed after sort)
+  id: string;
+}
 
 const VendorDetailPage = () => {
   const { id } = useParams<{ id: string }>();
@@ -24,12 +38,200 @@ const VendorDetailPage = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'overview' | 'transactions' | 'documents'>('overview');
+  const [transactions, setTransactions] = useState<TransactionRow[]>([]);
+  const [txnLoading, setTxnLoading] = useState(false);
+  const [txnFilter, setTxnFilter] = useState<'all' | 'bill' | 'payment' | 'credit'>('all');
 
   useEffect(() => {
     if (id) {
       fetchVendorDetails();
     }
   }, [id]);
+
+  useEffect(() => {
+    if (id && (activeTab === 'transactions' || activeTab === 'documents')) {
+      fetchTransactions();
+    }
+  }, [id, activeTab]);
+
+  const fetchTransactions = async () => {
+    try {
+      setTxnLoading(true);
+      const [billsRes, paymentsRes, creditsRes] = await Promise.all([
+        billsService.getAllBills({ vendor_id: id! }),
+        paymentsService.getAllPayments({ vendor_id: id! }),
+        vendorCreditsService.getAllVendorCredits({ vendor_id: id! }),
+      ]);
+
+      const rows: TransactionRow[] = [];
+
+      // Bills = amount owed TO vendor (increases payable)
+      const bills: Bill[] = billsRes.data || [];
+      bills.forEach((b) => {
+        rows.push({
+          date: b.bill_date,
+          type: 'bill',
+          number: b.bill_number,
+          status: b.status,
+          amount: b.total_amount,
+          balance: 0,
+          id: b.id,
+        });
+      });
+
+      // Payments = amount paid TO vendor (decreases payable)
+      const payments: PaymentMade[] = paymentsRes.data || [];
+      payments.forEach((p) => {
+        rows.push({
+          date: p.payment_date,
+          type: 'payment',
+          number: p.payment_number,
+          status: p.status,
+          amount: -p.amount,
+          balance: 0,
+          id: p.id,
+        });
+      });
+
+      // Credits = return/deduction from vendor (decreases payable)
+      const credits: VendorCredit[] = creditsRes.data || [];
+      credits.forEach((c) => {
+        rows.push({
+          date: c.credit_date,
+          type: 'credit',
+          number: c.credit_note_number,
+          status: c.status,
+          amount: -c.total_amount,
+          balance: 0,
+          id: c.id,
+        });
+      });
+
+      // Sort oldest first for running balance
+      rows.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+
+      // Compute running balance
+      let bal = 0;
+      rows.forEach((r) => {
+        bal += r.amount;
+        r.balance = bal;
+      });
+
+      // Reverse so newest is on top
+      rows.reverse();
+      setTransactions(rows);
+    } catch (err) {
+      console.error('Error fetching transactions:', err);
+    } finally {
+      setTxnLoading(false);
+    }
+  };
+
+  const handlePrintStatement = () => {
+    const totalBills = transactions.filter((t) => t.type === 'bill').reduce((s, t) => s + t.amount, 0);
+    const totalPayments = transactions.filter((t) => t.type === 'payment').reduce((s, t) => s + Math.abs(t.amount), 0);
+    const totalCredits = transactions.filter((t) => t.type === 'credit').reduce((s, t) => s + Math.abs(t.amount), 0);
+    const netBalance = totalBills - totalPayments - totalCredits;
+    // Sort oldest first for statement
+    const sorted = [...transactions].reverse();
+
+    const html = `
+      <html>
+      <head>
+        <title>Vendor Statement - ${vendor?.supplier_name}</title>
+        <style>
+          body { font-family: Arial, sans-serif; padding: 40px; color: #333; }
+          h1 { font-size: 22px; margin-bottom: 4px; }
+          .subtitle { color: #666; font-size: 13px; margin-bottom: 24px; }
+          .summary { display: flex; gap: 24px; margin-bottom: 24px; }
+          .summary-box { border: 1px solid #ddd; border-radius: 6px; padding: 12px 16px; flex: 1; }
+          .summary-box .label { font-size: 11px; color: #888; text-transform: uppercase; }
+          .summary-box .value { font-size: 18px; font-weight: bold; margin-top: 4px; }
+          .green { color: #15803d; }
+          .red { color: #b91c1c; }
+          .blue { color: #1d4ed8; }
+          table { width: 100%; border-collapse: collapse; font-size: 13px; }
+          th { background: #f3f4f6; text-align: left; padding: 8px 10px; border-bottom: 2px solid #ddd; font-size: 11px; text-transform: uppercase; color: #666; }
+          td { padding: 8px 10px; border-bottom: 1px solid #eee; }
+          .right { text-align: right; }
+          .bold { font-weight: bold; }
+          tfoot td { border-top: 2px solid #333; font-weight: bold; background: #f9fafb; }
+          @media print { body { padding: 20px; } }
+        </style>
+      </head>
+      <body>
+        <h1>Vendor Statement</h1>
+        <div class="subtitle">
+          <strong>${vendor?.supplier_name}</strong>
+          ${vendor?.company_name ? ' | ' + vendor.company_name : ''}
+          ${vendor?.phone ? ' | ' + vendor.phone : ''}
+          <br/>Statement Date: ${new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'long', year: 'numeric' })}
+        </div>
+
+        <div class="summary">
+          <div class="summary-box">
+            <div class="label">Total Billed</div>
+            <div class="value">Rs ${totalBills.toFixed(2)}</div>
+          </div>
+          <div class="summary-box">
+            <div class="label">Total Paid</div>
+            <div class="value green">Rs ${totalPayments.toFixed(2)}</div>
+          </div>
+          <div class="summary-box">
+            <div class="label">Credits</div>
+            <div class="value blue">Rs ${totalCredits.toFixed(2)}</div>
+          </div>
+          <div class="summary-box">
+            <div class="label">Balance Due</div>
+            <div class="value ${netBalance > 0 ? 'red' : 'green'}">Rs ${netBalance.toFixed(2)}</div>
+          </div>
+        </div>
+
+        <table>
+          <thead>
+            <tr>
+              <th>Date</th>
+              <th>Type</th>
+              <th>Number</th>
+              <th>Status</th>
+              <th class="right">Debit</th>
+              <th class="right">Credit</th>
+              <th class="right">Balance</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${sorted.map((txn) => `
+              <tr>
+                <td>${new Date(txn.date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}</td>
+                <td>${txn.type === 'bill' ? 'Bill' : txn.type === 'payment' ? 'Payment' : 'Credit'}</td>
+                <td>${txn.number}</td>
+                <td>${txn.status.charAt(0).toUpperCase() + txn.status.slice(1)}</td>
+                <td class="right red">${txn.amount > 0 ? 'Rs ' + txn.amount.toFixed(2) : ''}</td>
+                <td class="right green">${txn.amount < 0 ? 'Rs ' + Math.abs(txn.amount).toFixed(2) : ''}</td>
+                <td class="right bold">Rs ${txn.balance.toFixed(2)}</td>
+              </tr>
+            `).join('')}
+          </tbody>
+          <tfoot>
+            <tr>
+              <td colspan="4">Total (${sorted.length} transactions)</td>
+              <td class="right red">Rs ${totalBills.toFixed(2)}</td>
+              <td class="right green">Rs ${(totalPayments + totalCredits).toFixed(2)}</td>
+              <td class="right bold">Rs ${netBalance.toFixed(2)}</td>
+            </tr>
+          </tfoot>
+        </table>
+      </body>
+      </html>
+    `;
+
+    const printWindow = window.open('', '_blank');
+    if (printWindow) {
+      printWindow.document.write(html);
+      printWindow.document.close();
+      printWindow.print();
+    }
+  };
 
   const fetchVendorDetails = async () => {
     try {
@@ -396,24 +598,265 @@ const VendorDetailPage = () => {
         )}
 
         {activeTab === 'transactions' && (
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-12 text-center">
-            <CreditCard className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-            <h3 className="text-lg font-medium text-gray-700 mb-2">Transaction History</h3>
-            <p className="text-sm text-gray-500">
-              Transaction history feature coming soon
-            </p>
+          <div className="space-y-4">
+            {/* Filter bar */}
+            <div className="flex items-center justify-between">
+              <div className="flex gap-2">
+                {(['all', 'bill', 'payment', 'credit'] as const).map((f) => (
+                  <button
+                    key={f}
+                    onClick={() => setTxnFilter(f)}
+                    className={`px-3 py-1.5 text-sm rounded-lg border transition-colors ${
+                      txnFilter === f
+                        ? 'bg-blue-600 text-white border-blue-600'
+                        : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'
+                    }`}
+                  >
+                    {f === 'all' ? 'All' : f === 'bill' ? 'Bills' : f === 'payment' ? 'Payments' : 'Credits'}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Summary cards */}
+            {(() => {
+              const filtered = txnFilter === 'all' ? transactions : transactions.filter((t) => t.type === txnFilter);
+              const totalBills = transactions.filter((t) => t.type === 'bill').reduce((s, t) => s + t.amount, 0);
+              const totalPayments = transactions.filter((t) => t.type === 'payment').reduce((s, t) => s + Math.abs(t.amount), 0);
+              const totalCredits = transactions.filter((t) => t.type === 'credit').reduce((s, t) => s + Math.abs(t.amount), 0);
+              const netBalance = totalBills - totalPayments - totalCredits;
+
+              return (
+                <>
+                  <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                    <div className="bg-white rounded-lg border border-gray-200 p-4">
+                      <p className="text-xs text-gray-500 uppercase font-medium">Total Billed</p>
+                      <p className="text-xl font-bold text-gray-900 mt-1">Rs {totalBills.toFixed(2)}</p>
+                    </div>
+                    <div className="bg-white rounded-lg border border-gray-200 p-4">
+                      <p className="text-xs text-gray-500 uppercase font-medium">Total Paid</p>
+                      <p className="text-xl font-bold text-green-700 mt-1">Rs {totalPayments.toFixed(2)}</p>
+                    </div>
+                    <div className="bg-white rounded-lg border border-gray-200 p-4">
+                      <p className="text-xs text-gray-500 uppercase font-medium">Credits</p>
+                      <p className="text-xl font-bold text-blue-700 mt-1">Rs {totalCredits.toFixed(2)}</p>
+                    </div>
+                    <div className="bg-white rounded-lg border border-gray-200 p-4">
+                      <p className="text-xs text-gray-500 uppercase font-medium">Balance Due</p>
+                      <p className={`text-xl font-bold mt-1 ${netBalance > 0 ? 'text-red-700' : 'text-green-700'}`}>
+                        Rs {netBalance.toFixed(2)}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Table */}
+                  {txnLoading ? (
+                    <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8 text-center">
+                      <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                      <p className="mt-2 text-gray-600">Loading transactions...</p>
+                    </div>
+                  ) : filtered.length === 0 ? (
+                    <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-12 text-center">
+                      <CreditCard className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+                      <h3 className="text-lg font-medium text-gray-700 mb-2">No Transactions</h3>
+                      <p className="text-sm text-gray-500">No transactions found for this vendor.</p>
+                    </div>
+                  ) : (
+                    <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+                      <table className="min-w-full divide-y divide-gray-200">
+                        <thead className="bg-gray-50">
+                          <tr>
+                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Date</th>
+                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Type</th>
+                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Number</th>
+                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
+                            <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Debit (Bill)</th>
+                            <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Credit (Paid)</th>
+                            <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Balance</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-200">
+                          {filtered.map((txn, idx) => (
+                            <tr
+                              key={`${txn.type}-${txn.id}`}
+                              className="hover:bg-gray-50 cursor-pointer"
+                              onClick={() => {
+                                if (txn.type === 'bill') navigate(`/purchases/bills/${txn.id}`);
+                                else if (txn.type === 'payment') navigate(`/purchases/payments-made/${txn.id}`);
+                                else navigate(`/purchases/vendor-credits/${txn.id}`);
+                              }}
+                            >
+                              <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">
+                                {new Date(txn.date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
+                              </td>
+                              <td className="px-4 py-3 text-sm whitespace-nowrap">
+                                <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
+                                  txn.type === 'bill'
+                                    ? 'bg-orange-100 text-orange-700'
+                                    : txn.type === 'payment'
+                                    ? 'bg-green-100 text-green-700'
+                                    : 'bg-blue-100 text-blue-700'
+                                }`}>
+                                  {txn.type === 'bill' ? 'Bill' : txn.type === 'payment' ? 'Payment' : 'Credit'}
+                                </span>
+                              </td>
+                              <td className="px-4 py-3 text-sm text-blue-600 font-medium whitespace-nowrap">
+                                {txn.number}
+                              </td>
+                              <td className="px-4 py-3 text-sm whitespace-nowrap">
+                                <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
+                                  txn.status === 'paid' || txn.status === 'completed' || txn.status === 'closed'
+                                    ? 'bg-green-100 text-green-700'
+                                    : txn.status === 'draft'
+                                    ? 'bg-gray-100 text-gray-600'
+                                    : txn.status === 'cancelled'
+                                    ? 'bg-red-100 text-red-600'
+                                    : 'bg-yellow-100 text-yellow-700'
+                                }`}>
+                                  {txn.status.charAt(0).toUpperCase() + txn.status.slice(1).replace('_', ' ')}
+                                </span>
+                              </td>
+                              <td className="px-4 py-3 text-sm text-right whitespace-nowrap font-medium text-red-600">
+                                {txn.amount > 0 ? `Rs ${txn.amount.toFixed(2)}` : ''}
+                              </td>
+                              <td className="px-4 py-3 text-sm text-right whitespace-nowrap font-medium text-green-600">
+                                {txn.amount < 0 ? `Rs ${Math.abs(txn.amount).toFixed(2)}` : ''}
+                              </td>
+                              <td className="px-4 py-3 text-sm text-right whitespace-nowrap font-semibold">
+                                Rs {txn.balance.toFixed(2)}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </>
+              );
+            })()}
           </div>
         )}
 
-        {activeTab === 'documents' && (
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-12 text-center">
-            <FileText className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-            <h3 className="text-lg font-medium text-gray-700 mb-2">Documents</h3>
-            <p className="text-sm text-gray-500">
-              Document management feature coming soon
-            </p>
-          </div>
-        )}
+        {activeTab === 'documents' && (() => {
+          const totalBills = transactions.filter((t) => t.type === 'bill').reduce((s, t) => s + t.amount, 0);
+          const totalPayments = transactions.filter((t) => t.type === 'payment').reduce((s, t) => s + Math.abs(t.amount), 0);
+          const totalCredits = transactions.filter((t) => t.type === 'credit').reduce((s, t) => s + Math.abs(t.amount), 0);
+          const netBalance = totalBills - totalPayments - totalCredits;
+          const sorted = [...transactions].reverse();
+
+          return (
+            <div className="space-y-4">
+              {/* Header with print button */}
+              <div className="flex items-center justify-between">
+                <h2 className="text-lg font-semibold text-gray-800">Vendor Statement</h2>
+                <button
+                  onClick={handlePrintStatement}
+                  disabled={txnLoading || transactions.length === 0}
+                  className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
+                >
+                  <Download size={16} />
+                  Print / Download
+                </button>
+              </div>
+
+              {txnLoading ? (
+                <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8 text-center">
+                  <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                  <p className="mt-2 text-gray-600">Loading statement...</p>
+                </div>
+              ) : transactions.length === 0 ? (
+                <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-12 text-center">
+                  <FileText className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+                  <h3 className="text-lg font-medium text-gray-700 mb-2">No Statement</h3>
+                  <p className="text-sm text-gray-500">No transactions found to generate a statement.</p>
+                </div>
+              ) : (
+                <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+                  {/* Statement header */}
+                  <div className="border-b border-gray-200 pb-4 mb-4">
+                    <h3 className="text-xl font-bold text-gray-900">{vendor?.supplier_name}</h3>
+                    <p className="text-sm text-gray-500 mt-1">
+                      {vendor?.company_name && <span>{vendor.company_name} | </span>}
+                      {vendor?.phone && <span>{vendor.phone} | </span>}
+                      {vendor?.email && <span>{vendor.email}</span>}
+                    </p>
+                    <p className="text-xs text-gray-400 mt-1">
+                      Statement as of {new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'long', year: 'numeric' })}
+                    </p>
+                  </div>
+
+                  {/* Summary */}
+                  <div className="grid grid-cols-4 gap-4 mb-6">
+                    <div className="text-center p-3 bg-gray-50 rounded-lg">
+                      <p className="text-xs text-gray-500 uppercase">Billed</p>
+                      <p className="text-lg font-bold text-gray-900">Rs {totalBills.toFixed(2)}</p>
+                    </div>
+                    <div className="text-center p-3 bg-gray-50 rounded-lg">
+                      <p className="text-xs text-gray-500 uppercase">Paid</p>
+                      <p className="text-lg font-bold text-green-700">Rs {totalPayments.toFixed(2)}</p>
+                    </div>
+                    <div className="text-center p-3 bg-gray-50 rounded-lg">
+                      <p className="text-xs text-gray-500 uppercase">Credits</p>
+                      <p className="text-lg font-bold text-blue-700">Rs {totalCredits.toFixed(2)}</p>
+                    </div>
+                    <div className="text-center p-3 bg-gray-50 rounded-lg">
+                      <p className="text-xs text-gray-500 uppercase">Balance</p>
+                      <p className={`text-lg font-bold ${netBalance > 0 ? 'text-red-700' : 'text-green-700'}`}>
+                        Rs {netBalance.toFixed(2)}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Statement table */}
+                  <table className="min-w-full divide-y divide-gray-200 text-sm">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Date</th>
+                        <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Type</th>
+                        <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Number</th>
+                        <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
+                        <th className="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase">Debit</th>
+                        <th className="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase">Credit</th>
+                        <th className="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase">Balance</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100">
+                      {sorted.map((txn) => (
+                        <tr key={`${txn.type}-${txn.id}`}>
+                          <td className="px-3 py-2 text-gray-900">
+                            {new Date(txn.date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
+                          </td>
+                          <td className="px-3 py-2 text-gray-700">
+                            {txn.type === 'bill' ? 'Bill' : txn.type === 'payment' ? 'Payment' : 'Credit'}
+                          </td>
+                          <td className="px-3 py-2 font-medium text-gray-900">{txn.number}</td>
+                          <td className="px-3 py-2 text-gray-600 capitalize">{txn.status.replace('_', ' ')}</td>
+                          <td className="px-3 py-2 text-right text-red-600 font-medium">
+                            {txn.amount > 0 ? `Rs ${txn.amount.toFixed(2)}` : ''}
+                          </td>
+                          <td className="px-3 py-2 text-right text-green-600 font-medium">
+                            {txn.amount < 0 ? `Rs ${Math.abs(txn.amount).toFixed(2)}` : ''}
+                          </td>
+                          <td className="px-3 py-2 text-right font-semibold">Rs {txn.balance.toFixed(2)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                    <tfoot className="border-t-2 border-gray-300 bg-gray-50">
+                      <tr>
+                        <td colSpan={4} className="px-3 py-2 font-semibold text-gray-700">
+                          Total ({sorted.length} transactions)
+                        </td>
+                        <td className="px-3 py-2 text-right font-bold text-red-600">Rs {totalBills.toFixed(2)}</td>
+                        <td className="px-3 py-2 text-right font-bold text-green-600">Rs {(totalPayments + totalCredits).toFixed(2)}</td>
+                        <td className="px-3 py-2 text-right font-bold text-gray-900">Rs {netBalance.toFixed(2)}</td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
+              )}
+            </div>
+          );
+        })()}
       </div>
     </div>
   );

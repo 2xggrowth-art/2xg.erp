@@ -10,6 +10,7 @@ import ItemDetailPage from './pages/ItemDetailPage';
 import NewItemForm from './components/items/NewItemForm';
 import TransferOrderPage from './pages/TransferOrderPage';
 import PurchasesPage from './pages/PurchasesPage';
+import LedgerAccountPage from './pages/LedgerAccountPage';
 import VendorManagementPage from './pages/VendorManagementPage';
 import NewVendorForm from './components/vendors/NewVendorForm';
 import CustomerManagementPage from './pages/CustomerManagementPage';
@@ -115,7 +116,7 @@ function App() {
             <Route path="/purchases/vendor-credits" element={<ProtectedRoute><DashboardLayout><VendorCreditsPage /></DashboardLayout></ProtectedRoute>} />
             <Route path="/purchases/vendor-credits/new" element={<ProtectedRoute><DashboardLayout><NewVendorCreditForm /></DashboardLayout></ProtectedRoute>} />
             <Route path="/purchases/vendor-credits/:id" element={<ProtectedRoute><DashboardLayout><VendorCreditDetailPage /></DashboardLayout></ProtectedRoute>} />
-            <Route path="/purchases/ledger-account" element={<ProtectedRoute><DashboardLayout><PurchasesPage /></DashboardLayout></ProtectedRoute>} />
+            <Route path="/purchases/ledger-account" element={<ProtectedRoute><DashboardLayout><LedgerAccountPage /></DashboardLayout></ProtectedRoute>} />
 
             {/* Vendor Management Routes */}
             <Route path="/vendor-management" element={<ProtectedRoute><DashboardLayout><VendorManagementPage /></DashboardLayout></ProtectedRoute>} />
