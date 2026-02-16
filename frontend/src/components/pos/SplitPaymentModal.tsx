@@ -19,12 +19,10 @@ interface SplitPaymentModalProps {
 }
 
 const PAYMENT_METHODS = [
-  { id: 'CASH', label: 'Cash', shortcut: 'F1' },
-  { id: 'HDFC BANK', label: 'HDFC BANK', shortcut: 'F2' },
-  { id: 'ICICI BANK', label: 'ICICI BANK', shortcut: 'F3' },
-  { id: 'BAJAJ/ICICI', label: 'BAJAJ / ICICI BANK', shortcut: '' },
+  { id: 'Cash', label: 'Cash', shortcut: 'F1' },
+  { id: 'HDFC', label: 'HDFC', shortcut: 'F2' },
+  { id: 'ICICI', label: 'ICICI', shortcut: 'F3' },
   { id: 'CREDIT SALE', label: 'Credit Sale', shortcut: 'F4' },
-  { id: 'D/B CREDIT CARD', label: 'D/B CREDIT CARD / EM', shortcut: '' },
 ];
 
 const SplitPaymentModal: React.FC<SplitPaymentModalProps> = ({
@@ -83,7 +81,7 @@ const SplitPaymentModal: React.FC<SplitPaymentModalProps> = ({
     }
 
     // For non-cash and non-credit payments, reference is required
-    if (selectedMethod !== 'CASH' && selectedMethod !== 'CREDIT SALE' && !currentReference.trim()) {
+    if (selectedMethod !== 'Cash' && selectedMethod !== 'CREDIT SALE' && !currentReference.trim()) {
       alert('Reference number is required for this payment method');
       return;
     }
@@ -212,7 +210,7 @@ const SplitPaymentModal: React.FC<SplitPaymentModalProps> = ({
                   </div>
 
                   {/* Reference Number */}
-                  {selectedMethod !== 'CASH' && (
+                  {selectedMethod !== 'Cash' && (
                     <div>
                       <label className="block text-sm font-semibold text-gray-700 mb-3">
                         Reference Number {selectedMethod !== 'CREDIT SALE' && <span className="text-red-500">*</span>}

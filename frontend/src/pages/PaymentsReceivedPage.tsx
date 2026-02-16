@@ -157,15 +157,12 @@ const PaymentsReceivedPage = () => {
   };
 
   const getPaymentModeBadge = (mode: string) => {
-    const modeMap: Record<string, { bg: string; text: string }> = {
-      cash: { bg: 'bg-green-100', text: 'text-green-700' },
-      upi: { bg: 'bg-blue-100', text: 'text-blue-700' },
-      'bank transfer': { bg: 'bg-purple-100', text: 'text-purple-700' },
-      cheque: { bg: 'bg-orange-100', text: 'text-orange-700' },
-      card: { bg: 'bg-pink-100', text: 'text-pink-700' },
-    };
-
-    const style = modeMap[mode.toLowerCase()] || { bg: 'bg-slate-100', text: 'text-slate-700' };
+    const modeLower = mode.toLowerCase();
+    let style = { bg: 'bg-slate-100', text: 'text-slate-700' };
+    if (modeLower === 'cash') style = { bg: 'bg-green-100', text: 'text-green-700' };
+    else if (modeLower.includes('hdfc')) style = { bg: 'bg-blue-100', text: 'text-blue-700' };
+    else if (modeLower.includes('icici')) style = { bg: 'bg-purple-100', text: 'text-purple-700' };
+    else if (modeLower.includes('credit')) style = { bg: 'bg-orange-100', text: 'text-orange-700' };
     return (
       <span className={`px-3 py-1 rounded-full text-xs font-medium ${style.bg} ${style.text}`}>
         {mode}
@@ -255,17 +252,9 @@ const PaymentsReceivedPage = () => {
                 className="px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               >
                 <option value="all">All Payment Modes</option>
-                <option value="CASH">Cash</option>
-                <option value="HDFC BANK">HDFC Bank</option>
-                <option value="ICICI BANK">ICICI Bank</option>
-                <option value="BAJAJ/ICICI">Bajaj / ICICI</option>
-                <option value="CREDIT SALE">Credit Sale</option>
-                <option value="D/B CREDIT CARD">D/B Credit Card</option>
-                <option value="HDFC (Hub)">HDFC (Hub)</option>
-                <option value="HDFC (Center)">HDFC (Center)</option>
+                <option value="Cash">Cash</option>
+                <option value="HDFC">HDFC</option>
                 <option value="ICICI">ICICI</option>
-                <option value="Dhanalakhmi">Dhanalakhmi</option>
-                <option value="Cash">Cash (Manual)</option>
               </select>
               <select
                 value={filterPeriod}
@@ -419,26 +408,41 @@ const PaymentsReceivedPage = () => {
         </div>
 
         {/* Summary Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
           <div className="bg-white rounded-lg shadow-md p-4">
-            <div className="text-sm text-slate-600 mb-1">Total Payments</div>
-            <div className="text-2xl font-bold text-slate-800">{payments.length}</div>
-          </div>
-          <div className="bg-white rounded-lg shadow-md p-4">
-            <div className="text-sm text-slate-600 mb-1">Total Amount</div>
-            <div className="text-2xl font-bold text-slate-800">
+            <div className="text-sm text-slate-600 mb-1">Total Received</div>
+            <div className="text-xl font-bold text-slate-800">
               {formatCurrency(payments.reduce((sum, payment) => sum + payment.amount_received, 0))}
             </div>
+            <div className="text-xs text-slate-500 mt-1">{payments.length} payments</div>
           </div>
-          <div className="bg-white rounded-lg shadow-md p-4">
-            <div className="text-sm text-slate-600 mb-1">This Month</div>
-            <div className="text-2xl font-bold text-green-600">
-              {payments.filter(p => {
-                const paymentDate = new Date(p.payment_date);
-                const now = new Date();
-                return paymentDate.getMonth() === now.getMonth() && paymentDate.getFullYear() === now.getFullYear();
-              }).length}
+          <div className="bg-white rounded-lg shadow-md p-4 border-l-4 border-green-500">
+            <div className="text-sm text-green-700 mb-1 font-medium">Cash</div>
+            <div className="text-xl font-bold text-green-700">
+              {formatCurrency(payments.filter(p => p.payment_mode.toLowerCase() === 'cash').reduce((sum, p) => sum + p.amount_received, 0))}
             </div>
+            <div className="text-xs text-slate-500 mt-1">{payments.filter(p => p.payment_mode.toLowerCase() === 'cash').length} payments</div>
+          </div>
+          <div className="bg-white rounded-lg shadow-md p-4 border-l-4 border-blue-500">
+            <div className="text-sm text-blue-700 mb-1 font-medium">HDFC</div>
+            <div className="text-xl font-bold text-blue-700">
+              {formatCurrency(payments.filter(p => p.payment_mode.toLowerCase().includes('hdfc')).reduce((sum, p) => sum + p.amount_received, 0))}
+            </div>
+            <div className="text-xs text-slate-500 mt-1">{payments.filter(p => p.payment_mode.toLowerCase().includes('hdfc')).length} payments</div>
+          </div>
+          <div className="bg-white rounded-lg shadow-md p-4 border-l-4 border-purple-500">
+            <div className="text-sm text-purple-700 mb-1 font-medium">ICICI</div>
+            <div className="text-xl font-bold text-purple-700">
+              {formatCurrency(payments.filter(p => p.payment_mode.toLowerCase().includes('icici')).reduce((sum, p) => sum + p.amount_received, 0))}
+            </div>
+            <div className="text-xs text-slate-500 mt-1">{payments.filter(p => p.payment_mode.toLowerCase().includes('icici')).length} payments</div>
+          </div>
+          <div className="bg-white rounded-lg shadow-md p-4 border-l-4 border-orange-500">
+            <div className="text-sm text-orange-700 mb-1 font-medium">Credit Sale</div>
+            <div className="text-xl font-bold text-orange-700">
+              {formatCurrency(payments.filter(p => p.payment_mode.toLowerCase().includes('credit')).reduce((sum, p) => sum + p.amount_received, 0))}
+            </div>
+            <div className="text-xs text-slate-500 mt-1">{payments.filter(p => p.payment_mode.toLowerCase().includes('credit')).length} payments</div>
           </div>
         </div>
       </div>

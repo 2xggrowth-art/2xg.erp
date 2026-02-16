@@ -95,7 +95,7 @@ const PosCreate: React.FC = () => {
   // Payment states
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [showSplitPaymentModal, setShowSplitPaymentModal] = useState(false);
-  const [selectedPaymentMode, setSelectedPaymentMode] = useState<'CASH' | 'HDFC BANK' | 'ICICI BANK' | 'BAJAJ/ICICI' | 'CREDIT SALE' | 'D/B CREDIT CARD' | ''>('');
+  const [selectedPaymentMode, setSelectedPaymentMode] = useState<'Cash' | 'HDFC' | 'ICICI' | 'CREDIT SALE' | ''>('');
   const [referenceNumber, setReferenceNumber] = useState('');
   const [paidAmount, setPaidAmount] = useState<number>(0);
 
@@ -491,7 +491,7 @@ const PosCreate: React.FC = () => {
     }
   };
 
-  const handlePaymentClick = (mode: 'CASH' | 'HDFC BANK' | 'ICICI BANK' | 'BAJAJ/ICICI' | 'CREDIT SALE' | 'D/B CREDIT CARD') => {
+  const handlePaymentClick = (mode: 'Cash' | 'HDFC' | 'ICICI' | 'CREDIT SALE') => {
     if (!activeSession) {
       alert('Please start a session before making sales');
       setShowStartSessionModal(true);
@@ -513,7 +513,7 @@ const PosCreate: React.FC = () => {
     }
 
     // Cash payment doesn't need reference number
-    if (mode === 'CASH') {
+    if (mode === 'Cash') {
       handleProcessPayment(mode, '', total);
     } else {
       setShowPaymentModal(true);
@@ -1531,46 +1531,32 @@ const PosCreate: React.FC = () => {
 
             <div className="grid grid-cols-2 gap-2">
               <button
-                onClick={() => handlePaymentClick('CASH')}
+                onClick={() => handlePaymentClick('Cash')}
                 disabled={cart.length === 0 || processingPayment}
                 className="col-span-2 py-3.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg text-sm uppercase transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {processingPayment ? 'Processing...' : 'Cash [F1]'}
               </button>
               <button
-                onClick={() => handlePaymentClick('HDFC BANK')}
+                onClick={() => handlePaymentClick('HDFC')}
                 disabled={cart.length === 0 || processingPayment}
                 className="py-2.5 bg-white border border-gray-300 hover:bg-gray-100 text-gray-700 rounded-lg text-xs font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                HDFC BANK [F2]
+                HDFC [F2]
               </button>
               <button
-                onClick={() => handlePaymentClick('ICICI BANK')}
+                onClick={() => handlePaymentClick('ICICI')}
                 disabled={cart.length === 0 || processingPayment}
                 className="py-2.5 bg-white border border-gray-300 hover:bg-gray-100 text-gray-700 rounded-lg text-xs font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                ICICI BANK [F3]
-              </button>
-              <button
-                onClick={() => handlePaymentClick('BAJAJ/ICICI')}
-                disabled={cart.length === 0 || processingPayment}
-                className="py-2.5 bg-white border border-gray-300 hover:bg-gray-100 text-gray-700 rounded-lg text-xs font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                BAJAJ / ICICI
+                ICICI [F3]
               </button>
               <button
                 onClick={() => handlePaymentClick('CREDIT SALE')}
                 disabled={cart.length === 0 || processingPayment}
-                className="py-2.5 bg-white border border-gray-300 hover:bg-gray-100 text-gray-700 rounded-lg text-xs font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                className="col-span-2 py-2.5 bg-white border border-gray-300 hover:bg-gray-100 text-gray-700 rounded-lg text-xs font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 Credit Sale [F4]
-              </button>
-              <button
-                onClick={() => handlePaymentClick('D/B CREDIT CARD')}
-                disabled={cart.length === 0 || processingPayment}
-                className="py-2.5 bg-white border border-gray-300 hover:bg-gray-100 text-gray-700 rounded-lg text-xs font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                D/B CREDIT CARD
               </button>
               <button
                 onClick={() => setShowSplitPaymentModal(true)}
@@ -1901,7 +1887,7 @@ const PosCreate: React.FC = () => {
                   ) : (
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Reference Number {selectedPaymentMode !== 'CASH' && <span className="text-red-500">*</span>}
+                        Reference Number {selectedPaymentMode !== 'Cash' && <span className="text-red-500">*</span>}
                       </label>
                       <input
                         type="text"
@@ -1928,7 +1914,7 @@ const PosCreate: React.FC = () => {
                   </button>
                   <button
                     onClick={() => handleProcessPayment(selectedPaymentMode, referenceNumber, paidAmount)}
-                    disabled={processingPayment || (!referenceNumber && selectedPaymentMode !== 'CASH' && selectedPaymentMode !== 'CREDIT SALE')}
+                    disabled={processingPayment || (!referenceNumber && selectedPaymentMode !== 'Cash' && selectedPaymentMode !== 'CREDIT SALE')}
                     className="flex-1 px-6 py-3 bg-green-600 hover:bg-green-700 text-white font-bold rounded-lg text-sm transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     {processingPayment ? 'Processing...' : 'Complete Payment'}
