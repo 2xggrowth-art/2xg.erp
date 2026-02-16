@@ -1797,7 +1797,12 @@ function CountHistoryScreen({ navigation }: any) {
 
   return (
     <View style={styles.container}>
-      <View style={styles.screenHeader}><Text style={styles.screenHeaderTitle}>Count History</Text></View>
+      <View style={[styles.screenHeader, { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }]}>
+        <Text style={styles.screenHeaderTitle}>Count History</Text>
+        <TouchableOpacity onPress={() => navigation.navigate('Home')} style={{ paddingHorizontal: 12, paddingVertical: 6, backgroundColor: COLORS.primaryLight, borderRadius: 8 }}>
+          <Text style={{ color: COLORS.primary, fontWeight: '600', fontSize: 13 }}>← Dashboard</Text>
+        </TouchableOpacity>
+      </View>
       <View style={{ flexDirection: 'row', paddingHorizontal: 16, paddingVertical: 8, gap: 8 }}>
         {(['all', 'today', 'week', 'month'] as const).map(f => (
           <TouchableOpacity key={f} onPress={() => setFilterType(f)} style={{ paddingHorizontal: 12, paddingVertical: 6, borderRadius: 16, backgroundColor: filterType === f ? COLORS.primary : COLORS.gray100 }}>
@@ -2007,31 +2012,125 @@ function BinInventoryScreen({ navigation }: any) {
   );
 }
 
-// DamageReport (enhanced)
+// DamageReport (enhanced with barcode scanner)
 function DamageReportScreen({ navigation }: any) {
   const [itemId, setItemId] = useState('');
+  const [itemName, setItemName] = useState('');
   const [quantity, setQuantity] = useState('');
   const [description, setDescription] = useState('');
   const [damageType, setDamageType] = useState<DamageType>('physical');
   const [severity, setSeverity] = useState<SeverityLevel>('moderate');
   const [submitting, setSubmitting] = useState(false);
+  const [showScanner, setShowScanner] = useState(false);
+  const [scanProcessing, setScanProcessing] = useState(false);
+  const [permission, requestPermission] = useCameraPermissions();
+
+  const handleBarCodeScanned = async ({ data }: BarcodeScanningResult) => {
+    if (scanProcessing) return;
+    setScanProcessing(true);
+    Vibration.vibrate(50);
+    try {
+      const res = await api.get(`/items/barcode/${encodeURIComponent(data)}`);
+      const item = res.success ? res.data : res;
+      if (item && (item.id || item.item_name)) {
+        setItemId(item.id || data);
+        setItemName(item.item_name || item.name || data);
+        setShowScanner(false);
+        Vibration.vibrate([0, 50, 50, 50]);
+      } else {
+        setItemId(data);
+        setItemName(data);
+        setShowScanner(false);
+        Vibration.vibrate([0, 100, 50, 100]);
+        Alert.alert('Item Not Found', `Barcode "${data}" not found in system. You can still submit the report.`);
+      }
+    } catch {
+      setItemId(data);
+      setItemName(data);
+      setShowScanner(false);
+      Vibration.vibrate([0, 100, 50, 100]);
+    }
+    finally { setScanProcessing(false); }
+  };
 
   const handleSubmit = async () => {
-    if (!itemId || !quantity) { Alert.alert('Required', 'Enter item and quantity'); return; }
+    if (!itemId || !quantity) { Alert.alert('Required', 'Scan/enter an item and quantity'); return; }
     setSubmitting(true);
     try {
-      await api.post('/damage-reports', { item_id: itemId, quantity: Number(quantity), description, damage_type: damageType, severity });
+      await api.post('/damage-reports', { item_id: itemId, item_name: itemName || itemId, quantity: Number(quantity), description, damage_type: damageType, severity });
       Alert.alert('Submitted', 'Damage report submitted', [{ text: 'OK', onPress: () => navigation.goBack() }]);
     } catch (e: any) { Alert.alert('Error', e.message); }
     finally { setSubmitting(false); }
   };
 
+  if (showScanner) {
+    if (!permission?.granted) {
+      return (
+        <View style={styles.container}>
+          <Header title="Scan Damaged Item" onBack={() => setShowScanner(false)} />
+          <View style={[styles.centered, { padding: 24 }]}>
+            <Text style={styles.permissionTitle}>Camera Permission Required</Text>
+            <Text style={{ fontSize: 14, color: COLORS.gray500, textAlign: 'center', marginBottom: 24 }}>Allow camera access to scan barcodes.</Text>
+            <TouchableOpacity style={styles.primaryBtn} onPress={requestPermission}><Text style={styles.primaryBtnText}>Grant Permission</Text></TouchableOpacity>
+          </View>
+        </View>
+      );
+    }
+    return (
+      <View style={styles.container}>
+        <Header title="Scan Damaged Item" onBack={() => setShowScanner(false)} />
+        <View style={styles.halfScreenCamera}>
+          <CameraView style={StyleSheet.absoluteFillObject} barcodeScannerSettings={{ barcodeTypes: ['code128', 'code39', 'ean13', 'ean8', 'upc_a', 'qr'] }}
+            onBarcodeScanned={scanProcessing ? undefined : handleBarCodeScanned} />
+          <View style={styles.cameraOverlay}>
+            <View />
+            <View style={styles.smallScanFrame}>
+              <View style={[styles.scannerCorner, styles.scannerCornerTL]} /><View style={[styles.scannerCorner, styles.scannerCornerTR]} />
+              <View style={[styles.scannerCorner, styles.scannerCornerBL]} /><View style={[styles.scannerCorner, styles.scannerCornerBR]} />
+            </View>
+            <Text style={styles.scannerInstruction}>{scanProcessing ? 'Looking up item...' : 'Scan barcode of damaged item'}</Text>
+          </View>
+        </View>
+        <View style={[styles.centered, { flex: 1, padding: 24 }]}>
+          {scanProcessing ? <ActivityIndicator size="large" color={COLORS.primary} /> :
+            <Text style={{ fontSize: 14, color: COLORS.gray500, textAlign: 'center' }}>Point camera at the damaged item's barcode</Text>}
+        </View>
+      </View>
+    );
+  }
+
   return (
     <View style={styles.container}>
       <Header title="Damage Report" onBack={() => navigation.goBack()} />
       <ScrollView style={styles.formContent}>
-        <Text style={styles.inputLabel}>Item ID / Barcode</Text>
-        <TextInput style={styles.formInput} value={itemId} onChangeText={setItemId} placeholder="Scan or enter item" placeholderTextColor={COLORS.gray400} />
+        <Text style={styles.inputLabel}>Item</Text>
+        {itemName ? (
+          <View style={{ backgroundColor: COLORS.white, borderRadius: 12, padding: 16, marginBottom: 16, borderWidth: 1, borderColor: COLORS.gray200 }}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontSize: 16, fontWeight: '600', color: COLORS.gray900 }}>{itemName}</Text>
+                <Text style={{ fontSize: 12, color: COLORS.gray400, marginTop: 2 }}>ID: {itemId}</Text>
+              </View>
+              <TouchableOpacity onPress={() => { setItemId(''); setItemName(''); }} style={{ paddingHorizontal: 10, paddingVertical: 6, backgroundColor: COLORS.gray100, borderRadius: 6 }}>
+                <Text style={{ fontSize: 12, color: COLORS.gray600 }}>Change</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        ) : (
+          <View style={{ gap: 8, marginBottom: 16 }}>
+            <TouchableOpacity style={{ backgroundColor: COLORS.primary, borderRadius: 12, padding: 16, alignItems: 'center', flexDirection: 'row', justifyContent: 'center', gap: 8 }}
+              onPress={() => { if (!permission?.granted) requestPermission(); setShowScanner(true); }}>
+              <Text style={{ fontSize: 20 }}>📷</Text>
+              <Text style={{ color: COLORS.white, fontSize: 16, fontWeight: '600' }}>Scan Barcode</Text>
+            </TouchableOpacity>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+              <View style={{ flex: 1, height: 1, backgroundColor: COLORS.gray200 }} />
+              <Text style={{ color: COLORS.gray400, fontSize: 12 }}>OR</Text>
+              <View style={{ flex: 1, height: 1, backgroundColor: COLORS.gray200 }} />
+            </View>
+            <TextInput style={styles.formInput} value={itemId} onChangeText={(t) => { setItemId(t); setItemName(t); }} placeholder="Enter item ID or barcode manually" placeholderTextColor={COLORS.gray400} />
+          </View>
+        )}
         <Text style={styles.inputLabel}>Damage Type</Text>
         <ChipSelector options={DAMAGE_TYPES.map(d => ({ key: d.key, label: d.label }))} selected={damageType} onSelect={(k) => setDamageType(k as DamageType)} />
         <Text style={[styles.inputLabel, { marginTop: 16 }]}>Severity</Text>
