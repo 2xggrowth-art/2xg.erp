@@ -1637,13 +1637,14 @@ function ItemDamageScreen({ navigation, route }: any) {
       if (photoUri) {
         try { const base64 = await FileSystem.readAsStringAsync(photoUri, { encoding: FileSystem.EncodingType.Base64 }); photoBase64 = `data:image/jpeg;base64,${base64}`; } catch (e) { console.error('Error converting photo:', e); }
       }
-      await api.post('/damage-reports', {
+      const res = await api.post('/damage-reports', {
         item_id: item.item_id, item_name: item.item_name, serial_number: item.serial_number || null,
         bin_location_id: null, bin_code: binCode, damaged_bin_id: selectedDamageBin || null,
         damage_type: damageType, severity: severity,
         damage_description: description, photo_base64: photoBase64,
         stock_count_id: countId, reported_by: user?.id, reported_by_name: user?.employee_name || 'Mobile User',
       });
+      if (!res.success) throw new Error(res.error || 'Failed to save damage report');
       await api.patch(`/stock-counts/${countId}/items`, { items: [{ id: item.id, counted_quantity: 0, notes: `DAMAGED [${damageType}/${severity}]: ${description}` }] });
       Vibration.vibrate([0, 100, 50, 100]);
       Alert.alert('Damage Reported', `${item.item_name} has been marked as damaged.`, [
@@ -2181,7 +2182,8 @@ function DamageReportScreen({ navigation }: any) {
       if (photos.length > 0) {
         try { const base64 = await FileSystem.readAsStringAsync(photos[0].uri, { encoding: FileSystem.EncodingType.Base64 }); photoBase64 = `data:image/jpeg;base64,${base64}`; } catch (e) { console.error('Error converting photo:', e); }
       }
-      await api.post('/damage-reports', { item_id: itemId, item_name: itemName || itemId, quantity: Number(quantity), damage_description: description || undefined, damage_type: damageType, severity, photo_base64: photoBase64, damaged_bin_id: selectedDamageBin || null });
+      const res = await api.post('/damage-reports', { item_id: itemId, item_name: itemName || itemId, quantity: Number(quantity), damage_description: description || undefined, damage_type: damageType, severity, photo_base64: photoBase64, damaged_bin_id: selectedDamageBin || null });
+      if (!res.success) throw new Error(res.error || 'Failed to save damage report');
       Alert.alert('Submitted', 'Damage report submitted', [{ text: 'OK', onPress: () => navigation.goBack() }]);
     } catch (e: any) { Alert.alert('Error', e.message); }
     finally { setSubmitting(false); }

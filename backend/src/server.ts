@@ -85,8 +85,8 @@ app.use(cors({
   exposedHeaders: ['Content-Length', 'Content-Type']
 }));
 
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.use(morgan('dev'));
 
 // Read-only mode guard — blocks write operations when READ_ONLY_MODE=true
