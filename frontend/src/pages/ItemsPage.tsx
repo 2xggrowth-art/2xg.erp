@@ -14,6 +14,9 @@ interface Item {
   category: string;
   stock_on_hand: number;
   reorder_level: number;
+  color: string;
+  variant: string;
+  size: string;
 }
 
 const ItemsPage = () => {
@@ -70,9 +73,12 @@ const ItemsPage = () => {
           name: item.item_name,
           sku: item.sku,
           unit: item.unit_of_measurement,
-          category: '', // TODO: Get category name from joined data
+          category: '',
           stock_on_hand: item.current_stock,
-          reorder_level: item.reorder_point
+          reorder_level: item.reorder_point,
+          color: item.color || '',
+          variant: item.variant || '',
+          size: item.size || ''
         }));
         console.log('Mapped items with names:', mappedItems.map(i => ({ id: i.id, name: i.name })));
         setItems(mappedItems);
@@ -89,7 +95,10 @@ const ItemsPage = () => {
 
   const filteredItems = items.filter(item =>
     item.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    item.sku.toLowerCase().includes(searchQuery.toLowerCase())
+    item.sku.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    item.color.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    item.variant.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    item.size.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
   // Selection handlers
@@ -470,7 +479,11 @@ const ItemsPage = () => {
                               <div className="text-sm font-medium text-blue-600 hover:underline">
                                 {item.name}
                               </div>
-                              {item.category && <div className="text-xs text-gray-500">{item.category}</div>}
+                              {(item.color || item.variant || item.size) && (
+                                <div className="text-xs text-gray-500">
+                                  {[item.color, item.variant, item.size].filter(Boolean).join(' | ')}
+                                </div>
+                              )}
                             </div>
                           </div>
                         </td>

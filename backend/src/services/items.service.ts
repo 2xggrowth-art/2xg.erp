@@ -736,6 +736,9 @@ export class ItemsService {
         unit_of_measurement,
         is_active,
         advanced_tracking_type,
+        color,
+        variant,
+        size,
         product_categories (name)
       `)
       .order('created_at', { ascending: false });

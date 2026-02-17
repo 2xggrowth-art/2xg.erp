@@ -452,7 +452,10 @@ const PosCreate: React.FC = () => {
   const filteredItems = items.filter(item =>
     item.item_name?.toLowerCase().includes(itemSearch.toLowerCase()) ||
     item.sku?.toLowerCase().includes(itemSearch.toLowerCase()) ||
-    item.barcode?.includes(itemSearch)
+    item.barcode?.includes(itemSearch) ||
+    item.color?.toLowerCase().includes(itemSearch.toLowerCase()) ||
+    item.variant?.toLowerCase().includes(itemSearch.toLowerCase()) ||
+    item.size?.toLowerCase().includes(itemSearch.toLowerCase())
   );
 
   const filteredSalespersons = salespersons.filter(salesperson =>
@@ -1071,7 +1074,12 @@ const PosCreate: React.FC = () => {
                           >
                             <div>
                               <div className="font-semibold text-gray-800 text-sm group-hover:text-blue-700">{item.item_name}</div>
-                              <div className="text-xs text-gray-500 mt-0.5">
+                              {(item.color || item.variant || item.size) && (
+                                <div className="text-xs text-gray-500 mt-0.5">
+                                  {[item.color, item.variant, item.size].filter(Boolean).join(' | ')}
+                                </div>
+                              )}
+                              <div className="text-xs text-gray-400 mt-0.5">
                                 SKU: {item.sku} {item.barcode ? `| Barcode: ${item.barcode}` : ''}
                               </div>
                             </div>

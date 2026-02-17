@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Package, MapPin, Search, Plus, ChevronDown, ChevronUp, X, Trash2 } from 'lucide-react';
+import { Package, MapPin, Search, Plus, ChevronDown, ChevronUp, X, Trash2, Pencil } from 'lucide-react';
 import { binLocationService, BinLocationWithStock } from '../services/binLocation.service';
 import { locationsService, Location } from '../services/locations.service';
 
@@ -12,6 +12,9 @@ const BinLocationsPage = () => {
   const [showAddModal, setShowAddModal] = useState(false);
   const [newBin, setNewBin] = useState({ bin_code: '', location_id: '', description: '' });
   const [addError, setAddError] = useState('');
+  const [editingBin, setEditingBin] = useState<BinLocationWithStock | null>(null);
+  const [editForm, setEditForm] = useState({ bin_code: '', location_id: '', description: '', status: 'active' as 'active' | 'inactive' });
+  const [editError, setEditError] = useState('');
 
   useEffect(() => {
     fetchBinsWithStock();
@@ -68,7 +71,7 @@ const BinLocationsPage = () => {
   };
 
   const handleDeleteBin = async (binId: string, binCode: string) => {
-    if (!window.confirm(`Are you sure you want to delete bin "${binCode}"?`)) return;
+    if (!window.confirm(`Are you sure you want to delete bin "${binCode}"? This will also remove its allocation history.`)) return;
     try {
       const response = await binLocationService.deleteBinLocation(binId);
       if (response.success) {
@@ -78,6 +81,42 @@ const BinLocationsPage = () => {
       }
     } catch (error: any) {
       alert(error?.message || 'Failed to delete bin location');
+    }
+  };
+
+  const openEditModal = (bin: BinLocationWithStock) => {
+    setEditingBin(bin);
+    setEditForm({
+      bin_code: bin.bin_code,
+      location_id: bin.location_id || '',
+      description: bin.description || '',
+      status: bin.status || 'active',
+    });
+    setEditError('');
+  };
+
+  const handleEditBinLocation = async () => {
+    if (!editingBin) return;
+    if (!editForm.bin_code.trim() || !editForm.location_id) {
+      setEditError('Bin code and location are required');
+      return;
+    }
+    try {
+      setEditError('');
+      const response = await binLocationService.updateBinLocation(editingBin.id, {
+        bin_code: editForm.bin_code.trim(),
+        location_id: editForm.location_id,
+        description: editForm.description.trim() || undefined,
+        status: editForm.status,
+      });
+      if (response.success) {
+        setEditingBin(null);
+        fetchBinsWithStock();
+      } else {
+        setEditError(response.error || 'Failed to update bin location');
+      }
+    } catch (error: any) {
+      setEditError(error?.message || 'Failed to update bin location');
     }
   };
 
@@ -247,11 +286,22 @@ const BinLocationsPage = () => {
                         </div>
                         <div className="text-right text-sm mr-2">
                           <span className="text-gray-500">Items: </span>
-                          <span className="font-semibold text-gray-900">{bin.total_items}</span>
+                          <span className="font-semibold text-gray-900">
+                            {searchTerm.trim() ? bin.items.filter(i => i.item_name.toLowerCase().includes(searchTerm.toLowerCase())).length : bin.total_items}
+                          </span>
                           <span className="text-gray-300 mx-2">|</span>
                           <span className="text-gray-500">Qty: </span>
-                          <span className="font-semibold text-gray-900">{bin.total_quantity}</span>
+                          <span className="font-semibold text-gray-900">
+                            {searchTerm.trim() ? bin.items.filter(i => i.item_name.toLowerCase().includes(searchTerm.toLowerCase())).reduce((s, i) => s + i.quantity, 0) : bin.total_quantity}
+                          </span>
                         </div>
+                        <button
+                          onClick={(e) => { e.stopPropagation(); openEditModal(bin); }}
+                          className="p-2 text-blue-500 hover:bg-blue-50 rounded-lg transition"
+                          title="Edit bin"
+                        >
+                          <Pencil size={16} />
+                        </button>
                         <button
                           onClick={(e) => { e.stopPropagation(); handleDeleteBin(bin.id, bin.bin_code); }}
                           className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition"
@@ -260,7 +310,7 @@ const BinLocationsPage = () => {
                           <Trash2 size={16} />
                         </button>
                         <div>
-                          {expandedBins.has(bin.id) ? (
+                          {(searchTerm.trim() && bin.items.some(i => i.item_name.toLowerCase().includes(searchTerm.toLowerCase()))) || expandedBins.has(bin.id) ? (
                             <ChevronUp className="text-gray-400" size={18} />
                           ) : (
                             <ChevronDown className="text-gray-400" size={18} />
@@ -271,12 +321,16 @@ const BinLocationsPage = () => {
                   </div>
 
                   {/* Bin Items (Expanded View) */}
-                  {expandedBins.has(bin.id) && bin.items.length > 0 && (
+                  {(expandedBins.has(bin.id) || (searchTerm.trim() && bin.items.some(i => i.item_name.toLowerCase().includes(searchTerm.toLowerCase())))) && bin.items.length > 0 && (() => {
+                    const displayItems = searchTerm.trim()
+                      ? bin.items.filter(item => item.item_name.toLowerCase().includes(searchTerm.toLowerCase()))
+                      : bin.items;
+                    return displayItems.length > 0 ? (
                     <div className="border-t border-gray-100 bg-gray-50">
                       <div className="px-5 py-3">
                         <h4 className="text-sm font-semibold text-gray-700 mb-3">Items in this bin:</h4>
                         <div className="space-y-3">
-                          {bin.items.map((item, index) => (
+                          {displayItems.map((item, index) => (
                             <div key={index} className="bg-white rounded-lg p-4 border border-gray-200">
                               <div className="flex items-center gap-3">
                                 <Package className="text-blue-600" size={20} />
@@ -314,7 +368,8 @@ const BinLocationsPage = () => {
                         </div>
                       </div>
                     </div>
-                  )}
+                    ) : null;
+                  })()}
 
                   {/* Empty Bin Message */}
                   {expandedBins.has(bin.id) && bin.items.length === 0 && (
@@ -404,6 +459,82 @@ const BinLocationsPage = () => {
                 className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 Create
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* Edit Bin Location Modal */}
+      {editingBin && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg shadow-xl w-full max-w-md mx-4">
+            <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
+              <h3 className="text-lg font-semibold text-gray-900">Edit Bin</h3>
+              <button onClick={() => { setEditingBin(null); setEditError(''); }} className="p-1 hover:bg-gray-100 rounded">
+                <X size={20} className="text-gray-500" />
+              </button>
+            </div>
+            <div className="p-6 space-y-4">
+              {editError && (
+                <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-600">{editError}</div>
+              )}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Bin Code *</label>
+                <input
+                  type="text"
+                  value={editForm.bin_code}
+                  onChange={(e) => setEditForm({ ...editForm, bin_code: e.target.value })}
+                  placeholder="e.g. BIN-A01"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Location *</label>
+                <select
+                  value={editForm.location_id}
+                  onChange={(e) => setEditForm({ ...editForm, location_id: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                >
+                  <option value="">Select a location</option>
+                  {locations.map(loc => (
+                    <option key={loc.id} value={loc.id}>{loc.name}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
+                <input
+                  type="text"
+                  value={editForm.description}
+                  onChange={(e) => setEditForm({ ...editForm, description: e.target.value })}
+                  placeholder="Optional description"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
+                <select
+                  value={editForm.status}
+                  onChange={(e) => setEditForm({ ...editForm, status: e.target.value as 'active' | 'inactive' })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                >
+                  <option value="active">Active</option>
+                  <option value="inactive">Inactive</option>
+                </select>
+              </div>
+            </div>
+            <div className="px-6 py-4 border-t border-gray-200 flex justify-end gap-3">
+              <button
+                onClick={() => { setEditingBin(null); setEditError(''); }}
+                className="px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleEditBinLocation}
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+              >
+                Save Changes
               </button>
             </div>
           </div>

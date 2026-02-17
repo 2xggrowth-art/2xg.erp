@@ -147,6 +147,33 @@ export class BinLocationsService {
    * Delete a bin location (hard delete)
    */
   async deleteBinLocation(id: string) {
+    // Remove allocation records that reference this bin
+    const { error: billAllocError } = await supabaseAdmin
+      .from('bill_item_bin_allocations')
+      .delete()
+      .eq('bin_location_id', id);
+    if (billAllocError) throw billAllocError;
+
+    const { error: invoiceAllocError } = await supabaseAdmin
+      .from('invoice_item_bin_allocations')
+      .delete()
+      .eq('bin_location_id', id);
+    if (invoiceAllocError) throw invoiceAllocError;
+
+    // Remove transfer order allocations (source or destination)
+    const { error: transferSrcError } = await supabaseAdmin
+      .from('transfer_order_allocations')
+      .delete()
+      .eq('source_bin_location_id', id);
+    if (transferSrcError) throw transferSrcError;
+
+    const { error: transferDstError } = await supabaseAdmin
+      .from('transfer_order_allocations')
+      .delete()
+      .eq('destination_bin_location_id', id);
+    if (transferDstError) throw transferDstError;
+
+    // Now delete the bin itself
     const { data, error } = await supabaseAdmin
       .from('bin_locations')
       .delete()

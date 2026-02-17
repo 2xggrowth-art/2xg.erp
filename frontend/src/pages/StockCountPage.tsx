@@ -77,9 +77,12 @@ const StockCountPage = () => {
     }
   };
 
-  const filteredItems = stockItems.filter(item =>
-    item.item_name.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const filteredItems = searchQuery.trim()
+    ? stockItems.filter(item =>
+        item.item_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        item.bins.some(b => b.bin_code.toLowerCase().includes(searchQuery.toLowerCase()))
+      )
+    : stockItems;
 
   const getTransactionIcon = (type: string) => {
     switch (type) {
@@ -222,15 +225,19 @@ const StockCountPage = () => {
               </tr>
             ) : (
               filteredItems.map((item) => {
-                const isExpanded = expandedItem === item.item_id;
+                const isExpanded = searchQuery.trim() ? true : expandedItem === item.item_id;
                 return (
                   <React.Fragment key={item.item_id}>
                     {/* Item Row */}
                     <tr
                       className="border-b border-gray-100 hover:bg-gray-50 cursor-pointer"
                       onClick={() => {
-                        setExpandedItem(isExpanded ? null : item.item_id);
-                        setExpandedBin(null);
+                        if (!searchQuery.trim()) {
+                          setExpandedItem(isExpanded ? null : item.item_id);
+                          setExpandedBin(null);
+                        } else {
+                          setExpandedItem(isExpanded ? null : item.item_id);
+                        }
                       }}
                     >
                       <td className="px-4 py-3">
