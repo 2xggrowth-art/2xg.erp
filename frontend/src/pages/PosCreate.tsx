@@ -439,12 +439,13 @@ const PosCreate: React.FC = () => {
   );
 
   const filteredItems = items.filter(item =>
-    item.item_name?.toLowerCase().includes(itemSearch.toLowerCase()) ||
+    item.is_active !== false &&
+    (item.item_name?.toLowerCase().includes(itemSearch.toLowerCase()) ||
     item.sku?.toLowerCase().includes(itemSearch.toLowerCase()) ||
     item.barcode?.includes(itemSearch) ||
     item.color?.toLowerCase().includes(itemSearch.toLowerCase()) ||
     item.variant?.toLowerCase().includes(itemSearch.toLowerCase()) ||
-    item.size?.toLowerCase().includes(itemSearch.toLowerCase())
+    item.size?.toLowerCase().includes(itemSearch.toLowerCase()))
   );
 
   const filteredSalespersons = salespersons.filter(salesperson =>
