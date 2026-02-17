@@ -299,17 +299,6 @@ const PosCreate: React.FC = () => {
           location_name: b.location_name,
           stock: b.quantity
         }));
-      } else {
-        // Fallback: fetch all active bin locations so user can select which bin to sell from
-        const allBinsResponse = await binLocationService.getAllBinLocations({ status: 'active' });
-        if (allBinsResponse.success && allBinsResponse.data && allBinsResponse.data.length > 0) {
-          itemBins = allBinsResponse.data.map((b: any) => ({
-            bin_id: b.id,
-            bin_code: b.bin_code,
-            location_name: b.locations?.name || b.warehouse || '',
-            stock: 0
-          }));
-        }
       }
     } catch (error) {
       console.error('Error fetching bin locations:', error);
