@@ -192,7 +192,7 @@ const LoginPage = () => {
                 <span className="text-gray-600">Manager:</span>
                 <span className="font-mono text-gray-800">rahul@gmail.com</span>
               </div>
-              <p className="text-gray-500 text-center pt-2">Default password: admin123</p>
+              <p className="text-gray-500 text-center pt-2">Default password: admin@1234</p>
             </div>
           </div>
         </div>
