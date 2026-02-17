@@ -72,6 +72,12 @@ export const damageReportsService = {
     return response.data;
   },
 
+  // Clear photo from a damage report (save storage)
+  async clearPhoto(id: string) {
+    const response = await apiClient.put(`/damage-reports/${id}/clear-photo`);
+    return response.data;
+  },
+
   // Delete a damage report
   async delete(id: string) {
     const response = await apiClient.delete(`/damage-reports/${id}`);

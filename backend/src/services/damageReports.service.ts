@@ -147,6 +147,23 @@ export const damageReportsService = {
     return count || 0;
   },
 
+  // Clear photo from a damage report (to save storage)
+  async clearPhoto(id: string) {
+    const { data, error } = await supabase
+      .from('item_damage_reports')
+      .update({ photo_base64: null, updated_at: new Date().toISOString() })
+      .eq('id', id)
+      .select()
+      .single();
+
+    if (error) {
+      console.error('Error clearing photo from damage report:', error);
+      throw error;
+    }
+
+    return data;
+  },
+
   // Delete a damage report
   async delete(id: string) {
     const { error } = await supabase

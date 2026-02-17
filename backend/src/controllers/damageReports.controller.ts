@@ -122,6 +122,25 @@ export const damageReportsController = {
     }
   },
 
+  // Clear photo from a damage report
+  async clearPhoto(req: Request, res: Response) {
+    try {
+      const { id } = req.params;
+      const report = await damageReportsService.clearPhoto(id);
+      res.json({
+        success: true,
+        data: report,
+        message: 'Photo deleted successfully',
+      });
+    } catch (error: any) {
+      console.error('Error clearing photo:', error);
+      res.status(500).json({
+        success: false,
+        error: error.message || 'Failed to clear photo',
+      });
+    }
+  },
+
   // Delete a damage report
   async delete(req: Request, res: Response) {
     try {

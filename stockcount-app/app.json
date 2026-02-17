@@ -50,9 +50,7 @@
       }
     },
     "owner": "tech2xg",
-    "runtimeVersion": {
-      "policy": "appVersion"
-    },
+    "runtimeVersion": "1.0.0",
     "updates": {
       "url": "https://u.expo.dev/0b847d8b-bebc-4038-acb2-08115af7ffb2"
     }

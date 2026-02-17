@@ -22,6 +22,9 @@ router.post('/', damageReportsController.create);
 // Review (approve/reject) a damage report
 router.put('/:id/review', damageReportsController.review);
 
+// Clear photo from a damage report (to save storage after review)
+router.put('/:id/clear-photo', damageReportsController.clearPhoto);
+
 // Delete a damage report
 router.delete('/:id', damageReportsController.delete);
 

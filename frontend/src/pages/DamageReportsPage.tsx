@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { AlertTriangle, Check, X, Eye, Trash2, Filter, RefreshCw } from 'lucide-react';
+import { AlertTriangle, Check, X, Eye, Trash2, Filter, RefreshCw, ImageOff } from 'lucide-react';
 import { damageReportsService, DamageReport } from '../services/damageReports.service';
 
 const DamageReportsPage: React.FC = () => {
@@ -56,6 +56,23 @@ const DamageReportsPage: React.FC = () => {
       console.error('Error reviewing damage report:', error);
     } finally {
       setActionLoading(false);
+    }
+  };
+
+  const handleClearPhoto = async (id: string) => {
+    if (!confirm('Delete this image? This cannot be undone.')) return;
+
+    try {
+      const response = await damageReportsService.clearPhoto(id);
+      if (response.success) {
+        // Update the selected report in modal
+        if (selectedReport && selectedReport.id === id) {
+          setSelectedReport({ ...selectedReport, photo_base64: undefined });
+        }
+        fetchReports();
+      }
+    } catch (error) {
+      console.error('Error clearing photo:', error);
     }
   };
 
@@ -311,15 +328,32 @@ const DamageReportsPage: React.FC = () => {
               </div>
 
               {/* Damage Photo */}
-              {selectedReport.photo_base64 && (
+              {selectedReport.photo_base64 ? (
                 <div className="mb-6">
-                  <h3 className="text-sm font-medium text-gray-500 mb-2">Damage Photo</h3>
+                  <div className="flex items-center justify-between mb-2">
+                    <h3 className="text-sm font-medium text-gray-500">Damage Photo</h3>
+                    <button
+                      onClick={() => handleClearPhoto(selectedReport.id)}
+                      className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-red-600 bg-red-50 rounded-lg hover:bg-red-100 transition-colors"
+                      title="Delete image to save storage"
+                    >
+                      <ImageOff className="w-3.5 h-3.5" />
+                      Delete Image
+                    </button>
+                  </div>
                   <div className="bg-gray-100 rounded-lg overflow-hidden">
                     <img
                       src={selectedReport.photo_base64}
                       alt="Damage"
                       className="w-full max-h-96 object-contain"
                     />
+                  </div>
+                </div>
+              ) : (
+                <div className="mb-6">
+                  <h3 className="text-sm font-medium text-gray-500 mb-2">Damage Photo</h3>
+                  <div className="bg-gray-50 rounded-lg p-4 text-center text-gray-400 text-sm">
+                    No photo attached
                   </div>
                 </div>
               )}

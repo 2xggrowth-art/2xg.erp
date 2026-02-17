@@ -259,8 +259,8 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 function AuthProvider({ children }: { children: React.ReactNode }) {
-  // DEV BYPASS: Skip login, go straight to counter dashboard
-  const DEV_BYPASS_LOGIN = true;
+  // DEV BYPASS: Set to true to skip login (no API calls will work without real auth)
+  const DEV_BYPASS_LOGIN = false;
   const DEV_USER: User = { id: 'dev-1', employee_name: 'Dev User', phone_number: '9999999999', role: 'admin' };
 
   const [user, setUser] = useState<User | null>(DEV_BYPASS_LOGIN ? DEV_USER : null);
@@ -2021,9 +2021,20 @@ function DamageReportScreen({ navigation }: any) {
   const [damageType, setDamageType] = useState<DamageType>('physical');
   const [severity, setSeverity] = useState<SeverityLevel>('moderate');
   const [submitting, setSubmitting] = useState(false);
+  const [photos, setPhotos] = useState<PhotoEvidence[]>([]);
   const [showScanner, setShowScanner] = useState(false);
   const [scanProcessing, setScanProcessing] = useState(false);
   const [permission, requestPermission] = useCameraPermissions();
+
+  const takePhoto = async () => {
+    const { status } = await ImagePicker.requestCameraPermissionsAsync();
+    if (status !== 'granted') { Alert.alert('Permission Required', 'Camera permission is needed to take photos'); return; }
+    const result = await ImagePicker.launchCameraAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images, allowsEditing: true, aspect: [4, 3], quality: 0.5 });
+    if (!result.canceled && result.assets[0]) {
+      const newPhoto: PhotoEvidence = { uri: result.assets[0].uri, evidence_type: 'damaged', timestamp: new Date().toISOString(), uploaded: false };
+      setPhotos(prev => [...prev, newPhoto]);
+    }
+  };
 
   const handleBarCodeScanned = async ({ data }: BarcodeScanningResult) => {
     if (scanProcessing) return;
@@ -2055,9 +2066,14 @@ function DamageReportScreen({ navigation }: any) {
 
   const handleSubmit = async () => {
     if (!itemId || !quantity) { Alert.alert('Required', 'Scan/enter an item and quantity'); return; }
+    if (photos.length === 0) { Alert.alert('Required', 'Please take a photo of the damage'); return; }
     setSubmitting(true);
     try {
-      await api.post('/damage-reports', { item_id: itemId, item_name: itemName || itemId, quantity: Number(quantity), description, damage_type: damageType, severity });
+      let photoBase64 = '';
+      if (photos.length > 0) {
+        try { const base64 = await FileSystem.readAsStringAsync(photos[0].uri, { encoding: FileSystem.EncodingType.Base64 }); photoBase64 = `data:image/jpeg;base64,${base64}`; } catch (e) { console.error('Error converting photo:', e); }
+      }
+      await api.post('/damage-reports', { item_id: itemId, item_name: itemName || itemId, quantity: Number(quantity), damage_description: description, damage_type: damageType, severity, photo_base64: photoBase64 });
       Alert.alert('Submitted', 'Damage report submitted', [{ text: 'OK', onPress: () => navigation.goBack() }]);
     } catch (e: any) { Alert.alert('Error', e.message); }
     finally { setSubmitting(false); }
@@ -2135,11 +2151,29 @@ function DamageReportScreen({ navigation }: any) {
         <ChipSelector options={DAMAGE_TYPES.map(d => ({ key: d.key, label: d.label }))} selected={damageType} onSelect={(k) => setDamageType(k as DamageType)} />
         <Text style={[styles.inputLabel, { marginTop: 16 }]}>Severity</Text>
         <ChipSelector options={SEVERITY_LEVELS.map(s => ({ key: s.key, label: s.label, color: s.color }))} selected={severity} onSelect={(k) => setSeverity(k as SeverityLevel)} />
-        <Text style={[styles.inputLabel, { marginTop: 16 }]}>Damaged Quantity</Text>
+        <Text style={[styles.inputLabel, { marginTop: 16 }]}>Photos *</Text>
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 16 }}>
+          {photos.map((p, i) => (
+            <View key={i} style={{ position: 'relative' }}>
+              <Image source={{ uri: p.uri }} style={{ width: 80, height: 80, borderRadius: 8 }} />
+              <TouchableOpacity onPress={() => setPhotos(prev => prev.filter((_, idx) => idx !== i))} style={{ position: 'absolute', top: -6, right: -6, backgroundColor: COLORS.danger, borderRadius: 10, width: 20, height: 20, alignItems: 'center', justifyContent: 'center' }}>
+                <Text style={{ color: COLORS.white, fontSize: 12, fontWeight: '700' }}>×</Text>
+              </TouchableOpacity>
+            </View>
+          ))}
+          {photos.length < 5 && (
+            <TouchableOpacity onPress={takePhoto} style={{ width: 80, height: 80, borderRadius: 8, borderWidth: 2, borderColor: COLORS.gray300, borderStyle: 'dashed', alignItems: 'center', justifyContent: 'center' }}>
+              <Text style={{ fontSize: 24, color: COLORS.gray400 }}>📷</Text>
+              <Text style={{ fontSize: 10, color: COLORS.gray400 }}>Add</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+
+        <Text style={[styles.inputLabel, { marginTop: 8 }]}>Damaged Quantity</Text>
         <TextInput style={styles.formInput} value={quantity} onChangeText={setQuantity} keyboardType="numeric" placeholder="0" placeholderTextColor={COLORS.gray400} />
         <Text style={styles.inputLabel}>Description</Text>
         <TextInput style={[styles.formInput, { height: 100, textAlignVertical: 'top' }]} value={description} onChangeText={setDescription} placeholder="Describe the damage..." placeholderTextColor={COLORS.gray400} multiline />
-        <TouchableOpacity style={[styles.primaryBtn, { backgroundColor: COLORS.danger }]} onPress={handleSubmit} disabled={submitting}>
+        <TouchableOpacity style={[styles.primaryBtn, { backgroundColor: COLORS.danger, marginBottom: 40 }]} onPress={handleSubmit} disabled={submitting}>
           <Text style={styles.primaryBtnText}>{submitting ? 'Submitting...' : 'Submit Report'}</Text>
         </TouchableOpacity>
       </ScrollView>
@@ -2961,6 +2995,134 @@ function PlacementHistoryScreen({ navigation }: any) {
 // SECTION 8: ADMIN SCREENS
 // ============================================================================
 
+// AdminPlacementView — admin-level placement management (shown inside AdminDashboard)
+function AdminPlacementView({ navigation }: any) {
+  const [tasks, setTasks] = useState<PlacementTask[]>([]);
+  const [transfers, setTransfers] = useState<TransferTask[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [activeTab, setActiveTab] = useState<'pending' | 'placed' | 'transfers'>('pending');
+
+  const fetchData = async () => {
+    try {
+      const [taskRes, transferRes] = await Promise.all([
+        api.get('/placement-tasks').catch(() => ({ data: [] })),
+        api.get('/transfer-tasks').catch(() => ({ data: [] })),
+      ]);
+      setTasks(taskRes.data || taskRes || []);
+      setTransfers(transferRes.data || transferRes || []);
+    } catch (e) { console.error(e); }
+    finally { setLoading(false); setRefreshing(false); }
+  };
+
+  useFocusEffect(useCallback(() => { fetchData(); }, []));
+
+  const pendingTasks = tasks.filter(t => t.status === 'pending');
+  const placedTasks = tasks.filter(t => t.status === 'placed');
+  const activeTransfers = transfers.filter(t => t.status !== 'completed');
+  const placedToday = placedTasks.filter(t => t.placed_at && t.placed_at.split('T')[0] === new Date().toISOString().split('T')[0]).length;
+
+  if (loading) return <View style={styles.centered}><ActivityIndicator size="large" color={COLORS.primary} /></View>;
+
+  return (
+    <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 16, paddingBottom: 40 }}
+      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); fetchData(); }} />}>
+      <View style={styles.statsRow}>
+        <StatCard value={pendingTasks.length} label="Pending" color="warning" icon="⏳" />
+        <StatCard value={placedToday} label="Placed Today" color="success" icon="📦" />
+        <StatCard value={activeTransfers.length} label="Transfers" color="purple" icon="🔄" />
+      </View>
+
+      <View style={styles.tabs}>
+        {(['pending', 'placed', 'transfers'] as const).map(tab => (
+          <TouchableOpacity key={tab} style={[styles.tab, activeTab === tab && styles.tabActive]} onPress={() => setActiveTab(tab)}>
+            <Text style={[styles.tabText, activeTab === tab && styles.tabTextActive]}>
+              {tab === 'pending' ? `Pending (${pendingTasks.length})` : tab === 'placed' ? `Placed (${placedTasks.length})` : `Transfers (${activeTransfers.length})`}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+
+      {activeTab === 'pending' && (
+        pendingTasks.length === 0 ? (
+          <View style={styles.emptyState}><Text style={styles.emptyStateIcon}>✓</Text><Text style={styles.emptyStateText}>No pending placements</Text></View>
+        ) : pendingTasks.map(task => (
+          <View key={task.id} style={styles.countCard}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+              <View style={{ flex: 1 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <ColorDot color={task.colour_hex} />
+                  <Text style={styles.countCardLocation} numberOfLines={1}>{task.item_name}</Text>
+                  <SizeBadge size={task.size} />
+                </View>
+                <Text style={styles.countCardNumber}>{task.sku}</Text>
+              </View>
+              {task.suggested_bin_code && <Badge type="progress">→ {task.suggested_bin_code}</Badge>}
+            </View>
+            {task.source_po && <View style={styles.sourceTag}><Text style={styles.sourceTagText}>PO: {task.source_po}</Text></View>}
+          </View>
+        ))
+      )}
+
+      {activeTab === 'placed' && (
+        placedTasks.length === 0 ? (
+          <View style={styles.emptyState}><Text style={styles.emptyStateIcon}>📦</Text><Text style={styles.emptyStateText}>No placed items yet</Text></View>
+        ) : placedTasks.slice(0, 20).map(task => (
+          <View key={task.id} style={styles.countCard}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+              <View style={{ flex: 1 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <ColorDot color={task.colour_hex} />
+                  <Text style={styles.countCardLocation} numberOfLines={1}>{task.item_name}</Text>
+                  <SizeBadge size={task.size} />
+                </View>
+                <Text style={styles.countCardNumber}>{task.sku}</Text>
+              </View>
+              <Badge type="done">Placed</Badge>
+            </View>
+            {task.placed_bin_code && <Text style={{ fontSize: 12, color: COLORS.success, marginTop: 4 }}>Placed in: {task.placed_bin_code}</Text>}
+            {task.placed_by_name && <Text style={{ fontSize: 11, color: COLORS.gray400, marginTop: 2 }}>By: {task.placed_by_name} • {task.placed_at ? new Date(task.placed_at).toLocaleDateString() : ''}</Text>}
+          </View>
+        ))
+      )}
+
+      {activeTab === 'transfers' && (
+        activeTransfers.length === 0 ? (
+          <View style={styles.emptyState}><Text style={styles.emptyStateIcon}>🔄</Text><Text style={styles.emptyStateText}>No active transfers</Text></View>
+        ) : activeTransfers.map(transfer => (
+          <View key={transfer.id} style={[styles.countCard, { borderLeftWidth: 3, borderLeftColor: transfer.urgency === 'urgent' ? COLORS.danger : COLORS.purple }]}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+              <Text style={styles.countCardLocation}>{transfer.item_name}</Text>
+              <View style={{ flexDirection: 'row', gap: 6 }}>
+                {transfer.urgency === 'urgent' && <Badge type="urgent">Urgent</Badge>}
+                <Badge type={transfer.status === 'in_progress' ? 'progress' : 'pending'}>{transfer.status.replace('_', ' ')}</Badge>
+              </View>
+            </View>
+            <TransferFlowCard sourceBin={transfer.source_bin_code} sourceLocation={transfer.source_location}
+              destBin={transfer.dest_bin_code} destLocation={transfer.dest_location} compact />
+            {transfer.assigned_to_name && <Text style={{ fontSize: 11, color: COLORS.gray400, marginTop: 4 }}>Assigned: {transfer.assigned_to_name}</Text>}
+          </View>
+        ))
+      )}
+
+      <View style={{ marginTop: 16 }}>
+        <Text style={styles.sectionTitle}>Quick Actions</Text>
+        <View style={[styles.quickActions, { flexWrap: 'wrap' }]}>
+          <TouchableOpacity style={styles.quickAction} onPress={() => navigation.navigate('PlacementHistory')}>
+            <Text style={styles.quickActionIcon}>📋</Text><Text style={styles.quickActionLabel}>History</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.quickAction} onPress={() => navigation.navigate('Bins')}>
+            <Text style={styles.quickActionIcon}>📦</Text><Text style={styles.quickActionLabel}>Bins</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.quickAction} onPress={() => navigation.navigate('Escalations')}>
+            <Text style={styles.quickActionIcon}>🔔</Text><Text style={styles.quickActionLabel}>Alerts</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    </ScrollView>
+  );
+}
+
 // AdminDashboard (enhanced with counter performance, notification bell)
 function AdminDashboard({ navigation }: any) {
   const { user, logout, activeModule } = useAuth();
@@ -2996,6 +3158,9 @@ function AdminDashboard({ navigation }: any) {
 
       <ModuleSwitcher />
 
+      {activeModule === 'placement' ? (
+        <AdminPlacementView navigation={navigation} />
+      ) : (
       <ScrollView style={styles.dashboardContent}>
         <View style={styles.statsRow}>
           <StatCard value={pendingApprovals.length} label="Pending" color="warning" icon="⏳" />
@@ -3036,6 +3201,7 @@ function AdminDashboard({ navigation }: any) {
           <View style={styles.emptyState}><Text style={styles.emptyStateIcon}>✓</Text><Text style={styles.emptyStateText}>All caught up!</Text></View>
         ) : pendingApprovals.slice(0, 5).map(c => <ApprovalCard key={c.id} count={c} onPress={() => navigation.navigate('ReviewCount', { countId: c.id })} />)}
       </ScrollView>
+      )}
     </View>
   );
 }
