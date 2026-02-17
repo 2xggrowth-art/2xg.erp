@@ -1620,7 +1620,7 @@ function ItemDamageScreen({ navigation, route }: any) {
   const takePhoto = async () => {
     const { status } = await ImagePicker.requestCameraPermissionsAsync();
     if (status !== 'granted') { Alert.alert('Permission Required', 'Camera permission is needed to take photos'); return; }
-    const result = await ImagePicker.launchCameraAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images, allowsEditing: true, aspect: [4, 3], quality: 0.5 });
+    const result = await ImagePicker.launchCameraAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images, quality: 0.5 });
     if (!result.canceled && result.assets[0]) {
       const newPhoto: PhotoEvidence = { uri: result.assets[0].uri, evidence_type: 'damaged', timestamp: new Date().toISOString(), uploaded: false };
       setPhotos(prev => [...prev, newPhoto]);
@@ -1629,7 +1629,6 @@ function ItemDamageScreen({ navigation, route }: any) {
   };
 
   const handleSubmit = async () => {
-    if (!description.trim()) { Alert.alert('Required', 'Please describe the damage'); return; }
     if (photos.length === 0 && !photo) { Alert.alert('Required', 'Please take a photo of the damage'); return; }
     setSubmitting(true);
     try {
@@ -1854,28 +1853,87 @@ function ItemLookupScreen({ navigation }: any) {
   const [loading, setLoading] = useState(false);
   const [bins, setBins] = useState<any[]>([]);
   const [history, setHistory] = useState<PlacementHistoryEntry[]>([]);
+  const [showScanner, setShowScanner] = useState(false);
+  const [scanProcessing, setScanProcessing] = useState(false);
+  const [permission, requestPermission] = useCameraPermissions();
 
-  const handleLookup = async () => {
-    if (!barcode) return;
-    setLoading(true);
+  const handleLookup = async (code?: string) => {
+    const searchCode = code || barcode;
+    if (!searchCode) return;
+    setLoading(true); setItem(null); setBins([]); setHistory([]);
     try {
-      const res = await api.get(`/items/barcode/${encodeURIComponent(barcode)}`);
+      const res = await api.get(`/items/barcode/${encodeURIComponent(searchCode)}`);
       const itemData = res.data || res;
+      if (!itemData || !itemData.id) { Alert.alert('Not Found', `No item found for "${searchCode}"`); return; }
       setItem(itemData);
-      if (itemData?.id) {
-        try { const binRes = await api.get(`/bin-locations/item/${itemData.id}`); setBins((binRes.success ? binRes.data : binRes) || []); } catch { setBins([]); }
-        try { const histRes = await api.get(`/placement-history/item/${itemData.id}`); setHistory((histRes.success ? histRes.data : histRes) || []); } catch { setHistory([]); }
-      }
-    } catch { Alert.alert('Not Found', 'No item found'); }
+      setBarcode(searchCode);
+      try { const binRes = await api.get(`/bin-locations/item/${itemData.id}`); setBins((binRes.success ? binRes.data : binRes) || []); } catch { setBins([]); }
+      try { const histRes = await api.get(`/placement-history/item/${itemData.id}`); setHistory((histRes.success ? histRes.data : histRes) || []); } catch { setHistory([]); }
+    } catch { Alert.alert('Not Found', `No item found for "${searchCode}"`); }
     finally { setLoading(false); }
   };
+
+  const handleBarCodeScanned = async ({ data }: BarcodeScanningResult) => {
+    if (scanProcessing) return;
+    setScanProcessing(true);
+    Vibration.vibrate(50);
+    setShowScanner(false);
+    await handleLookup(data);
+    setScanProcessing(false);
+  };
+
+  if (showScanner) {
+    if (!permission?.granted) {
+      return (
+        <View style={styles.container}>
+          <Header title="Scan Item" onBack={() => setShowScanner(false)} />
+          <View style={[styles.centered, { padding: 24 }]}>
+            <Text style={styles.permissionTitle}>Camera Permission Required</Text>
+            <Text style={{ fontSize: 14, color: COLORS.gray500, textAlign: 'center', marginBottom: 24 }}>Allow camera access to scan barcodes.</Text>
+            <TouchableOpacity style={styles.primaryBtn} onPress={requestPermission}><Text style={styles.primaryBtnText}>Grant Permission</Text></TouchableOpacity>
+          </View>
+        </View>
+      );
+    }
+    return (
+      <View style={styles.container}>
+        <Header title="Scan Item" onBack={() => setShowScanner(false)} />
+        <View style={styles.halfScreenCamera}>
+          <CameraView style={StyleSheet.absoluteFillObject} barcodeScannerSettings={{ barcodeTypes: ['code128', 'code39', 'ean13', 'ean8', 'upc_a', 'qr'] }}
+            onBarcodeScanned={scanProcessing ? undefined : handleBarCodeScanned} />
+          <View style={styles.cameraOverlay}>
+            <View />
+            <View style={styles.smallScanFrame}>
+              <View style={[styles.scannerCorner, styles.scannerCornerTL]} /><View style={[styles.scannerCorner, styles.scannerCornerTR]} />
+              <View style={[styles.scannerCorner, styles.scannerCornerBL]} /><View style={[styles.scannerCorner, styles.scannerCornerBR]} />
+            </View>
+            <Text style={styles.scannerInstruction}>{scanProcessing ? 'Looking up item...' : 'Scan barcode to lookup item'}</Text>
+          </View>
+        </View>
+        <View style={[styles.centered, { flex: 1, padding: 24 }]}>
+          {scanProcessing ? <ActivityIndicator size="large" color={COLORS.primary} /> :
+            <Text style={{ fontSize: 14, color: COLORS.gray500, textAlign: 'center' }}>Point camera at barcode to find item location and bin</Text>}
+        </View>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>
       <Header title="Item Lookup" onBack={() => navigation.goBack()} />
       <ScrollView style={styles.lookupContent}>
-        <TextInput style={styles.searchInput} value={barcode} onChangeText={setBarcode} placeholder="Enter barcode or SKU" placeholderTextColor={COLORS.gray400} onSubmitEditing={handleLookup} />
-        <TouchableOpacity style={styles.primaryBtn} onPress={handleLookup} disabled={loading}>
+        <TouchableOpacity style={{ backgroundColor: COLORS.primary, borderRadius: 12, padding: 16, alignItems: 'center', flexDirection: 'row', justifyContent: 'center', gap: 8, marginBottom: 12 }}
+          onPress={() => { if (!permission?.granted) requestPermission(); setShowScanner(true); }}>
+          <Text style={{ fontSize: 20 }}>📷</Text>
+          <Text style={{ color: COLORS.white, fontSize: 16, fontWeight: '600' }}>Scan Barcode</Text>
+        </TouchableOpacity>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 12 }}>
+          <View style={{ flex: 1, height: 1, backgroundColor: COLORS.gray200 }} />
+          <Text style={{ color: COLORS.gray400, fontSize: 12 }}>OR</Text>
+          <View style={{ flex: 1, height: 1, backgroundColor: COLORS.gray200 }} />
+        </View>
+        <TextInput style={styles.searchInput} value={barcode} onChangeText={setBarcode} placeholder="Enter barcode or SKU" placeholderTextColor={COLORS.gray400} onSubmitEditing={() => handleLookup()} />
+        <TouchableOpacity style={styles.primaryBtn} onPress={() => handleLookup()} disabled={loading}>
           <Text style={styles.primaryBtnText}>{loading ? 'Searching...' : 'Search'}</Text>
         </TouchableOpacity>
         {item && (
@@ -2026,10 +2084,26 @@ function DamageReportScreen({ navigation }: any) {
   const [scanProcessing, setScanProcessing] = useState(false);
   const [permission, requestPermission] = useCameraPermissions();
 
+  const [damagedBins, setDamagedBins] = useState<BinLocation[]>([]);
+  const [selectedDamageBin, setSelectedDamageBin] = useState('');
+  const [loadingBins, setLoadingBins] = useState(true);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const res = await api.get('/bin-locations');
+        const bins = res.data || res || [];
+        const damageBins = bins.filter((b: BinLocation) => b.bin_code.toLowerCase().includes('damage') || b.bin_code.toLowerCase().includes('defect') || b.description?.toLowerCase().includes('damage'));
+        setDamagedBins(damageBins.length > 0 ? damageBins : bins.slice(0, 5));
+      } catch (e) { console.error('Error fetching bins:', e); }
+      finally { setLoadingBins(false); }
+    })();
+  }, []);
+
   const takePhoto = async () => {
     const { status } = await ImagePicker.requestCameraPermissionsAsync();
     if (status !== 'granted') { Alert.alert('Permission Required', 'Camera permission is needed to take photos'); return; }
-    const result = await ImagePicker.launchCameraAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images, allowsEditing: true, aspect: [4, 3], quality: 0.5 });
+    const result = await ImagePicker.launchCameraAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images, quality: 0.5 });
     if (!result.canceled && result.assets[0]) {
       const newPhoto: PhotoEvidence = { uri: result.assets[0].uri, evidence_type: 'damaged', timestamp: new Date().toISOString(), uploaded: false };
       setPhotos(prev => [...prev, newPhoto]);
@@ -2073,7 +2147,7 @@ function DamageReportScreen({ navigation }: any) {
       if (photos.length > 0) {
         try { const base64 = await FileSystem.readAsStringAsync(photos[0].uri, { encoding: FileSystem.EncodingType.Base64 }); photoBase64 = `data:image/jpeg;base64,${base64}`; } catch (e) { console.error('Error converting photo:', e); }
       }
-      await api.post('/damage-reports', { item_id: itemId, item_name: itemName || itemId, quantity: Number(quantity), damage_description: description, damage_type: damageType, severity, photo_base64: photoBase64 });
+      await api.post('/damage-reports', { item_id: itemId, item_name: itemName || itemId, quantity: Number(quantity), damage_description: description || undefined, damage_type: damageType, severity, photo_base64: photoBase64, damaged_bin_id: selectedDamageBin || null });
       Alert.alert('Submitted', 'Damage report submitted', [{ text: 'OK', onPress: () => navigation.goBack() }]);
     } catch (e: any) { Alert.alert('Error', e.message); }
     finally { setSubmitting(false); }
@@ -2144,7 +2218,15 @@ function DamageReportScreen({ navigation }: any) {
               <Text style={{ color: COLORS.gray400, fontSize: 12 }}>OR</Text>
               <View style={{ flex: 1, height: 1, backgroundColor: COLORS.gray200 }} />
             </View>
-            <TextInput style={styles.formInput} value={itemId} onChangeText={(t) => { setItemId(t); setItemName(t); }} placeholder="Enter item ID or barcode manually" placeholderTextColor={COLORS.gray400} />
+            <TextInput style={styles.formInput} value={itemId} onChangeText={(t) => { setItemId(t); if (!t.trim()) setItemName(''); }} placeholder="Enter item name or barcode" placeholderTextColor={COLORS.gray400} onSubmitEditing={async () => {
+              if (!itemId.trim()) return;
+              try {
+                const res = await api.get(`/items/barcode/${encodeURIComponent(itemId.trim())}`);
+                const item = res.success ? res.data : res;
+                if (item && (item.id || item.item_name)) { setItemId(item.id || itemId); setItemName(item.item_name || item.name || itemId); }
+                else { setItemName(itemId); }
+              } catch { setItemName(itemId); }
+            }} />
           </View>
         )}
         <Text style={styles.inputLabel}>Damage Type</Text>
@@ -2171,9 +2253,21 @@ function DamageReportScreen({ navigation }: any) {
 
         <Text style={[styles.inputLabel, { marginTop: 8 }]}>Damaged Quantity</Text>
         <TextInput style={styles.formInput} value={quantity} onChangeText={setQuantity} keyboardType="numeric" placeholder="0" placeholderTextColor={COLORS.gray400} />
-        <Text style={styles.inputLabel}>Description</Text>
+        <Text style={styles.inputLabel}>Description (Optional)</Text>
         <TextInput style={[styles.formInput, { height: 100, textAlignVertical: 'top' }]} value={description} onChangeText={setDescription} placeholder="Describe the damage..." placeholderTextColor={COLORS.gray400} multiline />
-        <TouchableOpacity style={[styles.primaryBtn, { backgroundColor: COLORS.danger, marginBottom: 40 }]} onPress={handleSubmit} disabled={submitting}>
+
+        <Text style={styles.inputLabel}>Move to Damaged Bin (Optional)</Text>
+        {loadingBins ? <ActivityIndicator size="small" color={COLORS.primary} /> : (
+          <View style={styles.pickerContainer}>
+            {damagedBins.map(bin => (
+              <TouchableOpacity key={bin.id} style={[styles.pickerOption, selectedDamageBin === bin.id && styles.pickerOptionSelected]} onPress={() => setSelectedDamageBin(selectedDamageBin === bin.id ? '' : bin.id)}>
+                <Text style={[styles.pickerOptionText, selectedDamageBin === bin.id && styles.pickerOptionTextSelected]}>{bin.bin_code}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        )}
+
+        <TouchableOpacity style={[styles.primaryBtn, { backgroundColor: COLORS.danger, marginBottom: 40, marginTop: 24 }]} onPress={handleSubmit} disabled={submitting}>
           <Text style={styles.primaryBtnText}>{submitting ? 'Submitting...' : 'Submit Report'}</Text>
         </TouchableOpacity>
       </ScrollView>
@@ -3326,11 +3420,27 @@ function ReviewCountScreen({ navigation, route }: any) {
   const [count, setCount] = useState<StockCount | null>(null);
   const [loading, setLoading] = useState(true);
   const [processing, setProcessing] = useState(false);
+  const [damageReports, setDamageReports] = useState<any[]>([]);
+  const [expandedDamage, setExpandedDamage] = useState<string | null>(null);
 
   useEffect(() => {
-    api.get(`/stock-counts/${countId}`).then(res => setCount(res.data || res))
-      .catch(console.error).finally(() => setLoading(false));
+    Promise.all([
+      api.get(`/stock-counts/${countId}`).then(res => setCount(res.data || res)),
+      api.get(`/damage-reports?stock_count_id=${countId}`).then(res => setDamageReports(res.data || res || [])).catch(() => setDamageReports([])),
+    ]).catch(console.error).finally(() => setLoading(false));
   }, [countId]);
+
+  const handleDeletePhoto = async (reportId: string) => {
+    Alert.alert('Delete Photo', 'Delete this image to save storage?', [
+      { text: 'Cancel' },
+      { text: 'Delete', style: 'destructive', onPress: async () => {
+        try {
+          await api.put(`/damage-reports/${reportId}/clear-photo`);
+          setDamageReports(prev => prev.map(r => r.id === reportId ? { ...r, photo_base64: null } : r));
+        } catch (e: any) { Alert.alert('Error', e.message); }
+      }},
+    ]);
+  };
 
   const handleApprove = async () => {
     setProcessing(true);
@@ -3373,6 +3483,44 @@ function ReviewCountScreen({ navigation, route }: any) {
         {mismatches.length > 0 && (
           <><Text style={styles.sectionTitle}>Mismatches</Text>
           {mismatches.map(item => <ItemRow key={item.id} item={item} showVariance />)}</>
+        )}
+        {damageReports.length > 0 && (
+          <>
+            <Text style={styles.sectionTitle}>Damage Reports ({damageReports.length})</Text>
+            {damageReports.map((report: any) => (
+              <TouchableOpacity key={report.id} style={[styles.binCard, { borderLeftWidth: 3, borderLeftColor: COLORS.warning }]}
+                onPress={() => setExpandedDamage(expandedDamage === report.id ? null : report.id)} activeOpacity={0.7}>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontSize: 15, fontWeight: '600', color: COLORS.gray900 }}>{report.item_name}</Text>
+                    <Text style={{ fontSize: 12, color: COLORS.gray500, marginTop: 2 }}>
+                      {report.damage_type && `${report.damage_type} • `}{report.severity && `${report.severity} • `}Bin: {report.bin_code || '—'}
+                    </Text>
+                  </View>
+                  <View style={{ paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6, backgroundColor: report.status === 'approved' ? COLORS.successLight : report.status === 'rejected' ? '#FEE2E2' : COLORS.warningLight }}>
+                    <Text style={{ fontSize: 11, fontWeight: '600', color: report.status === 'approved' ? COLORS.success : report.status === 'rejected' ? COLORS.danger : COLORS.warning }}>{report.status}</Text>
+                  </View>
+                </View>
+                {expandedDamage === report.id && (
+                  <View style={{ marginTop: 12, borderTopWidth: 1, borderTopColor: COLORS.gray200, paddingTop: 12 }}>
+                    {report.damage_description && <Text style={{ fontSize: 13, color: COLORS.gray700, marginBottom: 8 }}>{report.damage_description}</Text>}
+                    {report.serial_number && <Text style={{ fontSize: 12, color: COLORS.gray500, marginBottom: 4 }}>Serial: {report.serial_number}</Text>}
+                    {report.reported_by_name && <Text style={{ fontSize: 12, color: COLORS.gray500, marginBottom: 8 }}>Reported by: {report.reported_by_name}</Text>}
+                    {report.photo_base64 ? (
+                      <View>
+                        <Image source={{ uri: report.photo_base64 }} style={{ width: '100%', height: 200, borderRadius: 8, marginBottom: 8 }} resizeMode="contain" />
+                        <TouchableOpacity onPress={() => handleDeletePhoto(report.id)} style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 8, backgroundColor: '#FEE2E2', borderRadius: 8 }}>
+                          <Text style={{ fontSize: 13, color: COLORS.danger, fontWeight: '600' }}>Delete Photo</Text>
+                        </TouchableOpacity>
+                      </View>
+                    ) : (
+                      <Text style={{ fontSize: 12, color: COLORS.gray400, fontStyle: 'italic' }}>No photo / Photo deleted</Text>
+                    )}
+                  </View>
+                )}
+              </TouchableOpacity>
+            ))}
+          </>
         )}
       </ScrollView>
       {count.status === 'submitted' && (
