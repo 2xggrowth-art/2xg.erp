@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { X } from 'lucide-react';
 import { paymentsService, CreatePaymentData } from '../../services/payments.service';
 import { vendorsService } from '../../services/vendors.service';
@@ -27,6 +27,7 @@ const NewPaymentForm = () => {
   const { id } = useParams<{ id: string }>();
   const isEditMode = !!id;
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [activeTab, setActiveTab] = useState<PaymentTab>('bill');
   const [loading, setLoading] = useState(false);
   const [vendors, setVendors] = useState<Vendor[]>([]);
@@ -72,6 +73,18 @@ const NewPaymentForm = () => {
       fetchPaymentDetails();
     } else {
       generatePaymentNumber();
+      // Pre-fill from URL params (e.g. coming from Bill detail page)
+      const vendorId = searchParams.get('vendorId');
+      const vendorName = searchParams.get('vendorName');
+      const amount = searchParams.get('amount');
+      if (vendorId) {
+        setFormData(prev => ({
+          ...prev,
+          vendor_id: vendorId,
+          vendor_name: vendorName || '',
+          amount: amount ? parseFloat(amount) : 0,
+        }));
+      }
     }
   }, [id]);
 
@@ -130,6 +143,32 @@ const NewPaymentForm = () => {
         status: 'open'  // Only fetch unpaid bills
       });
       setUnpaidBills(response.data);
+
+      // Auto-select bill if billId is in URL params
+      const billId = searchParams.get('billId');
+      const billNumber = searchParams.get('billNumber');
+      const amount = searchParams.get('amount');
+      if (billId && response.data) {
+        const matchedBill = response.data.find((b: Bill) => b.id === billId);
+        if (matchedBill) {
+          const allocAmount = matchedBill.balance_due || matchedBill.total_amount;
+          setSelectedBills([{
+            bill_id: matchedBill.id,
+            bill_number: matchedBill.bill_number,
+            bill_amount: allocAmount,
+            amount_allocated: allocAmount,
+          }]);
+        } else if (billNumber) {
+          // Bill not in 'open' status, still pre-select with URL amount
+          const allocAmount = amount ? parseFloat(amount) : 0;
+          setSelectedBills([{
+            bill_id: billId,
+            bill_number: billNumber,
+            bill_amount: allocAmount,
+            amount_allocated: allocAmount,
+          }]);
+        }
+      }
     } catch (error) {
       console.error('Error fetching vendor bills:', error);
     }

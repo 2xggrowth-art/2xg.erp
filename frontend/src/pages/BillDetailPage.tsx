@@ -316,7 +316,9 @@ const BillDetailPage: React.FC = () => {
                 <Download size={20} className="text-gray-600" />
               </button>
               {bill.status !== 'paid' && (
-                <button className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 flex items-center gap-2">
+                <button
+                  onClick={() => navigate(`/purchases/payments-made/new?vendorId=${bill.vendor_id}&vendorName=${encodeURIComponent(bill.vendor_name || '')}&billId=${bill.id}&billNumber=${encodeURIComponent(bill.bill_number || '')}&amount=${bill.balance_due || bill.total_amount}`)}
+                  className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 flex items-center gap-2">
                   <CreditCard size={16} />
                   Make Payment
                 </button>
@@ -503,7 +505,9 @@ const BillDetailPage: React.FC = () => {
               {(bill.balance_due || 0) > 0 && (
                 <div className="bg-white rounded-xl shadow-sm border p-6">
                   <h3 className="text-lg font-semibold text-gray-900 mb-4">Quick Actions</h3>
-                  <button className="w-full px-4 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 flex items-center gap-2 justify-center font-medium">
+                  <button
+                    onClick={() => navigate(`/purchases/payments-made/new?vendorId=${bill.vendor_id}&vendorName=${encodeURIComponent(bill.vendor_name || '')}&billId=${bill.id}&billNumber=${encodeURIComponent(bill.bill_number || '')}&amount=${bill.balance_due || bill.total_amount}`)}
+                    className="w-full px-4 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 flex items-center gap-2 justify-center font-medium">
                     <CreditCard size={18} /> Make Payment
                   </button>
                 </div>
@@ -517,7 +521,9 @@ const BillDetailPage: React.FC = () => {
             <div className="p-6 border-b flex justify-between items-center">
               <h3 className="text-lg font-semibold text-gray-900">Payment History</h3>
               {(bill.balance_due || 0) > 0 && (
-                <button className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 flex items-center gap-2">
+                <button
+                  onClick={() => navigate(`/purchases/payments-made/new?vendorId=${bill.vendor_id}&vendorName=${encodeURIComponent(bill.vendor_name || '')}&billId=${bill.id}&billNumber=${encodeURIComponent(bill.bill_number || '')}&amount=${bill.balance_due || bill.total_amount}`)}
+                  className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 flex items-center gap-2">
                   <CreditCard size={16} />
                   Make Payment
                 </button>
