@@ -1753,7 +1753,7 @@ function EndCountScreen({ navigation, route }: any) {
                 {expandedDamage === report.id && (
                   <View style={{ marginTop: 12, borderTopWidth: 1, borderTopColor: COLORS.gray200, paddingTop: 12 }}>
                     {report.damage_description && <Text style={{ fontSize: 13, color: COLORS.gray700, marginBottom: 8 }}>{report.damage_description}</Text>}
-                    {report.bin_code && <Text style={{ fontSize: 12, color: COLORS.gray500, marginBottom: 4 }}>Moved to: {report.bin_code}</Text>}
+                    {(report.damaged_bins?.bin_code || report.bin_code) && <Text style={{ fontSize: 12, color: COLORS.gray500, marginBottom: 4 }}>Moved to: {report.damaged_bins?.bin_code || report.bin_code} ({report.quantity || 1})</Text>}
                     {report.photo_base64 && (
                       <Image source={{ uri: report.photo_base64 }} style={{ width: '100%', height: 200, borderRadius: 8, marginTop: 4 }} resizeMode="contain" />
                     )}
@@ -3359,7 +3359,7 @@ function AdminDashboard({ navigation }: any) {
                 {expandedDamage === report.id && (
                   <View style={{ marginTop: 12, borderTopWidth: 1, borderTopColor: COLORS.gray200, paddingTop: 12 }}>
                     {report.damage_description && <Text style={{ fontSize: 13, color: COLORS.gray700, marginBottom: 8 }}>{report.damage_description}</Text>}
-                    {report.bin_code && <Text style={{ fontSize: 12, color: COLORS.gray500, marginBottom: 4 }}>Moved to: {report.bin_code}</Text>}
+                    {(report.damaged_bins?.bin_code || report.bin_code) && <Text style={{ fontSize: 12, color: COLORS.gray500, marginBottom: 4 }}>Moved to: {report.damaged_bins?.bin_code || report.bin_code} ({report.quantity || 1})</Text>}
                     {report.photo_base64 ? (
                       <View>
                         <Image source={{ uri: report.photo_base64 }} style={{ width: '100%', height: 200, borderRadius: 8, marginBottom: 8 }} resizeMode="contain" />
@@ -3610,7 +3610,7 @@ function ReviewCountScreen({ navigation, route }: any) {
                   <View style={{ flex: 1 }}>
                     <Text style={{ fontSize: 15, fontWeight: '600', color: COLORS.gray900 }}>{report.item_name}</Text>
                     <Text style={{ fontSize: 12, color: COLORS.gray500, marginTop: 2 }}>
-                      {report.damage_type && `${report.damage_type} • `}{report.severity && `${report.severity} • `}Bin: {report.bin_code || '—'}
+                      {report.damage_type && `${report.damage_type} • `}{report.severity && `${report.severity} • `}Moved to: {report.damaged_bins?.bin_code || report.bin_code || '—'} ({report.quantity || 1})
                     </Text>
                   </View>
                   <View style={{ paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6, backgroundColor: report.status === 'approved' ? COLORS.successLight : report.status === 'rejected' ? '#FEE2E2' : COLORS.warningLight }}>
@@ -3907,7 +3907,7 @@ function DamageReportsListScreen({ navigation }: any) {
               {expandedId === report.id && (
                 <View style={{ marginTop: 12, borderTopWidth: 1, borderTopColor: COLORS.gray200, paddingTop: 12 }}>
                   {report.damage_description && <Text style={{ fontSize: 13, color: COLORS.gray700, marginBottom: 8 }}>{report.damage_description}</Text>}
-                  {report.bin_code && <Text style={{ fontSize: 12, color: COLORS.gray500, marginBottom: 4 }}>Moved to Bin: {report.bin_code}</Text>}
+                  {(report.damaged_bins?.bin_code || report.bin_code) && <Text style={{ fontSize: 12, color: COLORS.gray500, marginBottom: 4 }}>Moved to: {report.damaged_bins?.bin_code || report.bin_code} ({report.quantity || 1})</Text>}
                   {report.serial_number && <Text style={{ fontSize: 12, color: COLORS.gray500, marginBottom: 4 }}>Serial: {report.serial_number}</Text>}
                   {report.photo_base64 ? (
                     <View>
