@@ -1674,7 +1674,7 @@ function ItemDamageScreen({ navigation, route }: any) {
         <Text style={[styles.inputLabel, { marginTop: 16 }]}>Photos *</Text>
         <PhotoGallery photos={photos} onAddPhoto={takePhoto} maxPhotos={5} />
 
-        <Text style={[styles.inputLabel, { marginTop: 16 }]}>Describe the Damage *</Text>
+        <Text style={[styles.inputLabel, { marginTop: 16 }]}>Description (Optional)</Text>
         <TextInput style={[styles.formInput, { height: 100, textAlignVertical: 'top' }]} value={description} onChangeText={setDescription} placeholder="Describe what is damaged..." placeholderTextColor={COLORS.gray400} multiline />
 
         <Text style={styles.inputLabel}>Move to Damaged Bin (Optional)</Text>
@@ -1703,9 +1703,15 @@ function ItemDamageScreen({ navigation, route }: any) {
 function EndCountScreen({ navigation, route }: any) {
   const { countId, countNumber, items } = route.params;
   const [submitting, setSubmitting] = useState(false);
+  const [damageReports, setDamageReports] = useState<any[]>([]);
+  const [expandedDamage, setExpandedDamage] = useState<string | null>(null);
   const mismatches = items.filter((i: StockCountItem) => i.counted_quantity !== null && i.counted_quantity !== i.expected_quantity);
   const uncounted = items.filter((i: StockCountItem) => i.counted_quantity === null);
   const accuracy = items.length > 0 ? ((items.length - mismatches.length) / items.length * 100).toFixed(1) : '100';
+
+  useEffect(() => {
+    api.get(`/damage-reports?stock_count_id=${countId}`).then(res => setDamageReports(res.data || res || [])).catch(() => setDamageReports([]));
+  }, [countId]);
 
   const handleSubmit = async () => {
     setSubmitting(true);
@@ -1727,6 +1733,34 @@ function EndCountScreen({ navigation, route }: any) {
         {mismatches.length > 0 && (
           <><Text style={styles.sectionTitle}>Mismatches ({mismatches.length})</Text>
           {mismatches.map((item: StockCountItem) => <ItemRow key={item.id} item={item} showVariance />)}</>
+        )}
+        {damageReports.length > 0 && (
+          <>
+            <Text style={styles.sectionTitle}>Damage Reports ({damageReports.length})</Text>
+            {damageReports.map((report: any) => (
+              <TouchableOpacity key={report.id} style={[styles.binCard, { borderLeftWidth: 3, borderLeftColor: COLORS.warning }]}
+                onPress={() => setExpandedDamage(expandedDamage === report.id ? null : report.id)} activeOpacity={0.7}>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontSize: 15, fontWeight: '600', color: COLORS.gray900 }}>{report.item_name}</Text>
+                    <Text style={{ fontSize: 12, color: COLORS.gray500, marginTop: 2 }}>
+                      {report.damage_type && `${report.damage_type} • `}{report.severity && `${report.severity} • `}Qty: {report.quantity || 1}
+                    </Text>
+                  </View>
+                  <Text style={{ fontSize: 16 }}>{expandedDamage === report.id ? '▼' : '▶'}</Text>
+                </View>
+                {expandedDamage === report.id && (
+                  <View style={{ marginTop: 12, borderTopWidth: 1, borderTopColor: COLORS.gray200, paddingTop: 12 }}>
+                    {report.damage_description && <Text style={{ fontSize: 13, color: COLORS.gray700, marginBottom: 8 }}>{report.damage_description}</Text>}
+                    {report.bin_code && <Text style={{ fontSize: 12, color: COLORS.gray500, marginBottom: 4 }}>Moved to: {report.bin_code}</Text>}
+                    {report.photo_base64 && (
+                      <Image source={{ uri: report.photo_base64 }} style={{ width: '100%', height: 200, borderRadius: 8, marginTop: 4 }} resizeMode="contain" />
+                    )}
+                  </View>
+                )}
+              </TouchableOpacity>
+            ))}
+          </>
         )}
       </ScrollView>
       <View style={styles.actions}>
@@ -3217,22 +3251,51 @@ function AdminPlacementView({ navigation }: any) {
   );
 }
 
-// AdminDashboard (enhanced with counter performance, notification bell)
+// AdminDashboard (enhanced with counter performance, notification bell, damage reports)
 function AdminDashboard({ navigation }: any) {
   const { user, logout, activeModule } = useAuth();
   const [pendingApprovals, setPendingApprovals] = useState<StockCount[]>([]);
   const [counters, setCounters] = useState<CounterPerformance[]>([]);
   const [loading, setLoading] = useState(true);
+  const [pendingDamageCount, setPendingDamageCount] = useState(0);
+  const [recentDamageReports, setRecentDamageReports] = useState<any[]>([]);
+  const [expandedDamage, setExpandedDamage] = useState<string | null>(null);
 
   useFocusEffect(useCallback(() => {
     Promise.all([
       api.get('/stock-counts?status=submitted').catch(() => ({ data: [] })),
       api.get('/admin/counters/workload').catch(() => ({ data: [] })),
-    ]).then(([appRes, counterRes]) => {
+      api.get('/damage-reports/pending-count').catch(() => ({ data: { count: 0 } })),
+      api.get('/damage-reports?status=pending').catch(() => ({ data: [] })),
+    ]).then(([appRes, counterRes, damageCountRes, damageListRes]) => {
       setPendingApprovals(appRes.data || []);
       setCounters((counterRes.data || counterRes || []).slice(0, 5));
+      const countVal = damageCountRes.data?.count ?? damageCountRes.data ?? 0;
+      setPendingDamageCount(typeof countVal === 'number' ? countVal : 0);
+      setRecentDamageReports((damageListRes.data || damageListRes || []).slice(0, 3));
     }).catch(console.error).finally(() => setLoading(false));
   }, []));
+
+  const handleDeletePhoto = async (reportId: string) => {
+    Alert.alert('Delete Photo', 'Delete this image to save storage?', [
+      { text: 'Cancel' },
+      { text: 'Delete', style: 'destructive', onPress: async () => {
+        try {
+          await api.put(`/damage-reports/${reportId}/clear-photo`);
+          setRecentDamageReports(prev => prev.map(r => r.id === reportId ? { ...r, photo_base64: null } : r));
+        } catch (e: any) { Alert.alert('Error', e.message); }
+      }},
+    ]);
+  };
+
+  const handleDamageAction = async (reportId: string, action: 'approved' | 'rejected') => {
+    try {
+      await api.put(`/damage-reports/${reportId}/review`, { status: action });
+      setRecentDamageReports(prev => prev.filter(r => r.id !== reportId));
+      setPendingDamageCount(prev => Math.max(0, prev - 1));
+      Alert.alert('Done', `Damage report ${action}`);
+    } catch (e: any) { Alert.alert('Error', e.message); }
+  };
 
   if (loading) return <View style={styles.centered}><ActivityIndicator size="large" color={COLORS.primary} /></View>;
 
@@ -3259,15 +3322,66 @@ function AdminDashboard({ navigation }: any) {
         <View style={styles.statsRow}>
           <StatCard value={pendingApprovals.length} label="Pending" color="warning" icon="⏳" />
           <StatCard value={counters.length} label="Counters" color="primary" icon="👥" />
-          <StatCard value={0} label="Today" color="success" icon="✓" />
+          <StatCard value={pendingDamageCount} label="Damages" color="danger" icon="⚠️" />
         </View>
 
         <View style={styles.adminQuickActions}>
           <TouchableOpacity style={styles.adminQuickAction} onPress={() => navigation.navigate('AssignCount')}><Text style={styles.adminQuickActionIcon}>➕</Text><Text style={styles.adminQuickActionLabel}>Assign</Text></TouchableOpacity>
           <TouchableOpacity style={styles.adminQuickAction} onPress={() => navigation.navigate('Schedule')}><Text style={styles.adminQuickActionIcon}>📅</Text><Text style={styles.adminQuickActionLabel}>Schedule</Text></TouchableOpacity>
           <TouchableOpacity style={styles.adminQuickAction} onPress={() => navigation.navigate('Bins')}><Text style={styles.adminQuickActionIcon}>📦</Text><Text style={styles.adminQuickActionLabel}>Bins</Text></TouchableOpacity>
-          <TouchableOpacity style={styles.adminQuickAction} onPress={() => navigation.navigate('Workload')}><Text style={styles.adminQuickActionIcon}>👥</Text><Text style={styles.adminQuickActionLabel}>Workload</Text></TouchableOpacity>
+          <TouchableOpacity style={styles.adminQuickAction} onPress={() => navigation.navigate('DamageReportsList')}><Text style={styles.adminQuickActionIcon}>⚠️</Text><Text style={styles.adminQuickActionLabel}>Damages</Text></TouchableOpacity>
         </View>
+
+        {/* Pending Damage Reports */}
+        {recentDamageReports.length > 0 && (
+          <>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+              <Text style={styles.sectionTitle}>Pending Damage Reports</Text>
+              <TouchableOpacity onPress={() => navigation.navigate('DamageReportsList')}>
+                <Text style={{ fontSize: 13, color: COLORS.primary, fontWeight: '600' }}>View All</Text>
+              </TouchableOpacity>
+            </View>
+            {recentDamageReports.map((report: any) => (
+              <TouchableOpacity key={report.id} style={[styles.binCard, { borderLeftWidth: 3, borderLeftColor: COLORS.danger }]}
+                onPress={() => setExpandedDamage(expandedDamage === report.id ? null : report.id)} activeOpacity={0.7}>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontSize: 15, fontWeight: '600', color: COLORS.gray900 }}>{report.item_name}</Text>
+                    <Text style={{ fontSize: 12, color: COLORS.gray500, marginTop: 2 }}>
+                      {report.damage_type && `${report.damage_type} • `}{report.severity && `${report.severity}`}
+                    </Text>
+                    {report.reported_by_name && <Text style={{ fontSize: 11, color: COLORS.gray400, marginTop: 2 }}>By: {report.reported_by_name}</Text>}
+                  </View>
+                  <Text style={{ fontSize: 16 }}>{expandedDamage === report.id ? '▼' : '▶'}</Text>
+                </View>
+                {expandedDamage === report.id && (
+                  <View style={{ marginTop: 12, borderTopWidth: 1, borderTopColor: COLORS.gray200, paddingTop: 12 }}>
+                    {report.damage_description && <Text style={{ fontSize: 13, color: COLORS.gray700, marginBottom: 8 }}>{report.damage_description}</Text>}
+                    {report.bin_code && <Text style={{ fontSize: 12, color: COLORS.gray500, marginBottom: 4 }}>Moved to: {report.bin_code}</Text>}
+                    {report.photo_base64 ? (
+                      <View>
+                        <Image source={{ uri: report.photo_base64 }} style={{ width: '100%', height: 200, borderRadius: 8, marginBottom: 8 }} resizeMode="contain" />
+                        <TouchableOpacity onPress={() => handleDeletePhoto(report.id)} style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 8, backgroundColor: '#FEE2E2', borderRadius: 8, marginBottom: 8 }}>
+                          <Text style={{ fontSize: 13, color: COLORS.danger, fontWeight: '600' }}>Delete Photo</Text>
+                        </TouchableOpacity>
+                      </View>
+                    ) : (
+                      <Text style={{ fontSize: 12, color: COLORS.gray400, fontStyle: 'italic', marginBottom: 8 }}>No photo</Text>
+                    )}
+                    <View style={{ flexDirection: 'row', gap: 8 }}>
+                      <TouchableOpacity onPress={() => handleDamageAction(report.id, 'approved')} style={{ flex: 1, paddingVertical: 10, backgroundColor: COLORS.successLight, borderRadius: 8, alignItems: 'center' }}>
+                        <Text style={{ fontSize: 13, fontWeight: '600', color: COLORS.success }}>Approve</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity onPress={() => handleDamageAction(report.id, 'rejected')} style={{ flex: 1, paddingVertical: 10, backgroundColor: '#FEE2E2', borderRadius: 8, alignItems: 'center' }}>
+                        <Text style={{ fontSize: 13, fontWeight: '600', color: COLORS.danger }}>Reject</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                )}
+              </TouchableOpacity>
+            ))}
+          </>
+        )}
 
         {/* Counter Performance Cards */}
         {counters.length > 0 && (
@@ -3724,6 +3838,105 @@ function WorkloadScreen({ navigation }: any) {
   );
 }
 
+// DamageReportsListScreen - Admin view all damage reports
+function DamageReportsListScreen({ navigation }: any) {
+  const [reports, setReports] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [filter, setFilter] = useState<'pending' | 'approved' | 'rejected'>('pending');
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+
+  const fetchReports = useCallback(() => {
+    setLoading(true);
+    api.get(`/damage-reports?status=${filter}`).then(res => setReports(res.data || res || []))
+      .catch(console.error).finally(() => setLoading(false));
+  }, [filter]);
+
+  useFocusEffect(useCallback(() => { fetchReports(); }, [fetchReports]));
+
+  const handleDeletePhoto = async (reportId: string) => {
+    Alert.alert('Delete Photo', 'Delete this image to free database storage?', [
+      { text: 'Cancel' },
+      { text: 'Delete', style: 'destructive', onPress: async () => {
+        try {
+          await api.put(`/damage-reports/${reportId}/clear-photo`);
+          setReports(prev => prev.map(r => r.id === reportId ? { ...r, photo_base64: null } : r));
+        } catch (e: any) { Alert.alert('Error', e.message); }
+      }},
+    ]);
+  };
+
+  const handleReview = async (reportId: string, status: 'approved' | 'rejected') => {
+    try {
+      await api.put(`/damage-reports/${reportId}/review`, { status });
+      setReports(prev => prev.filter(r => r.id !== reportId));
+      Alert.alert('Done', `Report ${status}`);
+    } catch (e: any) { Alert.alert('Error', e.message); }
+  };
+
+  return (
+    <View style={styles.container}>
+      <Header title="Damage Reports" onBack={() => navigation.goBack()} />
+      <View style={styles.tabs}>
+        {(['pending', 'approved', 'rejected'] as const).map(f => (
+          <TouchableOpacity key={f} style={[styles.tab, filter === f && styles.tabActive]} onPress={() => setFilter(f)}>
+            <Text style={[styles.tabText, filter === f && styles.tabTextActive]}>{f.charAt(0).toUpperCase() + f.slice(1)}</Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+      {loading ? <View style={styles.centered}><ActivityIndicator size="large" color={COLORS.primary} /></View> : (
+        <FlatList data={reports} keyExtractor={r => r.id}
+          contentContainerStyle={styles.listContent}
+          ListEmptyComponent={<View style={styles.emptyState}><Text style={styles.emptyStateIcon}>✓</Text><Text style={styles.emptyStateText}>No {filter} damage reports</Text></View>}
+          renderItem={({ item: report }) => (
+            <TouchableOpacity style={[styles.binCard, { borderLeftWidth: 3, borderLeftColor: filter === 'approved' ? COLORS.success : filter === 'rejected' ? COLORS.danger : COLORS.warning }]}
+              onPress={() => setExpandedId(expandedId === report.id ? null : report.id)} activeOpacity={0.7}>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontSize: 15, fontWeight: '600', color: COLORS.gray900 }}>{report.item_name}</Text>
+                  <Text style={{ fontSize: 12, color: COLORS.gray500, marginTop: 2 }}>
+                    {report.damage_type && `${report.damage_type} • `}{report.severity || ''}{report.quantity ? ` • Qty: ${report.quantity}` : ''}
+                  </Text>
+                  <Text style={{ fontSize: 11, color: COLORS.gray400, marginTop: 2 }}>
+                    {report.reported_by_name && `By: ${report.reported_by_name} • `}{report.created_at ? new Date(report.created_at).toLocaleDateString() : ''}
+                  </Text>
+                </View>
+                <Text style={{ fontSize: 16 }}>{expandedId === report.id ? '▼' : '▶'}</Text>
+              </View>
+              {expandedId === report.id && (
+                <View style={{ marginTop: 12, borderTopWidth: 1, borderTopColor: COLORS.gray200, paddingTop: 12 }}>
+                  {report.damage_description && <Text style={{ fontSize: 13, color: COLORS.gray700, marginBottom: 8 }}>{report.damage_description}</Text>}
+                  {report.bin_code && <Text style={{ fontSize: 12, color: COLORS.gray500, marginBottom: 4 }}>Moved to Bin: {report.bin_code}</Text>}
+                  {report.serial_number && <Text style={{ fontSize: 12, color: COLORS.gray500, marginBottom: 4 }}>Serial: {report.serial_number}</Text>}
+                  {report.photo_base64 ? (
+                    <View>
+                      <Image source={{ uri: report.photo_base64 }} style={{ width: '100%', height: 250, borderRadius: 8, marginBottom: 8 }} resizeMode="contain" />
+                      <TouchableOpacity onPress={() => handleDeletePhoto(report.id)} style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 10, backgroundColor: '#FEE2E2', borderRadius: 8, marginBottom: 8 }}>
+                        <Text style={{ fontSize: 13, color: COLORS.danger, fontWeight: '600' }}>🗑 Delete Photo</Text>
+                      </TouchableOpacity>
+                    </View>
+                  ) : (
+                    <Text style={{ fontSize: 12, color: COLORS.gray400, fontStyle: 'italic', marginBottom: 8 }}>No photo / Photo deleted</Text>
+                  )}
+                  {filter === 'pending' && (
+                    <View style={{ flexDirection: 'row', gap: 8 }}>
+                      <TouchableOpacity onPress={() => handleReview(report.id, 'approved')} style={{ flex: 1, paddingVertical: 12, backgroundColor: COLORS.successLight, borderRadius: 8, alignItems: 'center' }}>
+                        <Text style={{ fontSize: 14, fontWeight: '600', color: COLORS.success }}>Approve</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity onPress={() => handleReview(report.id, 'rejected')} style={{ flex: 1, paddingVertical: 12, backgroundColor: '#FEE2E2', borderRadius: 8, alignItems: 'center' }}>
+                        <Text style={{ fontSize: 14, fontWeight: '600', color: COLORS.danger }}>Reject</Text>
+                      </TouchableOpacity>
+                    </View>
+                  )}
+                </View>
+              )}
+            </TouchableOpacity>
+          )}
+        />
+      )}
+    </View>
+  );
+}
+
 // EscalationScreen - Items requiring attention
 function EscalationsScreen({ navigation }: any) {
   const [escalations, setEscalations] = useState<EscalationItem[]>([]);
@@ -3842,6 +4055,7 @@ function AppNavigator() {
             <Stack.Screen name="Bins" component={BinsScreen} />
             <Stack.Screen name="Schedule" component={ScheduleScreen} />
             <Stack.Screen name="Workload" component={WorkloadScreen} />
+            <Stack.Screen name="DamageReportsList" component={DamageReportsListScreen} />
             <Stack.Screen name="Escalations" component={EscalationsScreen} />
           </>
         )}
