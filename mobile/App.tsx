@@ -13,10 +13,6 @@ import CategoryScreen from './src/screens/CategoryScreen';
 import PaymentScreen from './src/screens/PaymentScreen';
 import ReviewScreen from './src/screens/ReviewScreen';
 import SuccessScreen from './src/screens/SuccessScreen';
-import StockCountListScreen from './src/screens/StockCountListScreen';
-import StockCountDetailScreen from './src/screens/StockCountDetailScreen';
-import ItemLookupScreen from './src/screens/ItemLookupScreen';
-import DamageReportScreen from './src/screens/DamageReportScreen';
 
 // Types
 export type RootStackParamList = {
@@ -39,10 +35,6 @@ export type RootStackParamList = {
     amount: number;
     isAutoApproved: boolean;
   };
-  StockCountList: undefined;
-  StockCountDetail: { stockCountId: string };
-  ItemLookup: undefined;
-  DamageReport: undefined;
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -133,15 +125,6 @@ export default function App() {
                 options={{ gestureEnabled: false }}
               />
 
-              {/* Stock Count Flow */}
-              <Stack.Screen name="StockCountList" component={StockCountListScreen} />
-              <Stack.Screen name="StockCountDetail" component={StockCountDetailScreen} />
-
-              {/* Item Lookup */}
-              <Stack.Screen name="ItemLookup" component={ItemLookupScreen} />
-
-              {/* Damage Report */}
-              <Stack.Screen name="DamageReport" component={DamageReportScreen} />
             </>
           )}
         </Stack.Navigator>
