@@ -20,9 +20,11 @@ interface SplitPaymentModalProps {
 
 const PAYMENT_METHODS = [
   { id: 'Cash', label: 'Cash', shortcut: 'F1' },
-  { id: 'HDFC', label: 'HDFC', shortcut: 'F2' },
-  { id: 'ICICI', label: 'ICICI', shortcut: 'F3' },
+  { id: 'HDFC', label: 'HDFC Bank', shortcut: 'F2' },
+  { id: 'ICICI', label: 'ICICI Bank', shortcut: 'F3' },
+  { id: 'BAJAJ/ICICI', label: 'Bajaj / ICICI Bank', shortcut: '' },
   { id: 'CREDIT SALE', label: 'Credit Sale', shortcut: 'F4' },
+  { id: 'D/B CREDIT CARD / EM', label: 'D/B Credit Card / EM', shortcut: '' },
 ];
 
 const SplitPaymentModal: React.FC<SplitPaymentModalProps> = ({

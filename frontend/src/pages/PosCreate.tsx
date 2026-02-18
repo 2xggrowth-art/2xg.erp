@@ -95,7 +95,7 @@ const PosCreate: React.FC = () => {
   // Payment states
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [showSplitPaymentModal, setShowSplitPaymentModal] = useState(false);
-  const [selectedPaymentMode, setSelectedPaymentMode] = useState<'Cash' | 'HDFC' | 'ICICI' | 'CREDIT SALE' | ''>('');
+  const [selectedPaymentMode, setSelectedPaymentMode] = useState<'Cash' | 'HDFC' | 'ICICI' | 'BAJAJ/ICICI' | 'D/B CREDIT CARD / EM' | 'CREDIT SALE' | ''>('');
   const [referenceNumber, setReferenceNumber] = useState('');
   const [paidAmount, setPaidAmount] = useState<number>(0);
 
@@ -484,7 +484,7 @@ const PosCreate: React.FC = () => {
     }
   };
 
-  const handlePaymentClick = (mode: 'Cash' | 'HDFC' | 'ICICI' | 'CREDIT SALE') => {
+  const handlePaymentClick = (mode: 'Cash' | 'HDFC' | 'ICICI' | 'BAJAJ/ICICI' | 'D/B CREDIT CARD / EM' | 'CREDIT SALE') => {
     if (!activeSession) {
       alert('Please start a session before making sales');
       setShowStartSessionModal(true);
@@ -1540,21 +1540,35 @@ const PosCreate: React.FC = () => {
                 disabled={cart.length === 0 || processingPayment}
                 className="py-2.5 bg-white border border-gray-300 hover:bg-gray-100 text-gray-700 rounded-lg text-xs font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                HDFC [F2]
+                HDFC BANK [F2]
               </button>
               <button
                 onClick={() => handlePaymentClick('ICICI')}
                 disabled={cart.length === 0 || processingPayment}
                 className="py-2.5 bg-white border border-gray-300 hover:bg-gray-100 text-gray-700 rounded-lg text-xs font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                ICICI [F3]
+                ICICI BANK [F3]
+              </button>
+              <button
+                onClick={() => handlePaymentClick('BAJAJ/ICICI')}
+                disabled={cart.length === 0 || processingPayment}
+                className="py-2.5 bg-white border border-gray-300 hover:bg-gray-100 text-gray-700 rounded-lg text-xs font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                BAJAJ / ICICI BANK
               </button>
               <button
                 onClick={() => handlePaymentClick('CREDIT SALE')}
                 disabled={cart.length === 0 || processingPayment}
-                className="col-span-2 py-2.5 bg-white border border-gray-300 hover:bg-gray-100 text-gray-700 rounded-lg text-xs font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                className="py-2.5 bg-white border border-gray-300 hover:bg-gray-100 text-gray-700 rounded-lg text-xs font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 Credit Sale [F4]
+              </button>
+              <button
+                onClick={() => handlePaymentClick('D/B CREDIT CARD / EM')}
+                disabled={cart.length === 0 || processingPayment}
+                className="py-2.5 bg-white border border-gray-300 hover:bg-gray-100 text-gray-700 rounded-lg text-xs font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                D/B CREDIT CARD / EM
               </button>
               <button
                 onClick={() => setShowSplitPaymentModal(true)}
