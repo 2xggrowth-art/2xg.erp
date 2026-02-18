@@ -69,7 +69,7 @@ export default function PaymentScreen({ navigation, route }: Props) {
       console.error('Error creating expense:', error);
       Alert.alert(
         'Error',
-        error.response?.data?.error || error.message || 'Failed to create expense'
+        error.message || 'Failed to create expense. Check your connection.'
       );
       setSelectedMethod('');
     } finally {

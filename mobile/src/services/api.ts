@@ -5,6 +5,16 @@ const API_BASE_URL = __DEV__
   ? 'http://192.168.31.45:5000/api' // Change to your local IP for development
   : 'https://api.erp.2xg.in/api';
 
+// Helper to safely parse JSON response
+const safeJsonParse = async (response: Response): Promise<any> => {
+  const text = await response.text();
+  try {
+    return JSON.parse(text);
+  } catch {
+    throw new Error(text || `HTTP ${response.status}`);
+  }
+};
+
 // Helper function for API requests
 const apiRequest = async (
   endpoint: string,
@@ -26,7 +36,7 @@ const apiRequest = async (
     headers,
   });
 
-  const data = await response.json();
+  const data = await safeJsonParse(response);
 
   if (!response.ok) {
     throw new Error(data.error || 'Request failed');
@@ -91,7 +101,7 @@ export const expenseService = {
         body: formData,
       });
 
-      const data = await response.json();
+      const data = await safeJsonParse(response);
       if (!response.ok) {
         throw new Error(data.error || 'Failed to create expense');
       }

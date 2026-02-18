@@ -48,18 +48,26 @@ export default function CategoryScreen({ navigation, route }: Props) {
   const { imageUri, amount } = route.params;
   const [categories, setCategories] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     fetchCategories();
   }, []);
 
   const fetchCategories = async () => {
+    setLoading(true);
+    setError(null);
     try {
       const response = await expenseService.getCategories();
       const data = response.data || response || [];
-      setCategories(Array.isArray(data) ? data.slice(0, 6) : []);
-    } catch (error) {
-      console.error('Error fetching categories:', error);
+      const list = Array.isArray(data) ? data.slice(0, 6) : [];
+      setCategories(list);
+      if (list.length === 0) {
+        setError('No expense categories found. Please add categories from the web dashboard.');
+      }
+    } catch (err: any) {
+      console.error('Error fetching categories:', err);
+      setError(err.message || 'Failed to load categories. Check your connection.');
     } finally {
       setLoading(false);
     }
@@ -97,6 +105,14 @@ export default function CategoryScreen({ navigation, route }: Props) {
       {loading ? (
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color="#2563EB" />
+        </View>
+      ) : error ? (
+        <View style={styles.errorContainer}>
+          <Text style={styles.errorIcon}>⚠️</Text>
+          <Text style={styles.errorText}>{error}</Text>
+          <TouchableOpacity style={styles.retryButton} onPress={fetchCategories}>
+            <Text style={styles.retryButtonText}>Retry</Text>
+          </TouchableOpacity>
         </View>
       ) : (
         <ScrollView style={styles.categoriesContainer}>
@@ -171,6 +187,34 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  errorContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 32,
+  },
+  errorIcon: {
+    fontSize: 48,
+    marginBottom: 16,
+  },
+  errorText: {
+    fontSize: 16,
+    color: '#6B7280',
+    textAlign: 'center',
+    marginBottom: 24,
+    lineHeight: 24,
+  },
+  retryButton: {
+    backgroundColor: '#2563EB',
+    paddingHorizontal: 32,
+    paddingVertical: 12,
+    borderRadius: 12,
+  },
+  retryButtonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '600',
   },
   categoriesContainer: {
     flex: 1,
