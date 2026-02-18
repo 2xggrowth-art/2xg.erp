@@ -218,74 +218,9 @@ export class PaymentsReceivedService {
         throw error;
       }
 
-      let allPayments = data || [];
-
-      // Also fetch POS invoice payments
-      if (filters?.include_pos !== 'false') {
-        try {
-          console.log('[PaymentsReceived] Fetching POS invoices...');
-          let posQuery = supabase
-            .from('invoices')
-            .select('id, invoice_number, customer_name, invoice_date, total_amount, status, notes, customer_notes, created_at')
-            .eq('subject', 'POS')
-            .order('created_at', { ascending: false });
-
-          if (filters?.from_date) {
-            posQuery = posQuery.gte('invoice_date', filters.from_date);
-          }
-          if (filters?.to_date) {
-            posQuery = posQuery.lte('invoice_date', filters.to_date);
-          }
-
-          const { data: posInvoices, error: posErr } = await posQuery;
-          console.log('[PaymentsReceived] POS invoices found:', posInvoices?.length || 0, posErr ? `Error: ${posErr.message}` : '');
-
-          if (posInvoices && posInvoices.length > 0) {
-            const posPayments = posInvoices.map((inv: any) => {
-              // Extract payment mode from customer_notes field (POS stores it there)
-              const notesStr = inv.customer_notes || inv.notes || '';
-              const modeMatch = notesStr.match(/Payment Mode:\s*([^\n]+)/i);
-              const paymentMode = modeMatch ? modeMatch[1].trim() : 'POS';
-
-              return {
-                id: `pos-${inv.id}`,
-                payment_number: inv.invoice_number,
-                customer_name: inv.customer_name || 'Walk-in Customer',
-                reference_number: null,
-                payment_date: inv.invoice_date,
-                payment_mode: paymentMode,
-                amount_received: inv.total_amount,
-                status: inv.status,
-                notes: inv.notes,
-                created_at: inv.created_at,
-                is_pos: true,
-                invoice_id: inv.id,
-                invoice_number: inv.invoice_number,
-              };
-            });
-
-            // Filter POS payments by payment_mode if specified (case-insensitive, partial match)
-            const filteredPosPayments = filters?.payment_mode
-              ? posPayments.filter((p: any) => {
-                  const mode = p.payment_mode.toLowerCase();
-                  const filterMode = filters.payment_mode!.toLowerCase();
-                  return mode === filterMode || mode.includes(filterMode) || filterMode.includes(mode);
-                })
-              : posPayments;
-
-            allPayments = [...allPayments, ...filteredPosPayments];
-            // Sort combined by date descending
-            allPayments.sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
-          }
-        } catch (posError) {
-          console.error('Error fetching POS payments:', posError);
-          // Continue without POS payments
-        }
-      }
-
       return {
-        payments: allPayments,
-        total: (count || 0) + (allPayments.length - (data || []).length),
+        payments: data || [],
+        total: count || 0,
         page,
         limit
       };

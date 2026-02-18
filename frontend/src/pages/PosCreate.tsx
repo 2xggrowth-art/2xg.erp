@@ -6,6 +6,7 @@ import { itemsService, Item } from '../services/items.service';
 import { salespersonService, Salesperson } from '../services/salesperson.service';
 import { invoicesService } from '../services/invoices.service';
 import { posSessionsService, PosSession } from '../services/pos-sessions.service';
+import { paymentsReceivedService } from '../services/payments-received.service';
 import { binLocationService } from '../services/binLocation.service';
 import SplitPaymentModal from '../components/pos/SplitPaymentModal';
 
@@ -588,6 +589,23 @@ const PosCreate: React.FC = () => {
       const response = await invoicesService.createInvoice(invoiceData);
 
       if (response.success) {
+        // Create payment received record for tracking
+        try {
+          await paymentsReceivedService.createPaymentReceived({
+            customer_id: selectedCustomer?.id || undefined,
+            customer_name: selectedCustomer?.customer_name || 'Walk-in Customer',
+            payment_date: new Date().toISOString().split('T')[0],
+            payment_mode: mode,
+            amount_received: amountPaid,
+            reference_number: refNumber || undefined,
+            invoice_id: response.data?.id || undefined,
+            invoice_number: invoiceNumber,
+            notes: `POS Sale`,
+          });
+        } catch (payErr) {
+          console.error('Error creating payment received record:', payErr);
+        }
+
         setGeneratedInvoice({
           ...invoiceData,
           id: response.data?.id,
@@ -716,6 +734,25 @@ const PosCreate: React.FC = () => {
       const response = await invoicesService.createInvoice(invoiceData);
 
       if (response.success) {
+        // Create payment received records for each split payment
+        for (const payment of payments) {
+          try {
+            await paymentsReceivedService.createPaymentReceived({
+              customer_id: selectedCustomer?.id || undefined,
+              customer_name: selectedCustomer?.customer_name || 'Walk-in Customer',
+              payment_date: new Date().toISOString().split('T')[0],
+              payment_mode: payment.mode,
+              amount_received: payment.amount,
+              reference_number: payment.reference || undefined,
+              invoice_id: response.data?.id || undefined,
+              invoice_number: invoiceNumber,
+              notes: `POS Sale (Split Payment)`,
+            });
+          } catch (payErr) {
+            console.error('Error creating split payment received record:', payErr);
+          }
+        }
+
         setGeneratedInvoice({
           ...invoiceData,
           id: response.data?.id,
