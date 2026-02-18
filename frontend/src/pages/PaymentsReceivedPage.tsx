@@ -160,9 +160,11 @@ const PaymentsReceivedPage = () => {
     const modeLower = mode.toLowerCase();
     let style = { bg: 'bg-slate-100', text: 'text-slate-700' };
     if (modeLower === 'cash') style = { bg: 'bg-green-100', text: 'text-green-700' };
-    else if (modeLower.includes('hdfc')) style = { bg: 'bg-blue-100', text: 'text-blue-700' };
-    else if (modeLower.includes('icici')) style = { bg: 'bg-purple-100', text: 'text-purple-700' };
-    else if (modeLower.includes('credit')) style = { bg: 'bg-orange-100', text: 'text-orange-700' };
+    else if (modeLower.includes('bajaj')) style = { bg: 'bg-indigo-100', text: 'text-indigo-700' };
+    else if (modeLower.includes('d/b credit')) style = { bg: 'bg-teal-100', text: 'text-teal-700' };
+    else if (modeLower === 'hdfc' || modeLower === 'hdfc bank') style = { bg: 'bg-blue-100', text: 'text-blue-700' };
+    else if (modeLower === 'icici' || modeLower === 'icici bank') style = { bg: 'bg-purple-100', text: 'text-purple-700' };
+    else if (modeLower.includes('credit sale')) style = { bg: 'bg-orange-100', text: 'text-orange-700' };
     return (
       <span className={`px-3 py-1 rounded-full text-xs font-medium ${style.bg} ${style.text}`}>
         {mode}
@@ -253,8 +255,11 @@ const PaymentsReceivedPage = () => {
               >
                 <option value="all">All Payment Modes</option>
                 <option value="Cash">Cash</option>
-                <option value="HDFC">HDFC</option>
-                <option value="ICICI">ICICI</option>
+                <option value="HDFC">HDFC Bank</option>
+                <option value="ICICI">ICICI Bank</option>
+                <option value="BAJAJ/ICICI">BAJAJ / ICICI Bank</option>
+                <option value="D/B CREDIT CARD / EM">D/B Credit Card / EM</option>
+                <option value="CREDIT SALE">Credit Sale</option>
               </select>
               <select
                 value={filterPeriod}
@@ -408,7 +413,7 @@ const PaymentsReceivedPage = () => {
         </div>
 
         {/* Summary Cards */}
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <div className="bg-white rounded-lg shadow-md p-4">
             <div className="text-sm text-slate-600 mb-1">Total Received</div>
             <div className="text-xl font-bold text-slate-800">
@@ -424,25 +429,39 @@ const PaymentsReceivedPage = () => {
             <div className="text-xs text-slate-500 mt-1">{payments.filter(p => p.payment_mode.toLowerCase() === 'cash').length} payments</div>
           </div>
           <div className="bg-white rounded-lg shadow-md p-4 border-l-4 border-blue-500">
-            <div className="text-sm text-blue-700 mb-1 font-medium">HDFC</div>
+            <div className="text-sm text-blue-700 mb-1 font-medium">HDFC Bank</div>
             <div className="text-xl font-bold text-blue-700">
-              {formatCurrency(payments.filter(p => p.payment_mode.toLowerCase().includes('hdfc')).reduce((sum, p) => sum + p.amount_received, 0))}
+              {formatCurrency(payments.filter(p => p.payment_mode === 'HDFC' || p.payment_mode === 'HDFC BANK').reduce((sum, p) => sum + p.amount_received, 0))}
             </div>
-            <div className="text-xs text-slate-500 mt-1">{payments.filter(p => p.payment_mode.toLowerCase().includes('hdfc')).length} payments</div>
+            <div className="text-xs text-slate-500 mt-1">{payments.filter(p => p.payment_mode === 'HDFC' || p.payment_mode === 'HDFC BANK').length} payments</div>
           </div>
           <div className="bg-white rounded-lg shadow-md p-4 border-l-4 border-purple-500">
-            <div className="text-sm text-purple-700 mb-1 font-medium">ICICI</div>
+            <div className="text-sm text-purple-700 mb-1 font-medium">ICICI Bank</div>
             <div className="text-xl font-bold text-purple-700">
-              {formatCurrency(payments.filter(p => p.payment_mode.toLowerCase().includes('icici')).reduce((sum, p) => sum + p.amount_received, 0))}
+              {formatCurrency(payments.filter(p => p.payment_mode === 'ICICI' || p.payment_mode === 'ICICI BANK').reduce((sum, p) => sum + p.amount_received, 0))}
             </div>
-            <div className="text-xs text-slate-500 mt-1">{payments.filter(p => p.payment_mode.toLowerCase().includes('icici')).length} payments</div>
+            <div className="text-xs text-slate-500 mt-1">{payments.filter(p => p.payment_mode === 'ICICI' || p.payment_mode === 'ICICI BANK').length} payments</div>
+          </div>
+          <div className="bg-white rounded-lg shadow-md p-4 border-l-4 border-indigo-500">
+            <div className="text-sm text-indigo-700 mb-1 font-medium">BAJAJ / ICICI Bank</div>
+            <div className="text-xl font-bold text-indigo-700">
+              {formatCurrency(payments.filter(p => p.payment_mode === 'BAJAJ/ICICI').reduce((sum, p) => sum + p.amount_received, 0))}
+            </div>
+            <div className="text-xs text-slate-500 mt-1">{payments.filter(p => p.payment_mode === 'BAJAJ/ICICI').length} payments</div>
+          </div>
+          <div className="bg-white rounded-lg shadow-md p-4 border-l-4 border-teal-500">
+            <div className="text-sm text-teal-700 mb-1 font-medium">D/B Credit Card / EM</div>
+            <div className="text-xl font-bold text-teal-700">
+              {formatCurrency(payments.filter(p => p.payment_mode === 'D/B CREDIT CARD / EM').reduce((sum, p) => sum + p.amount_received, 0))}
+            </div>
+            <div className="text-xs text-slate-500 mt-1">{payments.filter(p => p.payment_mode === 'D/B CREDIT CARD / EM').length} payments</div>
           </div>
           <div className="bg-white rounded-lg shadow-md p-4 border-l-4 border-orange-500">
             <div className="text-sm text-orange-700 mb-1 font-medium">Credit Sale</div>
             <div className="text-xl font-bold text-orange-700">
-              {formatCurrency(payments.filter(p => p.payment_mode.toLowerCase().includes('credit')).reduce((sum, p) => sum + p.amount_received, 0))}
+              {formatCurrency(payments.filter(p => p.payment_mode.toLowerCase().includes('credit sale')).reduce((sum, p) => sum + p.amount_received, 0))}
             </div>
-            <div className="text-xs text-slate-500 mt-1">{payments.filter(p => p.payment_mode.toLowerCase().includes('credit')).length} payments</div>
+            <div className="text-xs text-slate-500 mt-1">{payments.filter(p => p.payment_mode.toLowerCase().includes('credit sale')).length} payments</div>
           </div>
         </div>
       </div>
