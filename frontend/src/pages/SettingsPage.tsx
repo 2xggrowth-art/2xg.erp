@@ -927,7 +927,6 @@ const SettingsPage = () => {
                               <option value="">None</option>
                               <option value="supervisor">Supervisor</option>
                               <option value="technician">Technician</option>
-                              <option value="warehouse_staff">Warehouse Staff</option>
                             </select>
                           </td>
                           <td className="px-6 py-4">
