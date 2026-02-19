@@ -9,6 +9,7 @@ export interface AuthenticatedRequest extends Request {
     userId: string;
     email: string;
     role: string;
+    buildlineRole?: string;
     isMobile?: boolean;
     employeeName?: string;
     branch?: string;
@@ -76,17 +77,38 @@ export const authMiddleware = async (
     }
 
     // Web user - verify against users table
-    const { data: user, error } = await supabaseAdmin
+    let user: any = null;
+    let buildlineRole: string | null = null;
+
+    // First try with buildline_role (if migration 029 was applied)
+    const { data: userData, error: userError } = await supabaseAdmin
       .from('users')
-      .select('id, status')
+      .select('id, status, buildline_role')
       .eq('id', decoded.userId)
       .single();
 
-    if (error || !user) {
+    if (userError && userError.message?.includes('buildline_role')) {
+      // buildline_role column doesn't exist yet — fallback without it
+      const { data: fallbackUser, error: fallbackError } = await supabaseAdmin
+        .from('users')
+        .select('id, status')
+        .eq('id', decoded.userId)
+        .single();
+      if (fallbackError || !fallbackUser) {
+        return res.status(401).json({
+          success: false,
+          error: 'Invalid token. User not found.'
+        });
+      }
+      user = fallbackUser;
+    } else if (userError || !userData) {
       return res.status(401).json({
         success: false,
         error: 'Invalid token. User not found.'
       });
+    } else {
+      user = userData;
+      buildlineRole = (userData as any).buildline_role || null;
     }
 
     if (user.status !== 'Active') {
@@ -97,7 +119,7 @@ export const authMiddleware = async (
     }
 
     // Attach user info to request
-    req.user = decoded;
+    req.user = { ...decoded, buildlineRole };
     next();
   } catch (error: any) {
     if (error.name === 'JsonWebTokenError') {
@@ -142,5 +164,32 @@ export const requireRole = (...roles: string[]) => {
     }
 
     next();
+  };
+};
+
+/**
+ * Buildline role-based authorization middleware.
+ * Checks buildlineRole field. Admin ERP role always has access.
+ */
+export const requireBuildlineRole = (...roles: string[]) => {
+  return (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+    if (!req.user) {
+      return res.status(401).json({
+        success: false,
+        error: 'Authentication required.'
+      });
+    }
+
+    // Admin always has access to Buildline
+    if (req.user.role === 'Admin') return next();
+
+    if (req.user.buildlineRole && roles.includes(req.user.buildlineRole)) {
+      return next();
+    }
+
+    return res.status(403).json({
+      success: false,
+      error: `Access denied. Required Buildline role: ${roles.join(' or ')}`
+    });
   };
 };
