@@ -6,7 +6,6 @@ import * as SecureStore from 'expo-secure-store';
 
 // Screens
 import LoginScreen from './src/screens/LoginScreen';
-import HomeScreen from './src/screens/HomeScreen';
 import CaptureScreen from './src/screens/CaptureScreen';
 import AmountScreen from './src/screens/AmountScreen';
 import CategoryScreen from './src/screens/CategoryScreen';
@@ -17,7 +16,6 @@ import SuccessScreen from './src/screens/SuccessScreen';
 // Types
 export type RootStackParamList = {
   Login: undefined;
-  Home: undefined;
   Capture: undefined;
   Amount: { imageUri?: string };
   Category: { imageUri?: string; amount: number };
@@ -110,10 +108,6 @@ export default function App() {
             <Stack.Screen name="Login" component={LoginScreen} />
           ) : (
             <>
-              {/* Home is the new landing page */}
-              <Stack.Screen name="Home" component={HomeScreen} />
-
-              {/* Expense Flow */}
               <Stack.Screen name="Capture" component={CaptureScreen} />
               <Stack.Screen name="Amount" component={AmountScreen} />
               <Stack.Screen name="Category" component={CategoryScreen} />

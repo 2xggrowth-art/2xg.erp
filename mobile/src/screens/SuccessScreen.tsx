@@ -16,7 +16,7 @@ export default function SuccessScreen({ navigation, route }: Props) {
 
   const handleAddAnother = () => {
     Vibration.vibrate(10);
-    navigation.replace('Home');
+    navigation.replace('Capture');
   };
 
   return (
