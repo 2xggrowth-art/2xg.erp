@@ -1,6 +1,6 @@
 import React, { useState, ChangeEvent, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Search, User, X, Plus, Edit2, ShoppingCart, Package, Trash2, Check, Printer, Clock, DollarSign, TrendingUp, MapPin, ArrowDownCircle, ArrowUpCircle } from 'lucide-react';
+import { Search, User, X, Plus, Edit2, ShoppingCart, Package, Trash2, Check, Printer, Clock, DollarSign, TrendingUp, MapPin, ArrowDownCircle, ArrowUpCircle, Repeat } from 'lucide-react';
 import { customersService, Customer, CreateCustomerData } from '../services/customers.service';
 import { itemsService, Item } from '../services/items.service';
 import { salespersonService, Salesperson } from '../services/salesperson.service';
@@ -8,6 +8,7 @@ import { invoicesService } from '../services/invoices.service';
 import { posSessionsService, PosSession } from '../services/pos-sessions.service';
 import { paymentsReceivedService } from '../services/payments-received.service';
 import { binLocationService } from '../services/binLocation.service';
+import { exchangesService, ExchangeItem } from '../services/exchanges.service';
 import SplitPaymentModal from '../components/pos/SplitPaymentModal';
 
 // Define the shape of a Cart Item
@@ -36,6 +37,7 @@ interface CartItem {
   cost_price: number;
   bin_allocations?: BinAllocation[];
   available_bins?: AvailableBin[];
+  exchange_item_id?: string;
 }
 
 interface HeldCart {
@@ -99,6 +101,12 @@ const PosCreate: React.FC = () => {
   const [selectedPaymentMode, setSelectedPaymentMode] = useState<'Cash' | 'HDFC' | 'ICICI' | 'BAJAJ/ICICI' | 'D/B CREDIT CARD / EM' | 'CREDIT SALE' | ''>('');
   const [referenceNumber, setReferenceNumber] = useState('');
   const [paidAmount, setPaidAmount] = useState<number>(0);
+
+  // Exchange items states
+  const [showExchangeModal, setShowExchangeModal] = useState(false);
+  const [exchangeItems, setExchangeItems] = useState<ExchangeItem[]>([]);
+  const [exchangeLoading, setExchangeLoading] = useState(false);
+  const [exchangeSearch, setExchangeSearch] = useState('');
 
   // Discount states
   const [showDiscountModal, setShowDiscountModal] = useState(false);
@@ -325,6 +333,43 @@ const PosCreate: React.FC = () => {
     setCart([...cart, cartItem]);
     setShowItemModal(false);
     setItemSearch('');
+  };
+
+  const fetchExchangeItems = async () => {
+    try {
+      setExchangeLoading(true);
+      const response = await exchangesService.getAll({ status: 'listed' });
+      if (response.success) {
+        setExchangeItems(response.data || []);
+      }
+    } catch (error) {
+      console.error('Error fetching exchange items:', error);
+    } finally {
+      setExchangeLoading(false);
+    }
+  };
+
+  const handleSelectExchangeItem = (exchangeItem: ExchangeItem) => {
+    // Check if already in cart
+    if (cart.some(c => c.exchange_item_id === exchangeItem.id)) {
+      alert('This exchange item is already in the cart');
+      return;
+    }
+
+    const cartItem: CartItem = {
+      id: `cart-ex-${Date.now()}-${exchangeItem.id}`,
+      item_id: '',
+      name: `[EXCHANGE] ${exchangeItem.item_name}`,
+      sku: 'EXCHANGE',
+      tax_rate: 0,
+      qty: 1,
+      rate: exchangeItem.estimated_price || 0,
+      cost_price: 0,
+      exchange_item_id: exchangeItem.id,
+    };
+    setCart([...cart, cartItem]);
+    setShowExchangeModal(false);
+    setExchangeSearch('');
   };
 
   const handleBinChange = (cartItemId: string, binId: string) => {
@@ -606,6 +651,17 @@ const PosCreate: React.FC = () => {
           console.error('Error creating payment received record:', payErr);
         }
 
+        // Mark exchange items in cart as sold
+        for (const cartItem of cart) {
+          if (cartItem.exchange_item_id) {
+            try {
+              await exchangesService.updateStatus(cartItem.exchange_item_id, 'sold');
+            } catch (exErr) {
+              console.error('Error marking exchange item as sold:', exErr);
+            }
+          }
+        }
+
         setGeneratedInvoice({
           ...invoiceData,
           id: response.data?.id,
@@ -750,6 +806,17 @@ const PosCreate: React.FC = () => {
             });
           } catch (payErr) {
             console.error('Error creating split payment received record:', payErr);
+          }
+        }
+
+        // Mark exchange items in cart as sold
+        for (const cartItem of cart) {
+          if (cartItem.exchange_item_id) {
+            try {
+              await exchangesService.updateStatus(cartItem.exchange_item_id, 'sold');
+            } catch (exErr) {
+              console.error('Error marking exchange item as sold:', exErr);
+            }
           }
         }
 
@@ -1155,7 +1222,11 @@ const PosCreate: React.FC = () => {
                         <div className="col-span-5">
                           <div className="font-semibold text-sm text-gray-800">{item.name}</div>
                           <div className="text-xs text-gray-500 mt-1">
-                            SKU: {item.sku} | Tax: {item.tax_rate}%
+                            {item.exchange_item_id ? (
+                              <span className="px-1.5 py-0.5 bg-orange-100 text-orange-700 rounded text-[10px] font-medium">2ND HAND EXCHANGE</span>
+                            ) : (
+                              <>SKU: {item.sku} | Tax: {item.tax_rate}%</>
+                            )}
                           </div>
                           {item.available_bins && item.available_bins.length > 0 && (
                             <div className="flex items-center gap-1 mt-1">
@@ -1185,7 +1256,8 @@ const PosCreate: React.FC = () => {
                             min="1"
                             value={item.qty}
                             onChange={(e: ChangeEvent<HTMLInputElement>) => handleQtyChange(item.id, e.target.value)}
-                            className="w-16 bg-gray-50 border border-gray-300 rounded px-2 py-1 text-center text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                            disabled={!!item.exchange_item_id}
+                            className={`w-16 bg-gray-50 border border-gray-300 rounded px-2 py-1 text-center text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent ${item.exchange_item_id ? 'opacity-60 cursor-not-allowed' : ''}`}
                           />
                         </div>
                         <div className="col-span-2 text-right">
@@ -1231,6 +1303,12 @@ const PosCreate: React.FC = () => {
                   className="px-4 py-2 bg-white border border-gray-300 hover:bg-gray-100 text-gray-700 rounded-lg text-xs font-medium flex items-center gap-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <Package size={14} /> Hold Cart [F7]
+                </button>
+                <button
+                  onClick={() => { setShowExchangeModal(true); fetchExchangeItems(); }}
+                  className="px-4 py-2 bg-orange-50 border border-orange-300 hover:bg-orange-100 text-orange-700 rounded-lg text-xs font-medium flex items-center gap-2 transition-colors"
+                >
+                  <Repeat size={14} /> Exchange Items [F8]
                 </button>
               </div>
             </>
@@ -2303,6 +2381,101 @@ const PosCreate: React.FC = () => {
                 >
                   {cashMovementLoading ? 'Processing...' : `Record Cash ${cashMovementType === 'in' ? 'In' : 'Out'}`}
                 </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Exchange Items Modal */}
+        {showExchangeModal && (
+          <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+            <div className="bg-white rounded-xl w-[600px] max-h-[700px] flex flex-col shadow-2xl">
+              <div className="flex justify-between items-center p-5 border-b border-gray-200">
+                <div>
+                  <h2 className="text-xl font-bold text-gray-800">Exchange Items</h2>
+                  <p className="text-xs text-gray-500 mt-1">Select listed 2nd hand items to add to cart</p>
+                </div>
+                <button onClick={() => { setShowExchangeModal(false); setExchangeSearch(''); }}>
+                  <X size={22} className="text-gray-400 hover:text-gray-600 cursor-pointer transition-colors" />
+                </button>
+              </div>
+              <div className="p-5 border-b border-gray-200">
+                <div className="relative">
+                  <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                  <input
+                    type="text"
+                    placeholder="Search exchange items by name..."
+                    value={exchangeSearch}
+                    onChange={(e) => setExchangeSearch(e.target.value)}
+                    className="w-full bg-gray-50 border border-gray-300 rounded-lg pl-10 pr-4 py-2.5 text-sm text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    autoFocus
+                  />
+                </div>
+              </div>
+              <div className="flex-grow overflow-y-auto p-3">
+                {exchangeLoading ? (
+                  <div className="flex items-center justify-center py-12">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-orange-600" />
+                  </div>
+                ) : exchangeItems.filter(ei =>
+                  ei.item_name.toLowerCase().includes(exchangeSearch.toLowerCase()) ||
+                  (ei.customer_name || '').toLowerCase().includes(exchangeSearch.toLowerCase())
+                ).length === 0 ? (
+                  <div className="text-center py-12 text-gray-400">
+                    <Repeat size={48} className="mx-auto mb-3 text-gray-300" />
+                    <p className="text-sm mb-1">No listed exchange items found</p>
+                    <p className="text-xs text-gray-400">Items must be marked as "Listed" in the Exchanges page first</p>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {exchangeItems
+                      .filter(ei =>
+                        ei.item_name.toLowerCase().includes(exchangeSearch.toLowerCase()) ||
+                        (ei.customer_name || '').toLowerCase().includes(exchangeSearch.toLowerCase())
+                      )
+                      .map((exchangeItem) => {
+                        const alreadyInCart = cart.some(c => c.exchange_item_id === exchangeItem.id);
+                        return (
+                          <div
+                            key={exchangeItem.id}
+                            onClick={() => !alreadyInCart && handleSelectExchangeItem(exchangeItem)}
+                            className={`p-4 border rounded-lg transition-colors flex justify-between items-center ${
+                              alreadyInCart
+                                ? 'border-gray-200 bg-gray-50 cursor-not-allowed opacity-60'
+                                : 'border-gray-200 hover:border-orange-300 hover:bg-orange-50 cursor-pointer'
+                            }`}
+                          >
+                            <div>
+                              <div className="font-semibold text-gray-800 text-sm">{exchangeItem.item_name}</div>
+                              <div className="flex items-center gap-2 mt-1">
+                                <span className={`px-1.5 py-0.5 text-[10px] font-medium rounded-full ${
+                                  exchangeItem.condition === 'good' ? 'bg-green-100 text-green-700' :
+                                  exchangeItem.condition === 'ok' ? 'bg-yellow-100 text-yellow-700' :
+                                  'bg-red-100 text-red-700'
+                                }`}>
+                                  {exchangeItem.condition.toUpperCase()}
+                                </span>
+                                {exchangeItem.customer_name && (
+                                  <span className="text-xs text-gray-500">From: {exchangeItem.customer_name}</span>
+                                )}
+                              </div>
+                              {alreadyInCart && (
+                                <div className="text-xs text-blue-600 mt-1 font-medium">Already in cart</div>
+                              )}
+                            </div>
+                            <div className="text-right">
+                              <div className="font-bold text-gray-900">
+                                {exchangeItem.estimated_price != null
+                                  ? `₹${exchangeItem.estimated_price.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`
+                                  : '₹0.00'}
+                              </div>
+                              <div className="text-[10px] text-orange-600 font-medium mt-0.5">EXCHANGE</div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                  </div>
+                )}
               </div>
             </div>
           </div>

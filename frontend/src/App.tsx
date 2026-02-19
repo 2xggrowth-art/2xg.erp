@@ -65,6 +65,7 @@ import TransferOrderDetailPage from './pages/TransferOrderDetailPage';
 import BinLocationsPage from './pages/BinLocationsPage';
 import BrandManufacturerManagementPage from './pages/BrandManufacturerManagementPage';
 import DamageReportsPage from './pages/DamageReportsPage';
+import ExchangesPage from './pages/ExchangesPage';
 import StockCountPage from './pages/StockCountPage';
 
 function App() {
@@ -173,6 +174,9 @@ function App() {
             <Route path="/search" element={<ProtectedRoute><DashboardLayout><SearchPage /></DashboardLayout></ProtectedRoute>} />
             <Route path="/ai-reporting" element={<ProtectedRoute><DashboardLayout><AIReportingPage /></DashboardLayout></ProtectedRoute>} />
             <Route path="/settings" element={<ProtectedRoute><DashboardLayout><SettingsPage /></DashboardLayout></ProtectedRoute>} />
+
+            {/* Exchanges */}
+            <Route path="/inventory/exchanges" element={<ProtectedRoute><DashboardLayout><ExchangesPage /></DashboardLayout></ProtectedRoute>} />
 
             {/* Damage Reports */}
             <Route path="/inventory/damage-reports" element={<ProtectedRoute><DashboardLayout><DamageReportsPage /></DashboardLayout></ProtectedRoute>} />

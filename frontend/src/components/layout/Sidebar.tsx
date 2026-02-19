@@ -19,6 +19,7 @@ import {
   FolderPlus,
   Package,
   ArrowRightLeft,
+  Repeat,
   Building2,
   FileEdit,
   CreditCard,
@@ -147,6 +148,13 @@ const Sidebar = ({ isOpen, onClose }: SidebarProps) => {
                   >
                     <ArrowRightLeft size={16} />
                     <span>Transfer Order</span>
+                  </Link>
+                  <Link
+                    to="/inventory/exchanges"
+                    className="flex items-center gap-3 px-6 py-2 pl-12 hover:bg-slate-700 transition-colors text-sm text-slate-300 hover:text-white"
+                  >
+                    <Repeat size={16} />
+                    <span>Exchanges</span>
                   </Link>
                 </div>
               )}
