@@ -2,6 +2,7 @@ import express, { Request, Response, NextFunction } from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import morgan from 'morgan';
+import rateLimit from 'express-rate-limit';
 import dotenv from 'dotenv';
 import path from 'path';
 
@@ -43,6 +44,7 @@ import placementTasksRoutes from './routes/placementTasks.routes';
 import transferTasksRoutes from './routes/transferTasks.routes';
 import placementHistoryRoutes from './routes/placementHistory.routes';
 import adminRoutes from './routes/admin.routes';
+import exchangesRoutes from './routes/exchanges.routes';
 import { readOnlyGuard } from './middleware/readOnly.middleware';
 import { authMiddleware } from './middleware/auth.middleware';
 
@@ -55,25 +57,28 @@ const PORT = process.env.PORT || 5000;
 // Middleware
 app.use(helmet());
 
-// FIXED CORS: This function allows any localhost port automatically
+// CORS configuration — strict in production, permissive in development
+const isProduction = process.env.NODE_ENV === 'production';
 app.use(cors({
   origin: function (origin, callback) {
     // Allow requests with no origin (like mobile apps or curl)
     if (!origin) return callback(null, true);
 
     const allowedOrigins = [
-      'http://localhost:3000',
-      'http://localhost:3001',
-      'http://localhost:3002',
-      'http://localhost:3003',
+      'https://erp.2xg.in',
       'https://2xg-erp.vercel.app',
       'https://2xg-dashboard-pi.vercel.app',
-      'https://erp.2xg.in',
       process.env.FRONTEND_URL
     ];
 
-    // Check if origin is in the list OR is any localhost port OR local network
-    if (allowedOrigins.indexOf(origin) !== -1 || origin.startsWith('http://localhost:') || origin.startsWith('http://192.168.')) {
+    if (!isProduction) {
+      // In development, also allow localhost and local network
+      if (origin.startsWith('http://localhost:') || origin.startsWith('http://192.168.')) {
+        return callback(null, true);
+      }
+    }
+
+    if (allowedOrigins.indexOf(origin) !== -1) {
       callback(null, true);
     } else {
       callback(new Error('Not allowed by CORS'));
@@ -95,6 +100,23 @@ app.use(readOnlyGuard);
 // Serve uploaded files statically
 app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
 
+// Rate limiters for auth endpoints (brute force protection)
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 15, // 15 attempts per window
+  message: { success: false, error: 'Too many login attempts. Please try again after 15 minutes.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+const mobileAuthLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 10, // 10 attempts per window (stricter — 4-digit PIN)
+  message: { success: false, error: 'Too many login attempts. Please try again after 15 minutes.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
 // Health check route
 app.get('/api/health', (req: Request, res: Response) => {
   res.json({
@@ -105,9 +127,12 @@ app.get('/api/health', (req: Request, res: Response) => {
 });
 
 // Auth routes are public (login, verify handled internally)
+app.use('/api/auth/login', authLimiter);
+app.use('/api/auth/register', authLimiter);
 app.use('/api/auth', authRoutes);
 
 // Mobile auth routes are public (phone + PIN login for mobile app)
+app.use('/api/mobile-auth/login', mobileAuthLimiter);
 app.use('/api/mobile-auth', mobileAuthRoutes);
 
 // Apply auth middleware to all other API routes
@@ -149,6 +174,7 @@ app.use('/api/placement-tasks', placementTasksRoutes);
 app.use('/api/transfer-tasks', transferTasksRoutes);
 app.use('/api/placement-history', placementHistoryRoutes);
 app.use('/api/admin', adminRoutes);
+app.use('/api/exchanges', exchangesRoutes);
 
 // Health check endpoint for deployment platforms
 app.get('/health', (_req: Request, res: Response) => {
@@ -169,10 +195,14 @@ app.use((req: Request, res: Response) => {
 
 // Global error handler
 app.use((err: any, req: Request, res: Response, next: NextFunction) => {
-  console.error('Error:', err);
+  if (!isProduction) {
+    console.error('Error:', err);
+  } else {
+    console.error('Error:', err.message || 'Internal server error');
+  }
   res.status(err.status || 500).json({
     success: false,
-    error: err.message || 'Internal server error'
+    error: isProduction ? 'Internal server error' : (err.message || 'Internal server error')
   });
 });
 

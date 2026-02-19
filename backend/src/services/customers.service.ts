@@ -1,5 +1,17 @@
 import { supabaseAdmin } from '../config/supabase';
 
+// Indian tax ID format validators
+const GSTIN_REGEX = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/;
+const PAN_REGEX = /^[A-Z]{5}[0-9]{4}[A-Z]{1}$/;
+
+function validateGSTIN(gstin: string): boolean {
+  return GSTIN_REGEX.test(gstin.toUpperCase());
+}
+
+function validatePAN(pan: string): boolean {
+  return PAN_REGEX.test(pan.toUpperCase());
+}
+
 export class CustomersService {
   /**
    * Get all customers with optional filters
@@ -76,6 +88,16 @@ export class CustomersService {
       throw new Error('Customer name is required');
     }
 
+    // Validate GSTIN format if provided
+    if (customerData.gstin && !validateGSTIN(customerData.gstin)) {
+      throw new Error('Invalid GSTIN format. Expected: 22AAAAA0000A1Z5 (15 characters)');
+    }
+
+    // Validate PAN format if provided
+    if (customerData.pan && !validatePAN(customerData.pan)) {
+      throw new Error('Invalid PAN format. Expected: ABCDE1234F (10 characters)');
+    }
+
     // Build billing address from address fields if provided
     let billingAddress = customerData.billing_address || customerData.address || '';
     if (!billingAddress && (customerData.city || customerData.state || customerData.country)) {
@@ -113,6 +135,16 @@ export class CustomersService {
    * Update an existing customer
    */
   async updateCustomer(id: string, customerData: any) {
+    // Validate GSTIN format if provided
+    if (customerData.gstin && !validateGSTIN(customerData.gstin)) {
+      throw new Error('Invalid GSTIN format. Expected: 22AAAAA0000A1Z5 (15 characters)');
+    }
+
+    // Validate PAN format if provided
+    if (customerData.pan && !validatePAN(customerData.pan)) {
+      throw new Error('Invalid PAN format. Expected: ABCDE1234F (10 characters)');
+    }
+
     const updateData: any = {};
 
     // Map display_name to customer_name

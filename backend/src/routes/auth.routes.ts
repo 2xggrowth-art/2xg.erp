@@ -5,7 +5,10 @@ import { supabaseAdmin } from '../config/supabase';
 
 const router = Router();
 
-const JWT_SECRET: string = process.env.JWT_SECRET || 'your-secret-key-change-in-production';
+const JWT_SECRET: string = process.env.JWT_SECRET!;
+if (!JWT_SECRET) {
+  throw new Error('JWT_SECRET environment variable is required');
+}
 
 // Helper function to generate JWT token
 const generateToken = (userId: string, email: string, role: string): string => {
@@ -88,7 +91,7 @@ router.post('/login', async (req: Request, res: Response) => {
       }
     });
   } catch (error: any) {
-    console.error('Login error:', error);
+    console.error('Login error:', error.message);
     res.status(500).json({
       success: false,
       error: 'An error occurred during login'
@@ -146,7 +149,7 @@ router.post('/register', async (req: Request, res: Response) => {
       .single();
 
     if (createError) {
-      console.error('Database error creating user:', createError);
+      console.error('Database error creating user:', createError.message);
       throw createError;
     }
 
@@ -166,7 +169,7 @@ router.post('/register', async (req: Request, res: Response) => {
       }
     });
   } catch (error: any) {
-    console.error('Register error:', error);
+    console.error('Register error:', error.message);
     res.status(500).json({
       success: false,
       error: 'An error occurred during registration'
@@ -225,7 +228,7 @@ router.get('/verify', async (req: Request, res: Response) => {
       });
     }
 
-    console.error('Verify error:', error);
+    console.error('Verify error:', error.message);
     res.status(500).json({
       success: false,
       error: 'An error occurred during verification'
@@ -299,7 +302,7 @@ router.post('/change-password', async (req: Request, res: Response) => {
       message: 'Password changed successfully'
     });
   } catch (error: any) {
-    console.error('Change password error:', error);
+    console.error('Change password error:', error.message);
     res.status(500).json({
       success: false,
       error: 'An error occurred while changing password'
@@ -324,7 +327,7 @@ router.get('/users', async (req: Request, res: Response) => {
       data: users
     });
   } catch (error: any) {
-    console.error('Get users error:', error);
+    console.error('Get users error:', error.message);
     res.status(500).json({
       success: false,
       error: 'An error occurred while fetching users'
@@ -362,7 +365,7 @@ router.put('/users/:id', async (req: Request, res: Response) => {
       data: updatedUser
     });
   } catch (error: any) {
-    console.error('Update user error:', error);
+    console.error('Update user error:', error.message);
     res.status(500).json({
       success: false,
       error: 'An error occurred while updating user'
@@ -389,7 +392,7 @@ router.delete('/users/:id', async (req: Request, res: Response) => {
       message: 'User deleted successfully'
     });
   } catch (error: any) {
-    console.error('Delete user error:', error);
+    console.error('Delete user error:', error.message);
     res.status(500).json({
       success: false,
       error: 'An error occurred while deleting user'

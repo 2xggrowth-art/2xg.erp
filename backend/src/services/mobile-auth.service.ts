@@ -1,7 +1,11 @@
 import { supabaseAdmin } from '../config/supabase';
 import jwt from 'jsonwebtoken';
+import bcrypt from 'bcrypt';
 
-const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key';
+const JWT_SECRET = process.env.JWT_SECRET!;
+if (!JWT_SECRET) {
+  throw new Error('JWT_SECRET environment variable is required');
+}
 
 export class MobileAuthService {
   /**
@@ -23,8 +27,11 @@ export class MobileAuthService {
       throw new Error('Invalid phone number or PIN');
     }
 
-    // Verify PIN
-    if (user.pin !== pin) {
+    // Verify PIN (supports both hashed and legacy plain-text PINs)
+    const isPinValid = user.pin.startsWith('$2')
+      ? await bcrypt.compare(pin, user.pin)
+      : user.pin === pin;
+    if (!isPinValid) {
       throw new Error('Invalid phone number or PIN');
     }
 
@@ -105,11 +112,14 @@ export class MobileAuthService {
   }) {
     const cleanPhone = userData.phone_number.replace(/[\s\-]/g, '').replace(/^\+91/, '');
 
+    // Hash PIN before storing
+    const hashedPin = await bcrypt.hash(userData.pin, 10);
+
     const { data, error } = await supabaseAdmin
       .from('mobile_users')
       .insert({
         phone_number: cleanPhone,
-        pin: userData.pin,
+        pin: hashedPin,
         employee_name: userData.employee_name,
         employee_id: userData.employee_id || null,
         branch: userData.branch || 'Head Office',
@@ -136,9 +146,12 @@ export class MobileAuthService {
       throw new Error('PIN must be 4 digits');
     }
 
+    // Hash PIN before storing
+    const hashedPin = await bcrypt.hash(newPin, 10);
+
     const { data, error } = await supabaseAdmin
       .from('mobile_users')
-      .update({ pin: newPin, updated_at: new Date().toISOString() })
+      .update({ pin: hashedPin, updated_at: new Date().toISOString() })
       .eq('id', userId)
       .select()
       .single();

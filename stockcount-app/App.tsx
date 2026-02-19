@@ -66,6 +66,12 @@ const EVIDENCE_TYPES: { key: EvidenceType; label: string }[] = [
   { key: 'no_barcode', label: 'No Barcode' }, { key: 'recount', label: 'Recount Evidence' },
 ];
 
+const EXCHANGE_CONDITIONS: { key: ExchangeCondition; label: string; color: string }[] = [
+  { key: 'good', label: 'Good', color: COLORS.success },
+  { key: 'ok', label: 'OK', color: COLORS.warning },
+  { key: 'bad', label: 'Bad', color: COLORS.danger },
+];
+
 // ============================================================================
 // SECTION 2: TYPES & INTERFACES
 // ============================================================================
@@ -74,6 +80,7 @@ type CountType = 'delivery' | 'audit';
 type DamageType = 'physical' | 'water' | 'electrical' | 'packaging' | 'mfg_defect' | 'other';
 type SeverityLevel = 'minor' | 'moderate' | 'severe' | 'total_loss';
 type EvidenceType = 'variance' | 'damaged' | 'wrong_item' | 'empty_shelf' | 'no_barcode' | 'recount';
+type ExchangeCondition = 'good' | 'ok' | 'bad';
 type TransferStatus = 'pending' | 'in_progress' | 'completed';
 type TransferUrgency = 'normal' | 'urgent';
 type PlacementStatus = 'pending' | 'placed' | 'transferred';
@@ -209,6 +216,23 @@ interface PlacementHistoryEntry {
   from_bin?: string; to_bin?: string;
   damage_type?: DamageType; severity?: SeverityLevel;
   user_name: string; timestamp: string; reference_number: string;
+}
+
+interface ExchangeItem {
+  id: string;
+  item_name: string;
+  condition: ExchangeCondition;
+  invoice_reference?: string;
+  customer_name?: string;
+  estimated_price?: number;
+  photo_base64?: string;
+  exchange_bin_id?: string;
+  received_by?: string;
+  received_by_name?: string;
+  status: 'received' | 'listed' | 'sold';
+  notes?: string;
+  created_at: string;
+  updated_at: string;
 }
 
 // Navigation
@@ -3984,6 +4008,166 @@ function EscalationsScreen({ navigation }: any) {
   );
 }
 
+// ExchangeDashboardScreen - List of exchange items
+function ExchangeDashboardScreen({ navigation }: any) {
+  const [items, setItems] = useState<ExchangeItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [filter, setFilter] = useState<'received' | 'listed' | 'sold'>('received');
+  const [refreshing, setRefreshing] = useState(false);
+
+  const fetchItems = useCallback(() => {
+    setLoading(true);
+    api.get(`/exchanges?status=${filter}`).then(res => setItems(res.data || res || []))
+      .catch(console.error).finally(() => { setLoading(false); setRefreshing(false); });
+  }, [filter]);
+
+  useFocusEffect(useCallback(() => { fetchItems(); }, [fetchItems]));
+
+  const conditionColor = (c: string) => c === 'good' ? COLORS.success : c === 'ok' ? COLORS.warning : COLORS.danger;
+
+  return (
+    <View style={styles.container}>
+      <View style={styles.screenHeader}>
+        <Text style={styles.screenHeaderTitle}>Exchange Items</Text>
+      </View>
+      <View style={styles.tabs}>
+        {(['received', 'listed', 'sold'] as const).map(f => (
+          <TouchableOpacity key={f} style={[styles.tab, filter === f && styles.tabActive]} onPress={() => setFilter(f)}>
+            <Text style={[styles.tabText, filter === f && styles.tabTextActive]}>{f.charAt(0).toUpperCase() + f.slice(1)}</Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+      {loading ? <View style={styles.centered}><ActivityIndicator size="large" color={COLORS.primary} /></View> : (
+        <FlatList data={items} keyExtractor={i => i.id}
+          contentContainerStyle={styles.listContent}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); fetchItems(); }} />}
+          ListEmptyComponent={<View style={styles.emptyState}><Text style={styles.emptyStateIcon}>🔄</Text><Text style={styles.emptyStateText}>No {filter} exchange items</Text></View>}
+          renderItem={({ item }) => (
+            <View style={[styles.binCard, { borderLeftWidth: 3, borderLeftColor: conditionColor(item.condition) }]}>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontSize: 15, fontWeight: '600', color: COLORS.gray900 }}>{item.item_name}</Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 4 }}>
+                    <View style={{ paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6, backgroundColor: conditionColor(item.condition) + '20' }}>
+                      <Text style={{ fontSize: 12, fontWeight: '600', color: conditionColor(item.condition) }}>{item.condition.toUpperCase()}</Text>
+                    </View>
+                    {item.estimated_price != null && (
+                      <Text style={{ fontSize: 13, fontWeight: '500', color: COLORS.gray700 }}>Rs. {item.estimated_price}</Text>
+                    )}
+                  </View>
+                  {item.customer_name ? <Text style={{ fontSize: 12, color: COLORS.gray500, marginTop: 4 }}>Customer: {item.customer_name}</Text> : null}
+                  <Text style={{ fontSize: 11, color: COLORS.gray400, marginTop: 2 }}>
+                    {item.received_by_name ? `By: ${item.received_by_name} • ` : ''}{item.created_at ? new Date(item.created_at).toLocaleDateString() : ''}
+                  </Text>
+                </View>
+                {item.photo_base64 ? (
+                  <Image source={{ uri: item.photo_base64 }} style={{ width: 50, height: 50, borderRadius: 8, marginLeft: 12 }} />
+                ) : null}
+              </View>
+            </View>
+          )}
+        />
+      )}
+      <TouchableOpacity
+        style={{ position: 'absolute', bottom: 24, right: 24, width: 56, height: 56, borderRadius: 28, backgroundColor: COLORS.primary, alignItems: 'center', justifyContent: 'center', shadowColor: COLORS.black, shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.25, shadowRadius: 4, elevation: 5 }}
+        onPress={() => navigation.navigate('ExchangeForm')}
+        activeOpacity={0.8}>
+        <Text style={{ fontSize: 28, color: COLORS.white, lineHeight: 32 }}>+</Text>
+      </TouchableOpacity>
+    </View>
+  );
+}
+
+// ExchangeFormScreen - Form to record a new exchange
+function ExchangeFormScreen({ navigation }: any) {
+  const [itemName, setItemName] = useState('');
+  const [condition, setCondition] = useState<ExchangeCondition>('good');
+  const [invoiceRef, setInvoiceRef] = useState('');
+  const [customerName, setCustomerName] = useState('');
+  const [estimatedPrice, setEstimatedPrice] = useState('');
+  const [notes, setNotes] = useState('');
+  const [photo, setPhoto] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+
+  const takePhoto = async () => {
+    const { status } = await ImagePicker.requestCameraPermissionsAsync();
+    if (status !== 'granted') { Alert.alert('Permission Required', 'Camera permission is needed to take photos'); return; }
+    const result = await ImagePicker.launchCameraAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images, quality: 0.5 });
+    if (!result.canceled && result.assets[0]) {
+      try {
+        const base64 = await FileSystem.readAsStringAsync(result.assets[0].uri, { encoding: FileSystem.EncodingType.Base64 });
+        setPhoto(`data:image/jpeg;base64,${base64}`);
+      } catch (e) { console.error('Error converting photo:', e); }
+    }
+  };
+
+  const handleSubmit = async () => {
+    if (!itemName.trim()) { Alert.alert('Required', 'Please enter the item name'); return; }
+    setSubmitting(true);
+    try {
+      const payload: any = {
+        item_name: itemName.trim(),
+        condition,
+        invoice_reference: invoiceRef.trim() || undefined,
+        customer_name: customerName.trim() || undefined,
+        estimated_price: estimatedPrice ? parseFloat(estimatedPrice) : undefined,
+        notes: notes.trim() || undefined,
+        photo_base64: photo || undefined,
+      };
+      const res = await api.post('/exchanges', payload);
+      if (!res.success) throw new Error(res.error || 'Failed to save exchange item');
+      Alert.alert('Success', 'Exchange item recorded', [{ text: 'OK', onPress: () => navigation.goBack() }]);
+    } catch (e: any) { Alert.alert('Error', e.message); }
+    finally { setSubmitting(false); }
+  };
+
+  return (
+    <View style={styles.container}>
+      <Header title="New Exchange" onBack={() => navigation.goBack()} />
+      <ScrollView style={styles.formContent} keyboardShouldPersistTaps="handled">
+        <Text style={styles.inputLabel}>Item Name *</Text>
+        <TextInput style={styles.formInput} value={itemName} onChangeText={setItemName} placeholder="e.g. Hero Sprint 26T" placeholderTextColor={COLORS.gray400} />
+
+        <Text style={styles.inputLabel}>Condition *</Text>
+        <ChipSelector options={EXCHANGE_CONDITIONS.map(c => ({ key: c.key, label: c.label, color: c.color }))} selected={condition} onSelect={(k) => setCondition(k as ExchangeCondition)} />
+
+        <Text style={[styles.inputLabel, { marginTop: 16 }]}>Photo</Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 16 }}>
+          {photo ? (
+            <View style={{ position: 'relative' }}>
+              <Image source={{ uri: photo }} style={{ width: 100, height: 100, borderRadius: 8 }} />
+              <TouchableOpacity onPress={() => setPhoto(null)} style={{ position: 'absolute', top: -6, right: -6, backgroundColor: COLORS.danger, borderRadius: 10, width: 20, height: 20, alignItems: 'center', justifyContent: 'center' }}>
+                <Text style={{ color: COLORS.white, fontSize: 12, fontWeight: '700' }}>x</Text>
+              </TouchableOpacity>
+            </View>
+          ) : (
+            <TouchableOpacity onPress={takePhoto} style={{ width: 100, height: 100, borderRadius: 8, borderWidth: 2, borderColor: COLORS.gray300, borderStyle: 'dashed', alignItems: 'center', justifyContent: 'center' }}>
+              <Text style={{ fontSize: 24, color: COLORS.gray400 }}>📷</Text>
+              <Text style={{ fontSize: 11, color: COLORS.gray400, marginTop: 4 }}>Take Photo</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+
+        <Text style={styles.inputLabel}>Invoice Reference</Text>
+        <TextInput style={styles.formInput} value={invoiceRef} onChangeText={setInvoiceRef} placeholder="Invoice or receipt number" placeholderTextColor={COLORS.gray400} />
+
+        <Text style={styles.inputLabel}>Customer Name</Text>
+        <TextInput style={styles.formInput} value={customerName} onChangeText={setCustomerName} placeholder="Customer name" placeholderTextColor={COLORS.gray400} />
+
+        <Text style={styles.inputLabel}>Estimated Price (Rs.)</Text>
+        <TextInput style={styles.formInput} value={estimatedPrice} onChangeText={setEstimatedPrice} keyboardType="numeric" placeholder="0" placeholderTextColor={COLORS.gray400} />
+
+        <Text style={styles.inputLabel}>Notes</Text>
+        <TextInput style={[styles.formInput, { height: 100, textAlignVertical: 'top' }]} value={notes} onChangeText={setNotes} placeholder="Any additional notes..." placeholderTextColor={COLORS.gray400} multiline />
+
+        <TouchableOpacity style={[styles.primaryBtn, { backgroundColor: COLORS.primary, marginBottom: 40, marginTop: 24 }]} onPress={handleSubmit} disabled={submitting}>
+          <Text style={styles.primaryBtnText}>{submitting ? 'Saving...' : 'Record Exchange'}</Text>
+        </TouchableOpacity>
+      </ScrollView>
+    </View>
+  );
+}
+
 // ============================================================================
 // SECTION 9: NAVIGATION
 // ============================================================================
@@ -3993,6 +4177,7 @@ function CounterTabs() {
     <Tab.Navigator screenOptions={{ headerShown: false, tabBarStyle: { backgroundColor: COLORS.white, borderTopColor: COLORS.gray200, height: 60, paddingBottom: 8 }, tabBarActiveTintColor: COLORS.primary, tabBarInactiveTintColor: COLORS.gray400 }}>
       <Tab.Screen name="Home" component={CounterDashboard} options={{ tabBarLabel: 'Home', tabBarIcon: () => <Text style={{ fontSize: 20 }}>🏠</Text> }} />
       <Tab.Screen name="History" component={CountHistoryScreen} options={{ tabBarLabel: 'History', tabBarIcon: () => <Text style={{ fontSize: 20 }}>📋</Text> }} />
+      <Tab.Screen name="Exchange" component={ExchangeDashboardScreen} options={{ tabBarLabel: 'Exchange', tabBarIcon: () => <Text style={{ fontSize: 20 }}>🔄</Text> }} />
       <Tab.Screen name="Profile" component={ProfileScreen} options={{ tabBarLabel: 'Profile', tabBarIcon: () => <Text style={{ fontSize: 20 }}>👤</Text> }} />
     </Tab.Navigator>
   );
@@ -4003,6 +4188,7 @@ function AdminTabs() {
     <Tab.Navigator screenOptions={{ headerShown: false, tabBarStyle: { backgroundColor: COLORS.white, borderTopColor: COLORS.gray200, height: 60, paddingBottom: 8 }, tabBarActiveTintColor: COLORS.primary, tabBarInactiveTintColor: COLORS.gray400 }}>
       <Tab.Screen name="Dashboard" component={AdminDashboard} options={{ tabBarLabel: 'Dashboard', tabBarIcon: () => <Text style={{ fontSize: 20 }}>📊</Text> }} />
       <Tab.Screen name="Approvals" component={ApprovalsListScreen} options={{ tabBarLabel: 'Approvals', tabBarIcon: () => <Text style={{ fontSize: 20 }}>✓</Text> }} />
+      <Tab.Screen name="Exchange" component={ExchangeDashboardScreen} options={{ tabBarLabel: 'Exchange', tabBarIcon: () => <Text style={{ fontSize: 20 }}>🔄</Text> }} />
       <Tab.Screen name="Profile" component={ProfileScreen} options={{ tabBarLabel: 'Profile', tabBarIcon: () => <Text style={{ fontSize: 20 }}>👤</Text> }} />
     </Tab.Navigator>
   );
@@ -4040,6 +4226,7 @@ function AppNavigator() {
             <Stack.Screen name="BinInventory" component={BinInventoryScreen} />
             <Stack.Screen name="FindBin" component={FindBinScreen} />
             <Stack.Screen name="DamageReport" component={DamageReportScreen} />
+            <Stack.Screen name="ExchangeForm" component={ExchangeFormScreen} />
             {/* New counter screens */}
             <Stack.Screen name="ManualEntry" component={ManualEntryScreen} />
             <Stack.Screen name="AuditReveal" component={AuditRevealScreen} />

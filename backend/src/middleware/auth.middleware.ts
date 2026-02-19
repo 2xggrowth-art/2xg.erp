@@ -113,7 +113,7 @@ export const authMiddleware = async (
       });
     }
 
-    console.error('Auth middleware error:', error);
+    console.error('Auth middleware error:', error.message);
     return res.status(500).json({
       success: false,
       error: 'Authentication error.'

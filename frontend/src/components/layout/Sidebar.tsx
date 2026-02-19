@@ -70,7 +70,7 @@ const Sidebar = ({ isOpen, onClose }: SidebarProps) => {
       )}
 
       <aside className={`
-        fixed lg:sticky lg:top-0 inset-y-0 left-0 z-30
+        fixed inset-y-0 left-0 z-30
         w-64 bg-slate-800 h-screen text-white flex-shrink-0 flex flex-col
         transition-transform duration-300 ease-in-out
         ${isOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}

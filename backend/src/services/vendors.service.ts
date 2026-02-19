@@ -1,5 +1,17 @@
 import { supabaseAdmin } from '../config/supabase';
 
+// Indian tax ID format validators
+const GSTIN_REGEX = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/;
+const PAN_REGEX = /^[A-Z]{5}[0-9]{4}[A-Z]{1}$/;
+
+function validateGSTIN(gstin: string): boolean {
+  return GSTIN_REGEX.test(gstin.toUpperCase());
+}
+
+function validatePAN(pan: string): boolean {
+  return PAN_REGEX.test(pan.toUpperCase());
+}
+
 export class VendorsService {
   /**
    * Get all vendors with optional filters
@@ -115,6 +127,11 @@ export class VendorsService {
     }
     notesText = notesText.trim();
 
+    // Validate PAN format if provided
+    if (vendorData.pan && !validatePAN(vendorData.pan)) {
+      throw new Error('Invalid PAN format. Expected: ABCDE1234F (10 characters)');
+    }
+
     // Only use columns that exist in the original schema
     const newVendor = {
       organization_id: org?.id,
@@ -149,6 +166,11 @@ export class VendorsService {
    * Update an existing vendor
    */
   async updateVendor(id: string, vendorData: any) {
+    // Validate PAN format if provided
+    if (vendorData.pan && !validatePAN(vendorData.pan)) {
+      throw new Error('Invalid PAN format. Expected: ABCDE1234F (10 characters)');
+    }
+
     const updateData: any = {};
 
     if (vendorData.display_name) updateData.supplier_name = vendorData.display_name;

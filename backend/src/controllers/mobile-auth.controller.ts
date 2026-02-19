@@ -28,7 +28,7 @@ export const mobileLogin = async (req: Request, res: Response) => {
       data: result
     });
   } catch (error: any) {
-    console.error('Mobile login error:', error);
+    console.error('Mobile login error:', error.message);
     res.status(401).json({
       success: false,
       error: error.message || 'Authentication failed'
@@ -108,7 +108,7 @@ export const createMobileUser = async (req: Request, res: Response) => {
       message: 'Mobile user created successfully'
     });
   } catch (error: any) {
-    console.error('Create mobile user error:', error);
+    console.error('Create mobile user error:', error.message);
     res.status(400).json({
       success: false,
       error: error.message || 'Failed to create user'
