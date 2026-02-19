@@ -227,7 +227,8 @@ const SettingsPage = () => {
         role: editUser.role,
         phone: editUser.phone,
         department: editUser.department,
-        status: editUser.status
+        status: editUser.status,
+        buildline_role: editUser.buildline_role
       });
 
       setUsers(users.map(u => u.id === updatedUser.id ? updatedUser : u));
@@ -875,6 +876,9 @@ const SettingsPage = () => {
                       Role
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Buildline
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Status
                     </th>
                     <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -912,6 +916,19 @@ const SettingsPage = () => {
                               {roles.map(role => (
                                 <option key={role.id} value={role.name}>{role.name}</option>
                               ))}
+                            </select>
+                          </td>
+                          <td className="px-6 py-4">
+                            <select
+                              value={editUser?.buildline_role || ''}
+                              onChange={(e) => setEditUser(editUser ? { ...editUser, buildline_role: e.target.value || null } : null)}
+                              className="w-full px-2 py-1 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 text-sm"
+                            >
+                              <option value="">None</option>
+                              <option value="supervisor">Supervisor</option>
+                              <option value="technician">Technician</option>
+                              <option value="qc_person">QC Person</option>
+                              <option value="warehouse_staff">Warehouse Staff</option>
                             </select>
                           </td>
                           <td className="px-6 py-4">
@@ -953,6 +970,15 @@ const SettingsPage = () => {
                           </td>
                           <td className="px-6 py-4 text-sm text-gray-600">{user.email}</td>
                           <td className="px-6 py-4 text-sm text-gray-600">{user.role}</td>
+                          <td className="px-6 py-4">
+                            {user.buildline_role ? (
+                              <span className="px-2 py-1 text-xs font-medium rounded-full bg-purple-100 text-purple-700">
+                                {user.buildline_role}
+                              </span>
+                            ) : (
+                              <span className="text-xs text-gray-400">-</span>
+                            )}
+                          </td>
                           <td className="px-6 py-4">
                             {isAdmin ? (
                               <button

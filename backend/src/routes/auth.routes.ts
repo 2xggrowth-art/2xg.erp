@@ -315,7 +315,7 @@ router.get('/users', async (req: Request, res: Response) => {
   try {
     const { data: users, error } = await supabaseAdmin
       .from('users')
-      .select('id, name, email, role, phone, department, status, last_login, created_at')
+      .select('id, name, email, role, phone, department, status, buildline_role, last_login, created_at')
       .order('created_at', { ascending: false });
 
     if (error) {
@@ -339,7 +339,7 @@ router.get('/users', async (req: Request, res: Response) => {
 router.put('/users/:id', async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    const { name, email, role, phone, department, status } = req.body;
+    const { name, email, role, phone, department, status, buildline_role } = req.body;
 
     const updates: any = {};
     if (name) updates.name = name;
@@ -348,12 +348,13 @@ router.put('/users/:id', async (req: Request, res: Response) => {
     if (phone !== undefined) updates.phone = phone;
     if (department !== undefined) updates.department = department;
     if (status) updates.status = status;
+    if (buildline_role !== undefined) updates.buildline_role = buildline_role || null;
 
     const { data: updatedUser, error } = await supabaseAdmin
       .from('users')
       .update(updates)
       .eq('id', id)
-      .select('id, name, email, role, phone, department, status')
+      .select('id, name, email, role, phone, department, status, buildline_role')
       .single();
 
     if (error) {

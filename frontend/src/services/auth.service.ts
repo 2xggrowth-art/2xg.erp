@@ -8,6 +8,7 @@ export interface User {
   phone?: string;
   department?: string;
   status: string;
+  buildline_role?: string | null;
 }
 
 export interface LoginResponse {
