@@ -927,7 +927,6 @@ const SettingsPage = () => {
                               <option value="">None</option>
                               <option value="supervisor">Supervisor</option>
                               <option value="technician">Technician</option>
-                              <option value="qc_person">QC Person</option>
                               <option value="warehouse_staff">Warehouse Staff</option>
                             </select>
                           </td>
