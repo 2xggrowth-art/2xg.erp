@@ -5,6 +5,7 @@ import morgan from 'morgan';
 import rateLimit from 'express-rate-limit';
 import dotenv from 'dotenv';
 import path from 'path';
+import { runScheduledCountGeneration } from './services/scheduleChecker.service';
 
 // Import routes
 import authRoutes from './routes/auth.routes';
@@ -214,6 +215,31 @@ if (process.env.VERCEL !== '1') {
     console.log(`\n🚀 2XG Dashboard API running on port ${PORT}`);
     console.log(`📊 Environment: ${process.env.NODE_ENV || 'development'}`);
     console.log(`🔗 Health check: http://localhost:${PORT}/api/health\n`);
+
+    // Schedule checker: run 30s after startup, then hourly
+    setTimeout(async () => {
+      try {
+        console.log('[ScheduleChecker] Running startup check...');
+        const result = await runScheduledCountGeneration();
+        console.log(`[ScheduleChecker] Startup: generated=${result.generated}, skipped=${result.skipped}`);
+        if (result.errors.length > 0) {
+          console.warn('[ScheduleChecker] Errors:', result.errors);
+        }
+      } catch (err) {
+        console.error('[ScheduleChecker] Startup check failed:', err);
+      }
+    }, 30000);
+
+    setInterval(async () => {
+      try {
+        const result = await runScheduledCountGeneration();
+        if (result.generated > 0) {
+          console.log(`[ScheduleChecker] Hourly: generated=${result.generated}`);
+        }
+      } catch (err) {
+        console.error('[ScheduleChecker] Hourly check failed:', err);
+      }
+    }, 60 * 60 * 1000);
   });
 
   // Handle graceful shutdown

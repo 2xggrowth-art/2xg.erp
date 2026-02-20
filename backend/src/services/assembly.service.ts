@@ -31,6 +31,9 @@ export class AssemblyService {
     serials: string[];
     model_sku: string;
     grn_reference: string;
+    item_name?: string;
+    item_color?: string;
+    item_size?: string;
   }): Promise<{ created: number; skipped: number; errors: string[] }> {
     let created = 0;
     let skipped = 0;
@@ -43,7 +46,10 @@ export class AssemblyService {
           barcode: serial,
           model_sku: data.model_sku,
           grn_reference: data.grn_reference,
-          current_status: 'inwarded'
+          current_status: 'inwarded',
+          item_name: data.item_name || null,
+          item_color: data.item_color || null,
+          item_size: data.item_size || null,
         });
 
       if (error) {
@@ -138,7 +144,10 @@ export class AssemblyService {
       p_technician_id: technicianId
     });
     if (error) throw error;
-    return data;
+
+    // item_name, item_color, item_size are now returned directly from the RPC
+    // (stored in assembly_journeys table via migration 032)
+    return data || [];
   }
 
   async getKanbanBoard(filters: { status?: string; location_id?: string; technician_id?: string; priority?: boolean }) {
@@ -417,10 +426,39 @@ export class AssemblyService {
 
   async getTechnicians() {
     const { data, error } = await supabaseAdmin
-      .from('users')
-      .select('id, name, email')
-      .eq('buildline_role', 'technician');
+      .from('mobile_users')
+      .select('id, employee_name, phone_number, role, is_active')
+      .in('role', ['technician', 'supervisor'])
+      .eq('is_active', true)
+      .order('employee_name');
     if (error) throw error;
-    return data;
+    return (data || []).map((u: any) => ({
+      id: u.id,
+      name: u.employee_name,
+      phone_number: u.phone_number,
+      buildline_role: u.role
+    }));
+  }
+
+  async createTechnician(data: { employee_name: string; phone_number: string; pin: string; role: string }) {
+    const bcrypt = require('bcrypt');
+    const cleanPhone = data.phone_number.replace(/[\s\-]/g, '').replace(/^\+91/, '');
+    const hashedPin = await bcrypt.hash(data.pin, 10);
+
+    const { data: user, error } = await supabaseAdmin
+      .from('mobile_users')
+      .insert({
+        phone_number: cleanPhone,
+        pin: hashedPin,
+        employee_name: data.employee_name,
+        role: data.role,
+        branch: 'Buildline',
+        is_active: true
+      })
+      .select()
+      .single();
+
+    if (error) throw error;
+    return user;
   }
 }

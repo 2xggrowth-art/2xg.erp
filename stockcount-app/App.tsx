@@ -923,6 +923,9 @@ const SetPINScreen = ({ navigation }: any) => {
 function CounterDashboard({ navigation }: any) {
   const { user, logout, activeModule } = useAuth();
   const [counts, setCounts] = useState<StockCount[]>([]);
+  const [availableCounts, setAvailableCounts] = useState<any[]>([]);
+  const [weekSchedule, setWeekSchedule] = useState<any>(null);
+  const [claimingId, setClaimingId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [selectedDay, setSelectedDay] = useState<string | null>(null);
@@ -931,10 +934,35 @@ function CounterDashboard({ navigation }: any) {
 
   const fetchData = async () => {
     try {
-      const res = await api.get(`/stock-counts?assigned_to=${user?.id}`);
-      if (res.success) setCounts(res.data || []);
+      const [countsRes, availableRes, scheduleRes] = await Promise.all([
+        api.get(`/stock-counts?assigned_to=${user?.id}`),
+        api.get('/stock-counts/available-today'),
+        api.get('/admin/schedule-status'),
+      ]);
+      if (countsRes.success) setCounts(countsRes.data || []);
+      if (availableRes.success) setAvailableCounts(availableRes.data || []);
+      if (scheduleRes.success) setWeekSchedule(scheduleRes.data || null);
     } catch (e) { console.error(e); }
     finally { setLoading(false); setRefreshing(false); }
+  };
+
+  const handleClaim = async (countId: string) => {
+    if (!user) return;
+    setClaimingId(countId);
+    try {
+      const res = await api.post(`/stock-counts/${countId}/claim`, { user_id: user.id, user_name: user.employee_name });
+      if (res.success) {
+        fetchData();
+      } else {
+        Alert.alert('Unavailable', res.error || 'This bin was already claimed');
+        fetchData();
+      }
+    } catch (e: any) {
+      Alert.alert('Unavailable', e.message || 'This bin was already claimed by another counter');
+      fetchData();
+    } finally {
+      setClaimingId(null);
+    }
   };
 
   useFocusEffect(useCallback(() => { fetchData(); }, []));
@@ -953,12 +981,24 @@ function CounterDashboard({ navigation }: any) {
   const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
   const now = new Date();
   const todayIndex = now.getDay();
-  const schedule = dayNames.map((name, i) => {
-    const diff = i - todayIndex;
-    const dayDate = new Date(now);
-    dayDate.setDate(now.getDate() + diff);
-    return { name, date: dayDate.toISOString().split('T')[0], status: (i === todayIndex ? 'today' : i < todayIndex ? 'done' : 'upcoming') as 'done' | 'today' | 'upcoming' };
-  });
+  const schedule = weekSchedule?.this_week
+    ? weekSchedule.this_week.map((day: any) => ({
+        name: day.day,
+        date: day.date,
+        status: (day.date === todayStr
+          ? 'today'
+          : day.completed_counts > 0
+            ? 'done'
+            : day.scheduled
+              ? 'upcoming'
+              : 'upcoming') as 'done' | 'today' | 'upcoming',
+      }))
+    : dayNames.map((name, i) => {
+        const diff = i - todayIndex;
+        const dayDate = new Date(now);
+        dayDate.setDate(now.getDate() + diff);
+        return { name, date: dayDate.toISOString().split('T')[0], status: (i === todayIndex ? 'today' : i < todayIndex ? 'done' : 'upcoming') as 'done' | 'today' | 'upcoming' };
+      });
 
   const getCountsForDay = (dateStr: string) => counts.filter(c => {
     const createdDate = c.created_at ? c.created_at.split('T')[0] : null;
@@ -1016,6 +1056,31 @@ function CounterDashboard({ navigation }: any) {
         </View>
 
         <ScheduleBanner days={schedule} selectedDay={selectedDay} onDayPress={handleDayPress} />
+
+        {/* Available Bins to Claim */}
+        {availableCounts.length > 0 && (
+          <View style={{ backgroundColor: COLORS.white, borderRadius: 12, padding: 16, marginBottom: 16 }}>
+            <Text style={{ fontSize: 14, fontWeight: '700', color: COLORS.gray800, marginBottom: 12 }}>Available Bins ({availableCounts.length})</Text>
+            {availableCounts.slice(0, 5).map((ac: any) => (
+              <View key={ac.id} style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: COLORS.gray100 }}>
+                <View style={{ flex: 1, marginRight: 12 }}>
+                  <Text style={{ fontSize: 14, fontWeight: '600', color: COLORS.gray800 }}>{ac.bin_code || 'Unknown Bin'}</Text>
+                  <Text style={{ fontSize: 12, color: COLORS.gray500, marginTop: 2 }}>{ac.location_name} {ac.total_items ? `• ${ac.total_items} items` : ''}</Text>
+                </View>
+                <TouchableOpacity
+                  style={{ backgroundColor: COLORS.primary, paddingHorizontal: 16, paddingVertical: 8, borderRadius: 8, opacity: claimingId === ac.id ? 0.6 : 1 }}
+                  onPress={() => handleClaim(ac.id)}
+                  disabled={claimingId === ac.id}
+                >
+                  <Text style={{ color: COLORS.white, fontSize: 13, fontWeight: '600' }}>{claimingId === ac.id ? 'Claiming...' : 'Claim'}</Text>
+                </TouchableOpacity>
+              </View>
+            ))}
+            {availableCounts.length > 5 && (
+              <Text style={{ fontSize: 12, color: COLORS.gray400, textAlign: 'center', marginTop: 8 }}>+{availableCounts.length - 5} more bins available</Text>
+            )}
+          </View>
+        )}
 
         {/* Active/Completed tabs */}
         <View style={styles.tabs}>

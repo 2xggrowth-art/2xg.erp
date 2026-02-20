@@ -14,6 +14,7 @@ export interface CreateStockCountData {
   count_type?: 'delivery' | 'audit';
   due_date?: string;
   notes?: string;
+  auto_generated?: boolean;
 }
 
 export interface UpdateItemCountData {
@@ -156,6 +157,7 @@ export class StockCountsService {
         due_date: data.due_date || null,
         notes: data.notes || null,
         status: 'pending',
+        auto_generated: data.auto_generated || false,
       })
       .select()
       .single();
@@ -498,5 +500,72 @@ export class StockCountsService {
       submitted_counts: counts?.filter(c => c.status === 'submitted').length || 0,
       avg_accuracy: Math.round(avgAccuracy * 100) / 100,
     };
+  }
+
+  /**
+   * Get available (unclaimed) auto-generated counts for today
+   */
+  async getAvailableToday() {
+    // Use IST date
+    const now = new Date();
+    const istOffset = 5.5 * 60 * 60 * 1000;
+    const istDate = new Date(now.getTime() + istOffset + now.getTimezoneOffset() * 60 * 1000);
+    const todayStr = istDate.toISOString().split('T')[0];
+
+    const { data, error } = await supabase
+      .from('stock_counts')
+      .select('*')
+      .eq('due_date', todayStr)
+      .is('assigned_to', null)
+      .eq('status', 'pending')
+      .eq('auto_generated', true)
+      .order('location_name')
+      .order('bin_code');
+
+    if (error) throw error;
+    return data || [];
+  }
+
+  /**
+   * Claim an unassigned count (counter picks a bin)
+   */
+  async claimCount(countId: string, userId: string, userName: string) {
+    // Check the count exists and is unclaimed
+    const { data: count, error: fetchError } = await supabase
+      .from('stock_counts')
+      .select('id, status, assigned_to')
+      .eq('id', countId)
+      .single();
+
+    if (fetchError) throw fetchError;
+    if (!count) throw new Error('Count not found');
+
+    if (count.assigned_to) {
+      throw new Error('This bin is already claimed by another counter');
+    }
+
+    if (count.status !== 'pending') {
+      throw new Error('This count is no longer available');
+    }
+
+    // Claim it: assign to user and start
+    const { data: updated, error } = await supabase
+      .from('stock_counts')
+      .update({
+        assigned_to: userId,
+        assigned_to_name: userName,
+        status: 'in_progress',
+        started_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', countId)
+      .is('assigned_to', null) // Double-check still unclaimed (race condition guard)
+      .select()
+      .single();
+
+    if (error) throw error;
+    if (!updated) throw new Error('This bin was already claimed by another counter');
+
+    return this.getStockCount(countId);
   }
 }

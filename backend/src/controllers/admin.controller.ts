@@ -36,6 +36,27 @@ export const adminController = {
     }
   },
 
+  async generateCounts(req: Request, res: Response) {
+    try {
+      const { runScheduledCountGeneration } = await import('../services/scheduleChecker.service');
+      const result = await runScheduledCountGeneration();
+      res.json({ success: true, data: result });
+    } catch (error: any) {
+      console.error('Error generating counts:', error);
+      res.status(500).json({ success: false, error: error.message || 'Failed to generate counts' });
+    }
+  },
+
+  async getScheduleStatus(req: Request, res: Response) {
+    try {
+      const status = await adminService.getScheduleStatus();
+      res.json({ success: true, data: status });
+    } catch (error: any) {
+      console.error('Error fetching schedule status:', error);
+      res.status(500).json({ success: false, error: error.message || 'Failed to fetch schedule status' });
+    }
+  },
+
   async getEscalations(req: Request, res: Response) {
     try {
       const escalations = await adminService.getEscalations();

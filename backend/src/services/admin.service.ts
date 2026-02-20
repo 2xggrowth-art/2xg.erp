@@ -133,6 +133,66 @@ export const adminService = {
     return { message: 'Schedules saved successfully' };
   },
 
+  // Get schedule status for the current week (used by mobile banner)
+  async getScheduleStatus() {
+    const schedules = await this.getSchedules();
+    const now = new Date();
+    // IST timezone
+    const istOffset = 5.5 * 60 * 60 * 1000;
+    const istDate = new Date(now.getTime() + istOffset + now.getTimezoneOffset() * 60 * 1000);
+    const todayStr = istDate.toISOString().split('T')[0];
+    const todayDayIndex = istDate.getDay();
+
+    const dayLabels = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+    // Build 7 days of the current week (Sun-Sat)
+    const weekStart = new Date(istDate);
+    weekStart.setDate(istDate.getDate() - todayDayIndex); // Go back to Sunday
+
+    const weekDates: string[] = [];
+    for (let i = 0; i < 7; i++) {
+      const d = new Date(weekStart);
+      d.setDate(weekStart.getDate() + i);
+      weekDates.push(d.toISOString().split('T')[0]);
+    }
+
+    // Get stock counts for this week's dates
+    const { data: weekCounts } = await supabase
+      .from('stock_counts')
+      .select('due_date, status, assigned_to')
+      .gte('due_date', weekDates[0])
+      .lte('due_date', weekDates[6]);
+
+    const this_week = weekDates.map((date, i) => {
+      // Check if any schedule has this day as scheduled
+      const isScheduled = schedules.some((s: any) => {
+        const override = (s.overrides || []).find((o: any) => o.date === date);
+        if (override) return !override.skip;
+        const isHoliday = (s.holidays || []).some((h: any) => h.date === date);
+        if (isHoliday) return false;
+        return s.regular_days?.[i] ?? false;
+      });
+
+      const dayCounts = (weekCounts || []).filter((c: any) => c.due_date === date);
+
+      return {
+        date,
+        day: dayLabels[i],
+        scheduled: isScheduled,
+        total_counts: dayCounts.length,
+        claimed_counts: dayCounts.filter((c: any) => c.assigned_to != null).length,
+        completed_counts: dayCounts.filter((c: any) => ['submitted', 'approved'].includes(c.status)).length,
+      };
+    });
+
+    return {
+      this_week,
+      today: todayStr,
+      today_scheduled: this_week[todayDayIndex]?.scheduled ?? false,
+      today_counts: this_week[todayDayIndex]?.total_counts ?? 0,
+    };
+  },
+
   // Get escalation items (repeated recounts or high variance)
   async getEscalations() {
     // Get stock counts that have been recounted or have high variance

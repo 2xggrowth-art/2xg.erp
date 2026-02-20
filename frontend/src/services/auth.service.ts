@@ -23,11 +23,17 @@ export interface LoginCredentials {
 
 export interface RegisterData {
   name: string;
-  email: string;
-  password: string;
+  email?: string;
+  password?: string;
   role?: string;
   phone?: string;
   department?: string;
+  pin?: string;
+}
+
+export interface TechnicianLoginCredentials {
+  phone: string;
+  pin: string;
 }
 
 export interface ChangePasswordData {
@@ -37,6 +43,7 @@ export interface ChangePasswordData {
 
 const TOKEN_KEY = 'authToken';
 const USER_KEY = 'authUser';
+const LOGIN_TYPE_KEY = 'authLoginType';
 
 class AuthService {
   /**
@@ -52,7 +59,27 @@ class AuthService {
       // Store token and user data in localStorage
       this.setToken(response.data.data.token);
       this.setUser(response.data.data.user);
+      localStorage.setItem(LOGIN_TYPE_KEY, 'admin');
 
+      return response.data.data;
+    }
+
+    throw new Error(response.data.error || 'Login failed');
+  }
+
+  /**
+   * Technician login with phone + PIN
+   */
+  async technicianLogin(credentials: TechnicianLoginCredentials): Promise<LoginResponse> {
+    const response = await apiClient.post<APIResponse<LoginResponse>>(
+      '/auth/technician-login',
+      credentials
+    );
+
+    if (response.data.success && response.data.data) {
+      this.setToken(response.data.data.token);
+      this.setUser(response.data.data.user);
+      localStorage.setItem(LOGIN_TYPE_KEY, 'technician');
       return response.data.data;
     }
 
@@ -206,11 +233,22 @@ class AuthService {
   }
 
   /**
-   * Logout - clear local storage
+   * Logout - clear local storage (keeps LOGIN_TYPE_KEY for redirect)
    */
   logout(): void {
     localStorage.removeItem(TOKEN_KEY);
     localStorage.removeItem(USER_KEY);
+  }
+
+  /**
+   * Get and clear login type (used by ProtectedRoute for redirect)
+   */
+  getLoginType(): string | null {
+    return localStorage.getItem(LOGIN_TYPE_KEY);
+  }
+
+  clearLoginType(): void {
+    localStorage.removeItem(LOGIN_TYPE_KEY);
   }
 
   /**
@@ -280,10 +318,11 @@ apiClient.interceptors.response.use(
   (response) => response,
   (error) => {
     // Check if the error is 401 and NOT from the login endpoint
-    if (error.response?.status === 401 && !error.config.url?.includes('/auth/login')) {
-      // Token is invalid or expired, logout user
+    if (error.response?.status === 401 && !error.config.url?.includes('/auth/login') && !error.config.url?.includes('/auth/technician-login')) {
+      const user = authService.getUser();
+      const isTechnician = user?.buildline_role === 'technician' && user?.role !== 'Admin';
       authService.logout();
-      window.location.href = '/login';
+      window.location.href = isTechnician ? '/technician-login' : '/login';
     }
     return Promise.reject(error);
   }

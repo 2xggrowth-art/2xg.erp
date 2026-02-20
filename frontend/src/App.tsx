@@ -71,7 +71,21 @@ import StockCountPage from './pages/StockCountPage';
 // Buildline
 import BuildlinePage from './pages/BuildlinePage';
 import BuildlineDashboardPage from './pages/BuildlineDashboardPage';
+import TechnicianLoginPage from './pages/TechnicianLoginPage';
+import TechnicianLayout from './components/layout/TechnicianLayout';
 import { Toaster } from 'react-hot-toast';
+import { useAuth } from './contexts/AuthContext';
+
+// Wrapper that picks the right layout for buildline routes
+const BuildlineRoute = ({ children }: { children: React.ReactNode }) => {
+  const { user } = useAuth();
+  const isTechnician = user?.buildline_role === 'technician' && user?.role !== 'Admin';
+
+  if (isTechnician) {
+    return <TechnicianLayout>{children}</TechnicianLayout>;
+  }
+  return <DashboardLayout>{children}</DashboardLayout>;
+};
 
 function App() {
   return (
@@ -81,6 +95,7 @@ function App() {
           <Routes>
             {/* Public Routes */}
             <Route path="/login" element={<LoginPage />} />
+            <Route path="/technician-login" element={<TechnicianLoginPage />} />
 
             {/* Protected Routes - All wrapped with ProtectedRoute and DashboardLayout */}
             <Route path="/" element={<ProtectedRoute><DashboardLayout><DashboardPage /></DashboardLayout></ProtectedRoute>} />
@@ -187,8 +202,8 @@ function App() {
             <Route path="/inventory/damage-reports" element={<ProtectedRoute><DashboardLayout><DamageReportsPage /></DashboardLayout></ProtectedRoute>} />
 
             {/* Buildline Routes */}
-            <Route path="/buildline" element={<ProtectedRoute><DashboardLayout><BuildlinePage /></DashboardLayout></ProtectedRoute>} />
-            <Route path="/buildline/dashboard" element={<ProtectedRoute><DashboardLayout><BuildlineDashboardPage /></DashboardLayout></ProtectedRoute>} />
+            <Route path="/buildline" element={<ProtectedRoute><BuildlineRoute><BuildlinePage /></BuildlineRoute></ProtectedRoute>} />
+            <Route path="/buildline/dashboard" element={<ProtectedRoute><BuildlineRoute><BuildlineDashboardPage /></BuildlineRoute></ProtectedRoute>} />
           </Routes>
           <Toaster position="top-right" />
         </DateFilterProvider>

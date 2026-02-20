@@ -18,6 +18,103 @@ const generateToken = (userId: string, email: string, role: string): string => {
   return jwt.sign(payload, JWT_SECRET, { expiresIn });
 };
 
+// POST /api/auth/technician-login - Technician login with phone + PIN
+router.post('/technician-login', async (req: Request, res: Response) => {
+  try {
+    const { phone, pin } = req.body;
+
+    if (!phone || !pin) {
+      return res.status(400).json({
+        success: false,
+        error: 'Phone number and PIN are required'
+      });
+    }
+
+    if (!/^\d{4}$/.test(pin)) {
+      return res.status(400).json({
+        success: false,
+        error: 'PIN must be 4 digits'
+      });
+    }
+
+    // Clean phone number (remove spaces, dashes, +91 prefix)
+    const cleanPhone = phone.toString().trim().replace(/[\s\-]/g, '').replace(/^\+91/, '');
+
+    // Find user by phone number with a buildline_role
+    const { data: user, error: userError } = await supabaseAdmin
+      .from('users')
+      .select('*')
+      .eq('phone', cleanPhone)
+      .not('buildline_role', 'is', null)
+      .single();
+
+    if (userError || !user) {
+      return res.status(401).json({
+        success: false,
+        error: 'Invalid phone number or PIN'
+      });
+    }
+
+    if (user.status !== 'Active') {
+      return res.status(403).json({
+        success: false,
+        error: 'Your account has been deactivated. Please contact supervisor.'
+      });
+    }
+
+    if (!user.pin) {
+      return res.status(401).json({
+        success: false,
+        error: 'PIN not set. Please contact supervisor.'
+      });
+    }
+
+    // Verify PIN (supports both hashed and plain-text for initial setup)
+    const isPinValid = user.pin.startsWith('$2')
+      ? await bcrypt.compare(pin, user.pin)
+      : user.pin === pin;
+
+    if (!isPinValid) {
+      return res.status(401).json({
+        success: false,
+        error: 'Invalid phone number or PIN'
+      });
+    }
+
+    // Update last login
+    await supabaseAdmin
+      .from('users')
+      .update({ last_login: new Date().toISOString() })
+      .eq('id', user.id);
+
+    // Generate JWT token
+    const token = generateToken(user.id, user.email || user.phone, user.role);
+
+    res.json({
+      success: true,
+      data: {
+        token,
+        user: {
+          id: user.id,
+          name: user.name,
+          email: user.email,
+          role: user.role,
+          phone: user.phone,
+          department: user.department,
+          status: user.status,
+          buildline_role: user.buildline_role
+        }
+      }
+    });
+  } catch (error: any) {
+    console.error('Technician login error:', error.message);
+    res.status(500).json({
+      success: false,
+      error: 'An error occurred during login'
+    });
+  }
+});
+
 // POST /api/auth/login - User login
 router.post('/login', async (req: Request, res: Response) => {
   try {
@@ -102,49 +199,92 @@ router.post('/login', async (req: Request, res: Response) => {
 // POST /api/auth/register - Create new user (Admin only)
 router.post('/register', async (req: Request, res: Response) => {
   try {
-    const { name, email, password, role, phone, department } = req.body;
+    const { name, email, password, role, phone, department, pin } = req.body;
 
-    // Validate input
-    if (!name || !email || !password) {
+    // For technician registration: name + phone + pin required (email/password optional)
+    // For regular registration: name + email + password required
+    if (!name) {
       return res.status(400).json({
         success: false,
-        error: 'Name, email, and password are required'
+        error: 'Name is required'
       });
     }
 
-    // Check if user already exists
-    const { data: existingUser } = await supabaseAdmin
-      .from('users')
-      .select('id')
-      .eq('email', email.toLowerCase())
-      .single();
+    const isTechnicianRegistration = pin && phone;
 
-    if (existingUser) {
-      return res.status(409).json({
+    if (!isTechnicianRegistration && (!email || !password)) {
+      return res.status(400).json({
         success: false,
-        error: 'User with this email already exists'
+        error: 'Email and password are required'
       });
     }
 
-    // Hash password
+    if (pin && !/^\d{4}$/.test(pin)) {
+      return res.status(400).json({
+        success: false,
+        error: 'PIN must be 4 digits'
+      });
+    }
+
+    // Check for duplicate email if provided
+    if (email) {
+      const { data: existingUser } = await supabaseAdmin
+        .from('users')
+        .select('id')
+        .eq('email', email.toLowerCase())
+        .single();
+
+      if (existingUser) {
+        return res.status(409).json({
+          success: false,
+          error: 'User with this email already exists'
+        });
+      }
+    }
+
+    // Check for duplicate phone if provided
+    if (phone) {
+      const cleanPhone = phone.toString().trim().replace(/[\s\-]/g, '').replace(/^\+91/, '');
+      const { data: existingPhone } = await supabaseAdmin
+        .from('users')
+        .select('id')
+        .eq('phone', cleanPhone)
+        .single();
+
+      if (existingPhone) {
+        return res.status(409).json({
+          success: false,
+          error: 'User with this phone number already exists'
+        });
+      }
+    }
+
     const saltRounds = 10;
-    const passwordHash = await bcrypt.hash(password, saltRounds);
 
-    // Use provided role or default to 'Staff'
-    const userRole = role || 'Staff';
+    // Build insert object
+    const insertData: any = {
+      name,
+      role: role || 'Staff',
+      status: 'Active'
+    };
 
-    // Create user (role validation will be done by database constraint)
+    if (email) insertData.email = email.toLowerCase();
+    if (phone) insertData.phone = phone.toString().trim().replace(/[\s\-]/g, '').replace(/^\+91/, '');
+    if (department) insertData.department = department;
+
+    // Hash password if provided
+    if (password) {
+      insertData.password_hash = await bcrypt.hash(password, saltRounds);
+    }
+
+    // Hash PIN if provided
+    if (pin) {
+      insertData.pin = await bcrypt.hash(pin, saltRounds);
+    }
+
     const { data: newUser, error: createError } = await supabaseAdmin
       .from('users')
-      .insert({
-        name,
-        email: email.toLowerCase(),
-        password_hash: passwordHash,
-        role: userRole,
-        phone,
-        department,
-        status: 'Active'
-      })
+      .insert(insertData)
       .select()
       .single();
 
@@ -153,7 +293,6 @@ router.post('/register', async (req: Request, res: Response) => {
       throw createError;
     }
 
-    // Return user data (without password hash)
     res.status(201).json({
       success: true,
       data: {
@@ -197,7 +336,7 @@ router.get('/verify', async (req: Request, res: Response) => {
     // Get user from database
     const { data: user, error: userError } = await supabaseAdmin
       .from('users')
-      .select('id, name, email, role, phone, department, status')
+      .select('id, name, email, role, phone, department, status, buildline_role')
       .eq('id', decoded.userId)
       .single();
 

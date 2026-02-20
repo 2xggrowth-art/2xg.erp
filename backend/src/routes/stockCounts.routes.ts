@@ -11,6 +11,7 @@ router.use(authMiddleware);
 // List and detail routes
 router.get('/', controller.getStockCounts.bind(controller));
 router.get('/stats', controller.getStats.bind(controller));
+router.get('/available-today', controller.getAvailableToday.bind(controller));
 router.get('/counter/:mobileUserId/stats', controller.getCounterStats.bind(controller));
 router.get('/assigned/:userId', controller.getAssignedStockCounts.bind(controller));
 router.get('/:id', controller.getStockCount.bind(controller));
@@ -19,6 +20,7 @@ router.get('/:id', controller.getStockCount.bind(controller));
 router.post('/', controller.createStockCount.bind(controller));
 
 // Counter actions
+router.post('/:id/claim', controller.claimCount.bind(controller));
 router.post('/:id/start', controller.startCount.bind(controller));
 router.put('/:id/items/:itemId', controller.updateItemCount.bind(controller));
 router.patch('/:id/items', controller.bulkUpdateItems.bind(controller));

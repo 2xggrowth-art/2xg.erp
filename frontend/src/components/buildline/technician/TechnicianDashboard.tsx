@@ -4,9 +4,10 @@ import { BikeScanner } from './BikeScanner';
 import { AssemblyChecklist } from './AssemblyChecklist';
 import { QueueList } from './QueueList';
 import { ReportIssueModal } from './ReportIssueModal';
+import { ScanConfirm } from './ScanConfirm';
 import toast from 'react-hot-toast';
 
-interface QueueBike {
+export interface QueueBike {
   id: string;
   barcode: string;
   model_sku: string;
@@ -19,13 +20,17 @@ interface QueueBike {
   rework_count?: number;
   assigned_at?: string;
   bin_location?: any;
+  item_name?: string | null;
+  item_color?: string | null;
+  item_size?: string | null;
+  item_variant?: string | null;
 }
 
 export const TechnicianDashboard = () => {
   const [queue, setQueue] = useState<QueueBike[]>([]);
   const [selectedBike, setSelectedBike] = useState<QueueBike | null>(null);
   const [loading, setLoading] = useState(true);
-  const [view, setView] = useState<'queue' | 'scan' | 'checklist'>('queue');
+  const [view, setView] = useState<'queue' | 'scan' | 'confirm_scan' | 'checklist'>('queue');
   const [showReportIssue, setShowReportIssue] = useState(false);
 
   useEffect(() => {
@@ -46,23 +51,29 @@ export const TechnicianDashboard = () => {
   };
 
   const handleSelectBike = async (bike: QueueBike) => {
+    if (bike.current_status === 'assigned') {
+      // Require barcode scan confirmation before starting
+      setSelectedBike(bike);
+      setView('confirm_scan');
+    } else if (bike.current_status === 'in_progress') {
+      setSelectedBike(bike);
+      setView('checklist');
+    } else {
+      toast.error(`Bike is in ${bike.current_status} status. Cannot start assembly.`);
+    }
+  };
+
+  const handleScanConfirmed = async (bike: QueueBike) => {
     try {
-      if (bike.current_status === 'assigned') {
-        const startResponse = await assemblyService.startAssembly(bike.barcode);
-        if (!startResponse.data.success) {
-          toast.error(startResponse.data.message || 'Failed to start assembly');
-          return;
-        }
-        toast.success('Assembly started!');
-        setSelectedBike({ ...bike, current_status: 'in_progress' });
-        setView('checklist');
-        loadQueue();
-      } else if (bike.current_status === 'in_progress') {
-        setSelectedBike(bike);
-        setView('checklist');
-      } else {
-        toast.error(`Bike is in ${bike.current_status} status. Cannot start assembly.`);
+      const startResponse = await assemblyService.startAssembly(bike.barcode);
+      if (!startResponse.data.success) {
+        toast.error(startResponse.data.message || 'Failed to start assembly');
+        return;
       }
+      toast.success('Assembly started!');
+      setSelectedBike({ ...bike, current_status: 'in_progress' });
+      setView('checklist');
+      loadQueue();
     } catch (error) {
       toast.error('Failed to start assembly');
       console.error(error);
@@ -153,7 +164,7 @@ export const TechnicianDashboard = () => {
           </div>
           <div className="flex gap-2 overflow-x-auto pb-1">
             <button
-              onClick={() => setView('queue')}
+              onClick={() => { setView('queue'); setSelectedBike(null); }}
               className={`px-3 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm rounded-lg font-medium whitespace-nowrap flex-shrink-0 ${
                 view === 'queue' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
               }`}
@@ -177,6 +188,13 @@ export const TechnicianDashboard = () => {
           <QueueList queue={queue} onSelectBike={handleSelectBike} onRefresh={loadQueue} />
         )}
         {view === 'scan' && <BikeScanner onScan={handleScan} />}
+        {view === 'confirm_scan' && selectedBike && (
+          <ScanConfirm
+            bike={selectedBike}
+            onConfirmed={handleScanConfirmed}
+            onBack={() => { setSelectedBike(null); setView('queue'); }}
+          />
+        )}
         {view === 'checklist' && selectedBike && (
           <AssemblyChecklist
             bike={selectedBike}

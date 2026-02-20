@@ -263,4 +263,38 @@ export class StockCountsController {
       res.status(500).json({ success: false, error: error.message });
     }
   }
+
+  /**
+   * Get available (unclaimed) counts for today
+   */
+  async getAvailableToday(req: Request, res: Response) {
+    try {
+      const counts = await stockCountsService.getAvailableToday();
+      res.json({ success: true, data: counts });
+    } catch (error: any) {
+      console.error('Error fetching available counts:', error);
+      res.status(500).json({ success: false, error: error.message });
+    }
+  }
+
+  /**
+   * Claim an unassigned count (counter picks a bin)
+   */
+  async claimCount(req: Request, res: Response) {
+    try {
+      const { id } = req.params;
+      const { user_id, user_name } = req.body;
+
+      if (!user_id || !user_name) {
+        return res.status(400).json({ success: false, error: 'user_id and user_name are required' });
+      }
+
+      const count = await stockCountsService.claimCount(id, user_id, user_name);
+      res.json({ success: true, data: count });
+    } catch (error: any) {
+      console.error('Error claiming count:', error);
+      const status = error.message?.includes('already claimed') || error.message?.includes('no longer available') ? 409 : 500;
+      res.status(status).json({ success: false, error: error.message });
+    }
+  }
 }

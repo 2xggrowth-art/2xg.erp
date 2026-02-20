@@ -5,18 +5,15 @@ import { TechnicianDashboard } from '../components/buildline/technician/Technici
 const BuildlinePage = () => {
   const { user } = useAuth();
 
-  // Admin and supervisor roles see the supervisor dashboard
-  // Technicians see the technician dashboard
-  // Default to supervisor view for Admin ERP role
-  const role = user?.role;
+  const buildlineRole = user?.buildline_role;
 
-  // For now, show supervisor dashboard (most common view)
-  // In the future, can check user.buildlineRole from a profile endpoint
-  return (
-    <div>
-      <SupervisorDashboard />
-    </div>
-  );
+  // Technicians see the technician dashboard
+  // Everyone else (Admin, supervisor) sees the supervisor dashboard
+  if (buildlineRole === 'technician') {
+    return <TechnicianDashboard />;
+  }
+
+  return <SupervisorDashboard />;
 };
 
 export default BuildlinePage;

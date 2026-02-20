@@ -324,7 +324,7 @@ export class BillsService {
 
           const { data: itemRecord } = await supabase
             .from('items')
-            .select('advanced_tracking_type, sku')
+            .select('advanced_tracking_type, sku, item_name, color, size')
             .eq('id', item.item_id)
             .single();
 
@@ -333,6 +333,9 @@ export class BillsService {
               serials: item.serial_numbers,
               model_sku: itemRecord.sku,
               grn_reference: bill.bill_number,
+              item_name: itemRecord.item_name || undefined,
+              item_color: itemRecord.color || undefined,
+              item_size: itemRecord.size || undefined,
             });
             if (result.errors.length > 0) {
               console.warn(`Assembly journey warnings for ${item.item_name}:`, result.errors);

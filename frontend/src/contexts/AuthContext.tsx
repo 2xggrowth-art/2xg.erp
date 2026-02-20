@@ -1,10 +1,11 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { authService, User, LoginCredentials } from '../services/auth.service';
+import { authService, User, LoginCredentials, TechnicianLoginCredentials } from '../services/auth.service';
 
 interface AuthContextType {
   user: User | null;
   login: (credentials: LoginCredentials) => Promise<boolean>;
+  technicianLogin: (credentials: TechnicianLoginCredentials) => Promise<boolean>;
   logout: () => void;
   isAuthenticated: boolean;
   isLoading: boolean;
@@ -70,11 +71,21 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
+  const technicianLogin = async (credentials: TechnicianLoginCredentials): Promise<boolean> => {
+    try {
+      const response = await authService.technicianLogin(credentials);
+      setUser(response.user);
+      return true;
+    } catch (error: any) {
+      console.error('AuthContext: Technician login error:', error);
+      return false;
+    }
+  };
+
   const logout = () => {
-    console.log('AuthContext: Logging out');
     authService.logout();
     setUser(null);
-    navigate('/login');
+    // ProtectedRoute handles redirect based on saved loginType
   };
 
   const refreshUser = async () => {
@@ -92,6 +103,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       value={{
         user,
         login,
+        technicianLogin,
         logout,
         isAuthenticated: !!user,
         isLoading,

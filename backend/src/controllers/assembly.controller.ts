@@ -374,3 +374,30 @@ export const getTechnicians = async (_req: AuthenticatedRequest, res: Response) 
     res.status(500).json({ success: false, error: error.message });
   }
 };
+
+export const createTechnician = async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const { employee_name, phone_number, pin, role } = req.body;
+    if (!employee_name || !phone_number || !pin) {
+      return res.status(400).json({ success: false, error: 'Name, phone number, and PIN are required' });
+    }
+    if (!/^\d{10}$/.test(phone_number.replace(/[\s\-]/g, '').replace(/^\+91/, ''))) {
+      return res.status(400).json({ success: false, error: 'Phone number must be 10 digits' });
+    }
+    if (!/^\d{4}$/.test(pin)) {
+      return res.status(400).json({ success: false, error: 'PIN must be 4 digits' });
+    }
+    const user = await assemblyService.createTechnician({
+      employee_name,
+      phone_number,
+      pin,
+      role: role || 'technician'
+    });
+    res.json({ success: true, data: user, message: 'Technician created successfully' });
+  } catch (error: any) {
+    if (error.code === '23505') {
+      return res.status(400).json({ success: false, error: 'Phone number already exists' });
+    }
+    res.status(500).json({ success: false, error: error.message });
+  }
+};

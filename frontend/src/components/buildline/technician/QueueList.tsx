@@ -10,24 +10,7 @@ import {
   MapPin,
 } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
-
-interface QueueBike {
-  id: string;
-  barcode: string;
-  model_sku: string;
-  frame_number?: string;
-  current_status: string;
-  checklist: Record<string, boolean> | null;
-  priority: boolean;
-  qc_status?: string;
-  qc_failure_reason?: string;
-  rework_count?: number;
-  assigned_at?: string;
-  bin_location?: {
-    bin_code?: string;
-    bin_name?: string;
-  } | null;
-}
+import type { QueueBike } from './TechnicianDashboard';
 
 interface QueueListProps {
   queue: QueueBike[];
@@ -189,7 +172,7 @@ export const QueueList = ({ queue, onSelectBike, onRefresh }: QueueListProps) =>
                         <Star className="w-4 h-4 text-yellow-500 fill-yellow-500 flex-shrink-0" />
                       )}
                       <span className="font-medium text-gray-900 text-sm truncate">
-                        {bike.model_sku}
+                        {bike.item_name || bike.model_sku}
                       </span>
                       <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${status.className}`}>
                         <StatusIcon className="w-3 h-3" />
@@ -197,8 +180,16 @@ export const QueueList = ({ queue, onSelectBike, onRefresh }: QueueListProps) =>
                       </span>
                     </div>
 
+                    {/* Item details */}
+                    {(bike.item_color || bike.item_size || bike.item_variant) && (
+                      <p className="text-xs text-gray-500 mb-0.5">
+                        {[bike.item_color, bike.item_size, bike.item_variant].filter(Boolean).join(' / ')}
+                      </p>
+                    )}
+
                     <div className="flex items-center gap-3 text-xs text-gray-500">
                       <span>{bike.barcode}</span>
+                      {bike.item_name && <span className="text-gray-400">{bike.model_sku}</span>}
                       {bike.frame_number && <span>Frame: {bike.frame_number}</span>}
                       {bike.bin_location?.bin_code && (
                         <span className="flex items-center gap-0.5">
