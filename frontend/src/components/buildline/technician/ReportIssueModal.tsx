@@ -73,11 +73,6 @@ export const ReportIssueModal = ({ bike, onClose, onSuccess }: ReportIssueModalP
       return;
     }
 
-    if (issueType === 'damage' && !damageNotes.trim()) {
-      toast.error('Please describe the damage.');
-      return;
-    }
-
     if (issueType === 'parts_missing' && selectedParts.length === 0) {
       toast.error('Please select at least one missing part.');
       return;
@@ -189,7 +184,7 @@ export const ReportIssueModal = ({ bike, onClose, onSuccess }: ReportIssueModalP
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Describe the damage <span className="text-red-500">*</span>
+                  Describe the damage (optional)
                 </label>
                 <textarea
                   value={damageNotes}
