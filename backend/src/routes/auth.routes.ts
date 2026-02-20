@@ -313,10 +313,20 @@ router.post('/change-password', async (req: Request, res: Response) => {
 // GET /api/auth/users - Get all users (Admin only)
 router.get('/users', async (req: Request, res: Response) => {
   try {
-    const { data: users, error } = await supabaseAdmin
+    // Try with buildline_role first; fall back without it if column doesn't exist yet
+    let { data: users, error } = await supabaseAdmin
       .from('users')
       .select('id, name, email, role, phone, department, status, buildline_role, last_login, created_at')
       .order('created_at', { ascending: false });
+
+    if (error && error.message?.includes('buildline_role')) {
+      const result = await supabaseAdmin
+        .from('users')
+        .select('id, name, email, role, phone, department, status, last_login, created_at')
+        .order('created_at', { ascending: false });
+      users = result.data as any;
+      error = result.error;
+    }
 
     if (error) {
       throw error;
@@ -350,12 +360,25 @@ router.put('/users/:id', async (req: Request, res: Response) => {
     if (status) updates.status = status;
     if (buildline_role !== undefined) updates.buildline_role = buildline_role || null;
 
-    const { data: updatedUser, error } = await supabaseAdmin
+    // Try with buildline_role; if column doesn't exist, retry without it
+    let { data: updatedUser, error } = await supabaseAdmin
       .from('users')
       .update(updates)
       .eq('id', id)
       .select('id, name, email, role, phone, department, status, buildline_role')
       .single();
+
+    if (error && error.message?.includes('buildline_role')) {
+      delete updates.buildline_role;
+      const result = await supabaseAdmin
+        .from('users')
+        .update(updates)
+        .eq('id', id)
+        .select('id, name, email, role, phone, department, status')
+        .single();
+      updatedUser = result.data as any;
+      error = result.error;
+    }
 
     if (error) {
       throw error;
