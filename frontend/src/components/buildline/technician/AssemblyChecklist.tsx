@@ -112,7 +112,7 @@ export const AssemblyChecklist = ({
                 {completing ? 'Completing...' : 'Mark as Completed'}
               </p>
               <p className="text-sm text-green-100 mt-1">
-                Assembly is done, send for QC / ready for sale
+                Assembly is done, ready for sale
               </p>
             </div>
           </div>
