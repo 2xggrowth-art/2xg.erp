@@ -254,36 +254,96 @@ export class AssemblyService {
   async getAssemblyHistory(journeyId: string) {
     const { data, error } = await supabaseAdmin
       .from('assembly_status_history')
-      .select(`*, changed_by_user:users(name, email)`)
+      .select('*')
       .eq('journey_id', journeyId)
       .order('created_at', { ascending: false });
     if (error) throw error;
+
+    // Fetch user names separately to avoid FK hint issues
+    if (data && data.length > 0) {
+      const userIds = [...new Set(data.map((h: any) => h.changed_by).filter(Boolean))];
+      if (userIds.length > 0) {
+        const { data: users } = await supabaseAdmin
+          .from('users')
+          .select('id, name, email')
+          .in('id', userIds);
+        const userMap = new Map((users || []).map((u: any) => [u.id, u]));
+        return data.map((h: any) => ({
+          ...h,
+          changed_by_name: userMap.get(h.changed_by)?.name || null,
+        }));
+      }
+    }
     return data;
   }
 
   async getBikeDetails(barcode: string) {
-    const { data, error } = await supabaseAdmin
-      .from('assembly_journeys')
-      .select(`
-        *,
-        location:locations(id, name, code),
-        bin_location:assembly_bins(id, bin_code, bin_name),
-        technician:users!assembly_journeys_technician_id_fkey(id, name, email),
-        qc_person:users!assembly_journeys_qc_person_id_fkey(id, name, email)
-      `)
+    // Use kanban view which already has all joins resolved via SQL (avoids PostgREST FK hint issues)
+    const { data: kanbanData, error: kanbanError } = await supabaseAdmin
+      .from('assembly_kanban_board')
+      .select('*')
       .eq('barcode', barcode)
       .single();
-    if (error) throw error;
+
+    if (kanbanError) {
+      // Fallback to direct query without FK hints
+      const { data, error } = await supabaseAdmin
+        .from('assembly_journeys')
+        .select('*')
+        .eq('barcode', barcode)
+        .single();
+      if (error) throw error;
+
+      // Fetch related data separately
+      const [locationRes, binRes, techRes] = await Promise.all([
+        data.current_location_id
+          ? supabaseAdmin.from('locations').select('id, name, code').eq('id', data.current_location_id).single()
+          : { data: null },
+        data.bin_location_id
+          ? supabaseAdmin.from('assembly_bins').select('id, bin_code, bin_name').eq('id', data.bin_location_id).single()
+          : { data: null },
+        data.technician_id
+          ? supabaseAdmin.from('users').select('id, name, email').eq('id', data.technician_id).single()
+          : { data: null },
+      ]);
+
+      const { data: timeline } = await supabaseAdmin
+        .from('assembly_status_history')
+        .select('to_status, created_at')
+        .eq('journey_id', data.id)
+        .order('created_at', { ascending: false });
+
+      return {
+        ...data,
+        location: (locationRes as any).data || null,
+        bin_location: (binRes as any).data || null,
+        technician: (techRes as any).data || null,
+        technician_name: (techRes as any).data?.name || null,
+        timeline: timeline?.map((t: any) => ({ status: t.to_status, timestamp: t.created_at })) || []
+      };
+    }
+
+    // Kanban view succeeded - enrich with extra fields not in the view
+    const { data: journey } = await supabaseAdmin
+      .from('assembly_journeys')
+      .select('damage_notes, damage_photos, parts_missing_list, grn_reference, notes, checklist, qc_failure_reason, qc_photos')
+      .eq('barcode', barcode)
+      .single();
 
     const { data: timeline } = await supabaseAdmin
       .from('assembly_status_history')
       .select('to_status, created_at')
-      .eq('journey_id', data.id)
+      .eq('journey_id', kanbanData.id)
       .order('created_at', { ascending: false });
 
     return {
-      ...data,
-      technician_name: (data as any).technician?.name,
+      ...kanbanData,
+      ...(journey || {}),
+      location: kanbanData.location_name ? { name: kanbanData.location_name, code: kanbanData.location_code } : null,
+      bin_location: kanbanData.bin_code ? { bin_code: kanbanData.bin_code, bin_name: kanbanData.bin_name } : null,
+      technician: kanbanData.technician_name ? { name: kanbanData.technician_name } : null,
+      qc_person: kanbanData.qc_person_name ? { name: kanbanData.qc_person_name } : null,
+      technician_name: kanbanData.technician_name,
       timeline: timeline?.map((t: any) => ({ status: t.to_status, timestamp: t.created_at })) || []
     };
   }

@@ -61,19 +61,21 @@ export const BikeDetailModal = ({ bike, onClose }: BikeDetailModalProps) => {
   }, [bike.barcode]);
 
   const loadDetails = async () => {
+    setLoading(true);
+    // Fetch independently so one failure doesn't block the other
     try {
-      setLoading(true);
-      const [detailsRes, historyRes] = await Promise.all([
-        assemblyService.getBikeDetails(bike.barcode),
-        assemblyService.getHistory(bike.id),
-      ]);
+      const detailsRes = await assemblyService.getBikeDetails(bike.barcode);
       setDetails(detailsRes.data.data);
-      setHistory(historyRes.data.data || []);
     } catch (error) {
       console.error('Failed to load bike details', error);
-    } finally {
-      setLoading(false);
     }
+    try {
+      const historyRes = await assemblyService.getHistory(bike.id);
+      setHistory(historyRes.data.data || []);
+    } catch (error) {
+      console.error('Failed to load bike history', error);
+    }
+    setLoading(false);
   };
 
   const formatTime = (dateStr?: string) => {
