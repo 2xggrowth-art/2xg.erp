@@ -36,11 +36,6 @@ export const AssemblyChecklist = ({
   const [completing, setCompleting] = useState(false);
 
   const handleComplete = async () => {
-    const confirmFinish = window.confirm(
-      'Are you sure you want to mark this assembly as complete? This will send the bike for QC / ready for sale.'
-    );
-    if (!confirmFinish) return;
-
     try {
       setCompleting(true);
       await onComplete(bike.barcode, { status: 'completed' });
