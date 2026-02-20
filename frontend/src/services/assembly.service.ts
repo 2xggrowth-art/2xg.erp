@@ -8,7 +8,7 @@ export const assemblyService = {
     apiClient.post('/assembly/inward/bulk', { bikes }),
 
   // Scan
-  scanBike: (barcode: string) => apiClient.get(`/assembly/scan/${barcode}`),
+  scanBike: (barcode: string) => apiClient.get(`/assembly/scan/${encodeURIComponent(barcode)}`),
 
   // Assign
   assignBike: (barcode: string, technician_id: string) =>
@@ -29,7 +29,7 @@ export const assemblyService = {
     apiClient.get('/assembly/kanban', { params: filters }),
   getDashboard: () => apiClient.get('/assembly/dashboard'),
   getHistory: (journeyId: string) => apiClient.get(`/assembly/history/${journeyId}`),
-  getBikeDetails: (barcode: string) => apiClient.get(`/assembly/bike/${barcode}`),
+  getBikeDetails: (barcode: string) => apiClient.get(`/assembly/bike/${encodeURIComponent(barcode)}`),
 
   // Actions
   setPriority: (barcode: string, priority: boolean) =>
@@ -40,7 +40,7 @@ export const assemblyService = {
     apiClient.post('/assembly/report-damage', { barcode, damage_notes, photos }),
 
   // Sales lock
-  canInvoice: (barcode: string) => apiClient.get(`/assembly/can-invoice/${barcode}`),
+  canInvoice: (barcode: string) => apiClient.get(`/assembly/can-invoice/${encodeURIComponent(barcode)}`),
 
   // QC
   submitQCResult: (barcode: string, result: string, failure_reason?: string, photos?: string[]) =>
