@@ -125,7 +125,7 @@ export const DamagedBikesList = ({ onRefresh }: DamagedBikesListProps) => {
                     </div>
                     <div className="min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
-                        <h4 className="font-bold text-gray-900 text-sm">{bike.model_sku}</h4>
+                        <h4 className="font-bold text-gray-900 text-sm">{(bike as any).item_name || bike.model_sku}</h4>
                         <StatusBadge status={bike.current_status} />
                         {bike.priority && (
                           <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-red-100 text-red-800">

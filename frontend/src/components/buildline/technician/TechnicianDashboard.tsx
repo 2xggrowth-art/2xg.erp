@@ -52,9 +52,9 @@ export const TechnicianDashboard = () => {
 
   const handleSelectBike = async (bike: QueueBike) => {
     if (bike.current_status === 'assigned') {
-      // Require barcode scan confirmation before starting
+      // Start assembly directly when clicking from queue
       setSelectedBike(bike);
-      setView('confirm_scan');
+      await handleScanConfirmed(bike);
     } else if (bike.current_status === 'in_progress') {
       setSelectedBike(bike);
       setView('checklist');

@@ -19,53 +19,15 @@ interface ReportIssueModalProps {
 
 type IssueType = 'damage' | 'parts_missing';
 
-const COMMON_PARTS = [
-  'Front Wheel',
-  'Rear Wheel',
-  'Front Tyre',
-  'Rear Tyre',
-  'Front Brake',
-  'Rear Brake',
-  'Brake Cables',
-  'Chain',
-  'Front Derailleur',
-  'Rear Derailleur',
-  'Gear Cables',
-  'Pedals (Left)',
-  'Pedals (Right)',
-  'Seat Post',
-  'Saddle',
-  'Handlebar Grips',
-  'Bell',
-  'Kickstand',
-  'Reflectors',
-  'Quick Release Skewer',
-  'Stem Bolts',
-  'Other',
-];
 
 export const ReportIssueModal = ({ bike, onClose, onSuccess }: ReportIssueModalProps) => {
   const [issueType, setIssueType] = useState<IssueType | null>(null);
   const [damageNotes, setDamageNotes] = useState('');
   const [photos, setPhotos] = useState<string[]>([]);
-  const [selectedParts, setSelectedParts] = useState<string[]>([]);
+  const [partName, setPartName] = useState('');
+  const [partPhotos, setPartPhotos] = useState<string[]>([]);
   const [partNotes, setPartNotes] = useState('');
-  const [customPart, setCustomPart] = useState('');
   const [submitting, setSubmitting] = useState(false);
-
-  const togglePart = (part: string) => {
-    setSelectedParts((prev) =>
-      prev.includes(part) ? prev.filter((p) => p !== part) : [...prev, part]
-    );
-  };
-
-  const addCustomPart = () => {
-    const trimmed = customPart.trim();
-    if (trimmed && !selectedParts.includes(trimmed)) {
-      setSelectedParts((prev) => [...prev, trimmed]);
-      setCustomPart('');
-    }
-  };
 
   const handleSubmit = async () => {
     if (!issueType) {
@@ -73,8 +35,8 @@ export const ReportIssueModal = ({ bike, onClose, onSuccess }: ReportIssueModalP
       return;
     }
 
-    if (issueType === 'parts_missing' && selectedParts.length === 0) {
-      toast.error('Please select at least one missing part.');
+    if (issueType === 'parts_missing' && !partName.trim()) {
+      toast.error('Please enter the part name.');
       return;
     }
 
@@ -91,7 +53,7 @@ export const ReportIssueModal = ({ bike, onClose, onSuccess }: ReportIssueModalP
       } else {
         await assemblyService.flagPartsMissing(
           bike.barcode,
-          selectedParts,
+          [partName.trim()],
           partNotes.trim() || undefined
         );
         toast.success('Missing parts flagged. Assembly paused.');
@@ -223,82 +185,28 @@ export const ReportIssueModal = ({ bike, onClose, onSuccess }: ReportIssueModalP
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Select missing parts <span className="text-red-500">*</span>
-                </label>
-                <div className="flex flex-wrap gap-2">
-                  {COMMON_PARTS.map((part) => (
-                    <button
-                      key={part}
-                      type="button"
-                      onClick={() => togglePart(part)}
-                      className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
-                        selectedParts.includes(part)
-                          ? 'bg-yellow-500 text-white'
-                          : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                      }`}
-                    >
-                      {part}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Custom part input */}
-              <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Add custom part
+                  Part name <span className="text-red-500">*</span>
                 </label>
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    value={customPart}
-                    onChange={(e) => setCustomPart(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') {
-                        e.preventDefault();
-                        addCustomPart();
-                      }
-                    }}
-                    placeholder="Type part name..."
-                    className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500"
-                  />
-                  <button
-                    type="button"
-                    onClick={addCustomPart}
-                    disabled={!customPart.trim()}
-                    className="px-3 py-2 bg-yellow-500 text-white rounded-lg text-sm font-medium hover:bg-yellow-600 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
-                  >
-                    Add
-                  </button>
-                </div>
+                <input
+                  type="text"
+                  value={partName}
+                  onChange={(e) => setPartName(e.target.value)}
+                  placeholder="Type the part name..."
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500"
+                  autoFocus
+                />
               </div>
 
-              {/* Selected parts summary */}
-              {selectedParts.length > 0 && (
-                <div className="p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
-                  <p className="text-xs font-medium text-yellow-800 mb-1">
-                    {selectedParts.length} part(s) selected:
-                  </p>
-                  <div className="flex flex-wrap gap-1">
-                    {selectedParts.map((part) => (
-                      <span
-                        key={part}
-                        className="inline-flex items-center gap-1 px-2 py-0.5 bg-yellow-200 text-yellow-800 rounded-full text-xs"
-                      >
-                        {part}
-                        <button
-                          type="button"
-                          onClick={() => togglePart(part)}
-                          className="hover:text-yellow-900"
-                        >
-                          <X className="w-3 h-3" />
-                        </button>
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              )}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <span className="flex items-center gap-1">
+                    <Camera className="w-4 h-4" />
+                    Photos (optional)
+                  </span>
+                </label>
+                <PhotoUpload photos={partPhotos} onChange={setPartPhotos} maxPhotos={5} />
+              </div>
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -308,7 +216,7 @@ export const ReportIssueModal = ({ bike, onClose, onSuccess }: ReportIssueModalP
                   value={partNotes}
                   onChange={(e) => setPartNotes(e.target.value)}
                   rows={2}
-                  placeholder="Any additional information about the missing parts..."
+                  placeholder="Any additional information..."
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500 resize-none"
                 />
               </div>

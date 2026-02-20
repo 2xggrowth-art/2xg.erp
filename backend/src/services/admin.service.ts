@@ -82,7 +82,10 @@ export const adminService = {
 
     if (error) {
       console.error('Error fetching schedules:', error);
-      // If table doesn't exist yet, return defaults from locations
+    }
+
+    // If table doesn't exist or has no rows, return defaults from locations
+    if (error || !schedules || schedules.length === 0) {
       const { data: locations } = await supabase
         .from('locations')
         .select('id, name')
@@ -98,7 +101,7 @@ export const adminService = {
       }));
     }
 
-    return schedules || [];
+    return schedules;
   },
 
   // Save schedule configuration

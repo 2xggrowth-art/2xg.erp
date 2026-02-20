@@ -150,7 +150,7 @@ export const AssignmentPanel = ({ bikes, technicians, onAssign }: AssignmentPane
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
-                    <span className="font-medium text-sm text-gray-900 truncate">{bike.model_sku}</span>
+                    <span className="font-medium text-sm text-gray-900 truncate">{bike.item_name || bike.model_sku}</span>
                     {bike.priority && (
                       <span className="text-xs text-red-600 font-medium">PRIORITY</span>
                     )}

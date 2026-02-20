@@ -82,7 +82,7 @@ export const BikeDetailModal = ({ bike, onClose }: BikeDetailModalProps) => {
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
               <h2 className="text-lg font-bold text-gray-900 truncate">
-                {details?.model_sku || bike.model_sku}
+                {details?.item_name || bike.item_name || bike.model_sku}
               </h2>
               {(details?.priority ?? bike.priority) && (
                 <Flag size={14} className="text-red-600 flex-shrink-0" />

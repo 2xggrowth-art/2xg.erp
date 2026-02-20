@@ -57,6 +57,9 @@ export interface KanbanItem {
   assembly_completed_at?: string;
   current_bin_code?: string;
   location_name?: string;
+  item_name?: string;
+  item_color?: string;
+  item_size?: string;
 }
 
 export interface AssemblyBin {

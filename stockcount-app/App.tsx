@@ -3833,17 +3833,10 @@ function ScheduleScreen({ navigation }: any) {
   useEffect(() => {
     api.get('/admin/schedules').then(res => {
       const data = res.data || res || [];
-      setSchedules(data.length > 0 ? data : [{
-        location_id: '1', location_name: 'Main Warehouse',
-        regular_days: [false, true, true, true, true, true, false],
-        high_value_daily: false, overrides: [], holidays: [],
-      }]);
+      // Backend returns defaults with real location UUIDs if table is empty
+      setSchedules(data.length > 0 ? data : []);
     }).catch(() => {
-      setSchedules([{
-        location_id: '1', location_name: 'Main Warehouse',
-        regular_days: [false, true, true, true, true, true, false],
-        high_value_daily: false, overrides: [], holidays: [],
-      }]);
+      setSchedules([]);
     }).finally(() => setLoading(false));
   }, []);
 

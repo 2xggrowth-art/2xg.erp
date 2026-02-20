@@ -170,7 +170,21 @@ export const ScanConfirm = ({ bike, onConfirmed, onBack }: ScanConfirmProps) => 
         </p>
 
         <div className="bg-gray-50 rounded-lg p-3 space-y-1">
-          <p className="text-sm text-gray-500">Barcode: <span className="font-mono font-medium text-gray-700">{bike.barcode}</span></p>
+          {bike.item_name && (
+            <p className="text-sm text-gray-500">Item: <span className="font-medium text-gray-700">{bike.item_name}</span></p>
+          )}
+          {bike.item_color && (
+            <p className="text-sm text-gray-500">Color: <span className="font-medium text-gray-700">{bike.item_color}</span></p>
+          )}
+          {bike.item_size && (
+            <p className="text-sm text-gray-500">Size: <span className="font-medium text-gray-700">{bike.item_size}</span></p>
+          )}
+          {bike.item_variant && (
+            <p className="text-sm text-gray-500">Variant: <span className="font-medium text-gray-700">{bike.item_variant}</span></p>
+          )}
+          {!bike.item_name && (
+            <p className="text-sm text-gray-500">Barcode: <span className="font-mono font-medium text-gray-700">{bike.barcode}</span></p>
+          )}
           {bike.bin_location?.bin_code && (
             <p className="text-sm text-gray-500">Bin Location: <span className="font-medium text-gray-700">{bike.bin_location.bin_code}</span></p>
           )}

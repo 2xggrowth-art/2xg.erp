@@ -102,7 +102,10 @@ const BikeCard = ({ bike, onSetPriority, onClick, showDamageInfo }: BikeCardProp
     >
       <div className="flex items-start justify-between mb-2">
         <div className="flex-1 min-w-0">
-          <h4 className="font-bold text-gray-900 text-sm truncate">{bike.model_sku}</h4>
+          <h4 className="font-bold text-gray-900 text-sm truncate">{bike.item_name || bike.model_sku}</h4>
+          {bike.item_name && bike.item_color && (
+            <p className="text-xs text-gray-600 truncate">{[bike.item_color, bike.item_size].filter(Boolean).join(' / ')}</p>
+          )}
           <p className="text-xs text-gray-500 truncate">{bike.barcode}</p>
         </div>
         <button
