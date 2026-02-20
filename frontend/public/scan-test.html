@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Scan Test</title>
+  <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"></script>
+  <style>
+    body { margin: 0; padding: 20px; background: #fff; display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; }
+    .b { text-align: center; padding: 20px 10px; border: 1px solid #ddd; border-radius: 8px; }
+    .b svg { display: block; margin: 0 auto; }
+    @media print { body { gap: 16px; padding: 10px; } .b { border: 1px solid #ccc; } }
+  </style>
+</head>
+<body>
+  <div class="b"><svg id="b1"></svg></div>
+  <div class="b"><svg id="b2"></svg></div>
+  <div class="b"><svg id="b3"></svg></div>
+  <div class="b"><svg id="b4"></svg></div>
+  <div class="b"><svg id="b5"></svg></div>
+  <div class="b"><svg id="b6"></svg></div>
+  <div class="b"><svg id="b7"></svg></div>
+  <div class="b"><svg id="b8"></svg></div>
+  <div class="b"><svg id="b9"></svg></div>
+  <script>
+    const skus = [
+      'SKU-0001','SKU-0004','SKU-0007',
+      'SKU-0008','SKU-0010','SKU-0011',
+      'SKU-0025','SKU-0026','SKU-0027'
+    ];
+    skus.forEach((sku, i) => {
+      JsBarcode('#b'+(i+1), sku, {
+        format: 'CODE128',
+        width: 2.5,
+        height: 90,
+        displayValue: false,
+        margin: 10,
+      });
+    });
+  </script>
+</body>
+</html>

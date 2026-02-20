@@ -1,0 +1,867 @@
+\<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>2XG ERP — Business Process Waterfall</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Inter', 'Segoe UI', sans-serif;
+            background: #0b0f1a;
+            color: #d1d5db;
+            min-height: 100vh;
+        }
+
+        /* ── Header ── */
+        .hero {
+            background: linear-gradient(135deg, #0f1629 0%, #1a1040 50%, #0f1629 100%);
+            padding: 50px 40px 40px;
+            text-align: center;
+            border-bottom: 1px solid rgba(99,102,241,0.2);
+            position: relative;
+            overflow: hidden;
+        }
+        .hero::after {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: radial-gradient(ellipse at 50% 0%, rgba(99,102,241,0.1) 0%, transparent 60%);
+            pointer-events: none;
+        }
+        .hero h1 {
+            font-size: 2.6em;
+            font-weight: 900;
+            background: linear-gradient(135deg, #818cf8, #c084fc, #f472b6);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            position: relative; z-index: 1;
+        }
+        .hero p {
+            font-size: 1.15em;
+            color: #6b7280;
+            margin-top: 6px;
+            position: relative; z-index: 1;
+        }
+        .hero .tagline {
+            margin-top: 16px;
+            display: flex;
+            justify-content: center;
+            gap: 12px;
+            flex-wrap: wrap;
+            position: relative; z-index: 1;
+        }
+        .hero .tagline span {
+            padding: 5px 18px;
+            border-radius: 20px;
+            font-size: 0.82em;
+            font-weight: 600;
+            border: 1px solid rgba(255,255,255,0.08);
+            background: rgba(255,255,255,0.04);
+            color: #9ca3af;
+        }
+
+        /* ── Container ── */
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 50px 24px 80px;
+        }
+
+        /* ── Section Title ── */
+        .section-title {
+            text-align: center;
+            margin-bottom: 48px;
+        }
+        .section-title h2 {
+            font-size: 1.8em;
+            font-weight: 800;
+            color: #e5e7eb;
+        }
+        .section-title p {
+            color: #6b7280;
+            margin-top: 4px;
+        }
+
+        /* ── Process Flow ── */
+        .process-flow {
+            margin-bottom: 70px;
+        }
+        .process-header {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            margin-bottom: 28px;
+        }
+        .process-icon {
+            width: 52px;
+            height: 52px;
+            border-radius: 14px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5em;
+            flex-shrink: 0;
+        }
+        .process-header h3 {
+            font-size: 1.45em;
+            font-weight: 800;
+            color: #f3f4f6;
+        }
+        .process-header h3 small {
+            display: block;
+            font-size: 0.55em;
+            font-weight: 500;
+            color: #6b7280;
+            margin-top: 2px;
+        }
+
+        /* ── Waterfall Steps ── */
+        .waterfall-steps {
+            display: flex;
+            flex-direction: column;
+            gap: 0;
+            position: relative;
+            padding-left: 32px;
+        }
+        .waterfall-steps::before {
+            content: '';
+            position: absolute;
+            left: 15px;
+            top: 12px;
+            bottom: 12px;
+            width: 3px;
+            border-radius: 3px;
+        }
+
+        .step {
+            display: flex;
+            align-items: flex-start;
+            gap: 20px;
+            position: relative;
+            padding: 12px 0;
+        }
+
+        .step-dot {
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            flex-shrink: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.75em;
+            font-weight: 800;
+            color: #fff;
+            position: relative;
+            z-index: 2;
+            margin-left: -32px;
+        }
+
+        .step-card {
+            flex: 1;
+            background: rgba(17, 20, 39, 0.8);
+            border: 1px solid rgba(255,255,255,0.06);
+            border-radius: 12px;
+            padding: 18px 22px;
+            transition: transform 0.25s, border-color 0.25s;
+        }
+        .step-card:hover {
+            transform: translateX(6px);
+        }
+        .step-card h4 {
+            font-size: 1.05em;
+            font-weight: 700;
+            color: #e5e7eb;
+            margin-bottom: 4px;
+        }
+        .step-card p {
+            font-size: 0.88em;
+            color: #6b7280;
+            line-height: 1.55;
+        }
+        .step-card .who {
+            display: inline-block;
+            margin-top: 8px;
+            padding: 2px 10px;
+            border-radius: 10px;
+            font-size: 0.72em;
+            font-weight: 600;
+        }
+        .step-card .detail {
+            margin-top: 8px;
+            padding: 8px 12px;
+            border-radius: 8px;
+            background: rgba(255,255,255,0.02);
+            border: 1px solid rgba(255,255,255,0.04);
+            font-size: 0.82em;
+            color: #9ca3af;
+            line-height: 1.5;
+        }
+
+        /* ── Arrow between steps ── */
+        .step-arrow {
+            padding-left: 6px;
+            margin: -4px 0;
+            position: relative;
+            z-index: 1;
+        }
+        .step-arrow svg { display: block; }
+
+        /* ── Color Themes ── */
+        .theme-blue .process-icon { background: rgba(59,130,246,0.15); color: #60a5fa; border: 1px solid rgba(59,130,246,0.2); }
+        .theme-blue .waterfall-steps::before { background: linear-gradient(180deg, #3b82f6, rgba(59,130,246,0.1)); }
+        .theme-blue .step-dot { background: #2563eb; box-shadow: 0 0 12px rgba(37,99,235,0.4); }
+        .theme-blue .step-card:hover { border-color: rgba(59,130,246,0.3); }
+        .theme-blue .step-card .who { background: rgba(59,130,246,0.1); color: #60a5fa; border: 1px solid rgba(59,130,246,0.2); }
+
+        .theme-green .process-icon { background: rgba(16,185,129,0.15); color: #34d399; border: 1px solid rgba(16,185,129,0.2); }
+        .theme-green .waterfall-steps::before { background: linear-gradient(180deg, #10b981, rgba(16,185,129,0.1)); }
+        .theme-green .step-dot { background: #059669; box-shadow: 0 0 12px rgba(5,150,105,0.4); }
+        .theme-green .step-card:hover { border-color: rgba(16,185,129,0.3); }
+        .theme-green .step-card .who { background: rgba(16,185,129,0.1); color: #34d399; border: 1px solid rgba(16,185,129,0.2); }
+
+        .theme-purple .process-icon { background: rgba(139,92,246,0.15); color: #a78bfa; border: 1px solid rgba(139,92,246,0.2); }
+        .theme-purple .waterfall-steps::before { background: linear-gradient(180deg, #8b5cf6, rgba(139,92,246,0.1)); }
+        .theme-purple .step-dot { background: #7c3aed; box-shadow: 0 0 12px rgba(124,58,237,0.4); }
+        .theme-purple .step-card:hover { border-color: rgba(139,92,246,0.3); }
+        .theme-purple .step-card .who { background: rgba(139,92,246,0.1); color: #a78bfa; border: 1px solid rgba(139,92,246,0.2); }
+
+        .theme-amber .process-icon { background: rgba(245,158,11,0.15); color: #fbbf24; border: 1px solid rgba(245,158,11,0.2); }
+        .theme-amber .waterfall-steps::before { background: linear-gradient(180deg, #f59e0b, rgba(245,158,11,0.1)); }
+        .theme-amber .step-dot { background: #d97706; box-shadow: 0 0 12px rgba(217,119,6,0.4); }
+        .theme-amber .step-card:hover { border-color: rgba(245,158,11,0.3); }
+        .theme-amber .step-card .who { background: rgba(245,158,11,0.1); color: #fbbf24; border: 1px solid rgba(245,158,11,0.2); }
+
+        .theme-pink .process-icon { background: rgba(236,72,153,0.15); color: #f472b6; border: 1px solid rgba(236,72,153,0.2); }
+        .theme-pink .waterfall-steps::before { background: linear-gradient(180deg, #ec4899, rgba(236,72,153,0.1)); }
+        .theme-pink .step-dot { background: #db2777; box-shadow: 0 0 12px rgba(219,39,119,0.4); }
+        .theme-pink .step-card:hover { border-color: rgba(236,72,153,0.3); }
+        .theme-pink .step-card .who { background: rgba(236,72,153,0.1); color: #f472b6; border: 1px solid rgba(236,72,153,0.2); }
+
+        .theme-cyan .process-icon { background: rgba(6,182,212,0.15); color: #22d3ee; border: 1px solid rgba(6,182,212,0.2); }
+        .theme-cyan .waterfall-steps::before { background: linear-gradient(180deg, #06b6d4, rgba(6,182,212,0.1)); }
+        .theme-cyan .step-dot { background: #0891b2; box-shadow: 0 0 12px rgba(8,145,178,0.4); }
+        .theme-cyan .step-card:hover { border-color: rgba(6,182,212,0.3); }
+        .theme-cyan .step-card .who { background: rgba(6,182,212,0.1); color: #22d3ee; border: 1px solid rgba(6,182,212,0.2); }
+
+        .theme-red .process-icon { background: rgba(239,68,68,0.15); color: #f87171; border: 1px solid rgba(239,68,68,0.2); }
+        .theme-red .waterfall-steps::before { background: linear-gradient(180deg, #ef4444, rgba(239,68,68,0.1)); }
+        .theme-red .step-dot { background: #dc2626; box-shadow: 0 0 12px rgba(220,38,38,0.4); }
+        .theme-red .step-card:hover { border-color: rgba(239,68,68,0.3); }
+        .theme-red .step-card .who { background: rgba(239,68,68,0.1); color: #f87171; border: 1px solid rgba(239,68,68,0.2); }
+
+        /* ── Divider ── */
+        .divider {
+            height: 1px;
+            background: linear-gradient(90deg, transparent, rgba(99,102,241,0.2), transparent);
+            margin: 10px 0 60px;
+        }
+
+        /* ── Overview Diagram ── */
+        .overview {
+            margin-bottom: 60px;
+        }
+        .overview-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+            gap: 12px;
+            margin-top: 20px;
+        }
+        .overview-card {
+            text-align: center;
+            padding: 20px 14px;
+            border-radius: 14px;
+            background: rgba(17,20,39,0.7);
+            border: 1px solid rgba(255,255,255,0.06);
+            transition: transform 0.2s;
+        }
+        .overview-card:hover { transform: translateY(-4px); }
+        .overview-card .ov-icon { font-size: 2em; margin-bottom: 8px; }
+        .overview-card h4 { font-size: 0.95em; font-weight: 700; color: #e5e7eb; }
+        .overview-card p { font-size: 0.78em; color: #6b7280; margin-top: 4px; line-height: 1.4; }
+
+        .big-arrow-row {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 6px;
+            padding: 10px 0;
+        }
+        .big-arrow-row .arr {
+            color: #4b5563;
+            font-size: 1.4em;
+        }
+
+        /* ── Footer ── */
+        .footer {
+            text-align: center;
+            padding: 30px;
+            color: #374151;
+            font-size: 0.82em;
+            border-top: 1px solid rgba(255,255,255,0.04);
+        }
+
+        @media (max-width: 700px) {
+            .hero h1 { font-size: 1.7em; }
+            .container { padding: 30px 14px; }
+            .process-header h3 { font-size: 1.15em; }
+            .step-card { padding: 14px 16px; }
+        }
+    </style>
+</head>
+<body>
+
+<div class="hero">
+    <h1>2XG ERP — Business Process</h1>
+    <p>How every operation flows from start to finish</p>
+    <div class="tagline">
+        <span>Procurement</span>
+        <span>Sales</span>
+        <span>Inventory</span>
+        <span>Warehouse</span>
+        <span>Point of Sale</span>
+        <span>Expenses</span>
+        <span>Reporting</span>
+    </div>
+</div>
+
+<div class="container">
+
+    <!-- ════════════════════════════════════════ -->
+    <!--           OVERVIEW DIAGRAM              -->
+    <!-- ════════════════════════════════════════ -->
+    <div class="overview">
+        <div class="section-title">
+            <h2>High-Level Business Flow</h2>
+            <p>The ERP connects every department into one unified system</p>
+        </div>
+        <div class="overview-grid">
+            <div class="overview-card">
+                <div class="ov-icon">🏭</div>
+                <h4>Vendor / Supplier</h4>
+                <p>Register vendors, set payment terms</p>
+            </div>
+            <div class="overview-card">
+                <div class="ov-icon">📋</div>
+                <h4>Purchase Order</h4>
+                <p>Request goods from vendors</p>
+            </div>
+            <div class="overview-card">
+                <div class="ov-icon">📦</div>
+                <h4>Receive &amp; Stock</h4>
+                <p>Bill received, stock placed in bins</p>
+            </div>
+            <div class="overview-card">
+                <div class="ov-icon">🏬</div>
+                <h4>Warehouse</h4>
+                <p>Manage bins, transfer stock, count</p>
+            </div>
+            <div class="overview-card">
+                <div class="ov-icon">🛒</div>
+                <h4>Sell</h4>
+                <p>Sales orders, invoices, or POS</p>
+            </div>
+            <div class="overview-card">
+                <div class="ov-icon">🚚</div>
+                <h4>Deliver</h4>
+                <p>Delivery challan, dispatch goods</p>
+            </div>
+            <div class="overview-card">
+                <div class="ov-icon">💰</div>
+                <h4>Collect Payment</h4>
+                <p>Record payments received</p>
+            </div>
+            <div class="overview-card">
+                <div class="ov-icon">📊</div>
+                <h4>Reports</h4>
+                <p>P&amp;L, stock, ledger, AI insights</p>
+            </div>
+        </div>
+    </div>
+
+    <div class="divider"></div>
+
+    <!-- ════════════════════════════════════════ -->
+    <!--       1. PROCUREMENT PROCESS            -->
+    <!-- ════════════════════════════════════════ -->
+    <div class="process-flow theme-blue">
+        <div class="process-header">
+            <div class="process-icon">📥</div>
+            <h3>Procurement Process <small>How goods are purchased and stocked</small></h3>
+        </div>
+        <div class="waterfall-steps">
+
+            <div class="step">
+                <div class="step-dot">1</div>
+                <div class="step-card">
+                    <h4>Register a Vendor</h4>
+                    <p>Add a new supplier with their contact person, phone, email, city, state, country, and payment terms (e.g. "Net 30" or "Due on Receipt").</p>
+                    <span class="who">Admin / Purchase Manager</span>
+                </div>
+            </div>
+
+            <div class="step">
+                <div class="step-dot">2</div>
+                <div class="step-card">
+                    <h4>Create a Purchase Order (PO)</h4>
+                    <p>Select the vendor, add items with quantities and agreed prices. The PO is a formal request to buy goods. It can be saved as draft first and sent to the vendor later.</p>
+                    <span class="who">Purchase Manager</span>
+                </div>
+            </div>
+
+            <div class="step">
+                <div class="step-dot">3</div>
+                <div class="step-card">
+                    <h4>Receive Goods &amp; Create Bill</h4>
+                    <p>When goods arrive, convert the PO into a Bill. Each bill line item records the exact quantity received, cost price, serial numbers (if tracked), and any TDS/TCS tax deductions.</p>
+                    <span class="who">Warehouse / Accounts</span>
+                </div>
+            </div>
+
+            <div class="step">
+                <div class="step-dot">4</div>
+                <div class="step-card">
+                    <h4>Allocate Stock to Bins</h4>
+                    <p>For each item on the bill, choose which warehouse bin to store it in (e.g. "A-01-01", "BIN-003"). The system records a <strong>bin allocation</strong> — this is how stock enters the warehouse.</p>
+                    <div class="detail">Example: 100 units of "Widget X" received → 60 placed in BIN-001 (Ground Floor), 40 placed in BIN-015 (1st Floor).</div>
+                    <span class="who">Warehouse Staff</span>
+                </div>
+            </div>
+
+            <div class="step">
+                <div class="step-dot">5</div>
+                <div class="step-card">
+                    <h4>Record Payment to Vendor</h4>
+                    <p>Create a "Payment Made" record against the bill. Track how much was paid, the payment method (cash, bank, UPI), and any remaining balance. If the vendor overcharged, issue a <strong>Vendor Credit</strong>.</p>
+                    <span class="who">Accounts</span>
+                </div>
+            </div>
+
+            <div class="step">
+                <div class="step-dot">✓</div>
+                <div class="step-card" style="background: rgba(37,99,235,0.05); border-color: rgba(59,130,246,0.2);">
+                    <h4>Result</h4>
+                    <p>Stock is now in the warehouse bins. The vendor ledger shows the bill and payment. Inventory counts are updated. The items are ready to sell.</p>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <div class="divider"></div>
+
+    <!-- ════════════════════════════════════════ -->
+    <!--          2. SALES PROCESS               -->
+    <!-- ════════════════════════════════════════ -->
+    <div class="process-flow theme-green">
+        <div class="process-header">
+            <div class="process-icon">📤</div>
+            <h3>Sales Process <small>How goods are sold and delivered to customers</small></h3>
+        </div>
+        <div class="waterfall-steps">
+
+            <div class="step">
+                <div class="step-dot">1</div>
+                <div class="step-card">
+                    <h4>Register a Customer</h4>
+                    <p>Add customer name, company, email, phone, billing address, shipping address, GSTIN/PAN (for tax), and payment terms.</p>
+                    <span class="who">Sales Team</span>
+                </div>
+            </div>
+
+            <div class="step">
+                <div class="step-dot">2</div>
+                <div class="step-card">
+                    <h4>Create a Sales Order (SO)</h4>
+                    <p>Customer requests items. Create a sales order listing what they want, quantities, and selling prices. This is a <em>commitment</em> to sell — no stock moves yet.</p>
+                    <span class="who">Sales Team</span>
+                </div>
+            </div>
+
+            <div class="step">
+                <div class="step-dot">3</div>
+                <div class="step-card">
+                    <h4>Generate Invoice</h4>
+                    <p>Convert the sales order into an invoice. The invoice is the official billing document with tax calculations (TDS/TCS), totals, and due dates. This is what the customer pays against.</p>
+                    <span class="who">Accounts / Sales</span>
+                </div>
+            </div>
+
+            <div class="step">
+                <div class="step-dot">4</div>
+                <div class="step-card">
+                    <h4>Pick Stock from Bins</h4>
+                    <p>For each item on the invoice, select which bin to take stock from. The system creates <strong>invoice bin allocations</strong> — this is how stock leaves the warehouse.</p>
+                    <div class="detail">Example: Customer ordered 25 units of "Widget X" → Pick 25 from BIN-001 (Ground Floor). BIN-001 stock drops from 60 to 35.</div>
+                    <span class="who">Warehouse Staff</span>
+                </div>
+            </div>
+
+            <div class="step">
+                <div class="step-dot">5</div>
+                <div class="step-card">
+                    <h4>Create Delivery Challan &amp; Dispatch</h4>
+                    <p>Generate a delivery challan — a document that travels with the goods. It lists items, quantities, and the destination. Hand over to logistics for delivery.</p>
+                    <span class="who">Logistics</span>
+                </div>
+            </div>
+
+            <div class="step">
+                <div class="step-dot">6</div>
+                <div class="step-card">
+                    <h4>Receive Payment from Customer</h4>
+                    <p>Record the payment received against the invoice — full or partial. Track payment method and any outstanding balance.</p>
+                    <span class="who">Accounts</span>
+                </div>
+            </div>
+
+            <div class="step">
+                <div class="step-dot">✓</div>
+                <div class="step-card" style="background: rgba(5,150,105,0.05); border-color: rgba(16,185,129,0.2);">
+                    <h4>Result</h4>
+                    <p>Goods delivered to customer. Payment collected. Stock reduced from the correct bins. Customer ledger updated. Revenue recorded in reports.</p>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <div class="divider"></div>
+
+    <!-- ════════════════════════════════════════ -->
+    <!--       3. POINT OF SALE (POS)            -->
+    <!-- ════════════════════════════════════════ -->
+    <div class="process-flow theme-purple">
+        <div class="process-header">
+            <div class="process-icon">🛒</div>
+            <h3>Point of Sale (POS) <small>Walk-in counter sales — quick checkout</small></h3>
+        </div>
+        <div class="waterfall-steps">
+
+            <div class="step">
+                <div class="step-dot">1</div>
+                <div class="step-card">
+                    <h4>Open a POS Session</h4>
+                    <p>A cashier opens a new session for the day. This tracks all sales, payments, and cash movements during that session. The opening cash balance is recorded.</p>
+                    <span class="who">Cashier</span>
+                </div>
+            </div>
+
+            <div class="step">
+                <div class="step-dot">2</div>
+                <div class="step-card">
+                    <h4>Add Items to Cart</h4>
+                    <p>Scan barcodes or search items. Select the bin to pick from (system shows available stock per bin). Add quantities and the selling price is auto-filled.</p>
+                    <span class="who">Cashier</span>
+                </div>
+            </div>
+
+            <div class="step">
+                <div class="step-dot">3</div>
+                <div class="step-card">
+                    <h4>Collect Payment</h4>
+                    <p>Customer pays. Supports split payment — for example ₹500 cash + ₹1,200 UPI. Each portion is recorded separately with its payment method.</p>
+                    <span class="who">Cashier</span>
+                </div>
+            </div>
+
+            <div class="step">
+                <div class="step-dot">4</div>
+                <div class="step-card">
+                    <h4>Auto-Generated Invoice &amp; Stock Update</h4>
+                    <p>The system automatically creates an invoice, a "payment received" record, and deducts stock from the selected bins. No manual steps needed.</p>
+                    <span class="who">System (Automatic)</span>
+                </div>
+            </div>
+
+            <div class="step">
+                <div class="step-dot">5</div>
+                <div class="step-card">
+                    <h4>Close Session &amp; Reconcile</h4>
+                    <p>At end of day, close the session. The system shows total sales, total cash collected, and payment breakdowns. Cashier counts physical cash and records the closing balance.</p>
+                    <span class="who">Cashier / Manager</span>
+                </div>
+            </div>
+
+            <div class="step">
+                <div class="step-dot">✓</div>
+                <div class="step-card" style="background: rgba(124,58,237,0.05); border-color: rgba(139,92,246,0.2);">
+                    <h4>Result</h4>
+                    <p>All walk-in sales recorded. Stock automatically reduced. Cash balanced. Session report available for management review.</p>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <div class="divider"></div>
+
+    <!-- ════════════════════════════════════════ -->
+    <!--       4. WAREHOUSE OPERATIONS           -->
+    <!-- ════════════════════════════════════════ -->
+    <div class="process-flow theme-amber">
+        <div class="process-header">
+            <div class="process-icon">🏬</div>
+            <h3>Warehouse &amp; Stock Management <small>How stock is organized, moved, and counted</small></h3>
+        </div>
+        <div class="waterfall-steps">
+
+            <div class="step">
+                <div class="step-dot">1</div>
+                <div class="step-card">
+                    <h4>Set Up Locations &amp; Bins</h4>
+                    <p>Define physical locations (e.g. "Warehouse A", "Head Office", "Shop Floor"). Within each location, create bin codes (e.g. "A-01-01", "BIN-003") to track exactly where items sit.</p>
+                    <span class="who">Warehouse Manager</span>
+                </div>
+            </div>
+
+            <div class="step">
+                <div class="step-dot">2</div>
+                <div class="step-card">
+                    <h4>Stock Comes In (via Bills)</h4>
+                    <p>When a purchase bill is created, stock is allocated to specific bins. This is the only way stock <em>enters</em> the system. Every unit is traceable to a bin.</p>
+                    <span class="who">Warehouse Staff</span>
+                </div>
+            </div>
+
+            <div class="step">
+                <div class="step-dot">3</div>
+                <div class="step-card">
+                    <h4>Transfer Stock Between Locations</h4>
+                    <p>Need to move items from one location to another? Create a <strong>Transfer Order</strong>. Select source bin, destination bin, and quantity. When the order is "initiated", the stock moves. If cancelled, stock reverts.</p>
+                    <div class="detail">
+                        Draft → no movement<br>
+                        Initiated → stock deducted from source bin, added to destination bin<br>
+                        Received → transfer confirmed<br>
+                        Cancelled → movement reversed
+                    </div>
+                    <span class="who">Warehouse Manager</span>
+                </div>
+            </div>
+
+            <div class="step">
+                <div class="step-dot">4</div>
+                <div class="step-card">
+                    <h4>Conduct Stock Counts</h4>
+                    <p>Periodically count physical stock and compare with system records. Mobile app staff can scan items and record counts. Discrepancies are flagged for investigation.</p>
+                    <span class="who">Warehouse Staff / Mobile Users</span>
+                </div>
+            </div>
+
+            <div class="step">
+                <div class="step-dot">5</div>
+                <div class="step-card">
+                    <h4>Report Damaged Stock</h4>
+                    <p>If items are found damaged, create a damage report with type, severity, and quantity. This helps management track losses and decide on write-offs or insurance claims.</p>
+                    <span class="who">Warehouse Staff</span>
+                </div>
+            </div>
+
+            <div class="step">
+                <div class="step-dot">6</div>
+                <div class="step-card">
+                    <h4>Stock Goes Out (via Invoices / POS)</h4>
+                    <p>When a sale is made, stock is deducted from the selected bins via invoice or POS bin allocations. The cycle completes — goods received, stored, managed, and sold.</p>
+                    <span class="who">System (Automatic)</span>
+                </div>
+            </div>
+
+            <div class="step">
+                <div class="step-dot">✓</div>
+                <div class="step-card" style="background: rgba(217,119,6,0.05); border-color: rgba(245,158,11,0.2);">
+                    <h4>Stock Formula</h4>
+                    <p><strong>Stock in any bin</strong> = Purchases In − Sales Out − Transfers Out + Transfers In. The system calculates this in real-time. No manual stock registers needed.</p>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <div class="divider"></div>
+
+    <!-- ════════════════════════════════════════ -->
+    <!--       5. EXPENSE MANAGEMENT             -->
+    <!-- ════════════════════════════════════════ -->
+    <div class="process-flow theme-pink">
+        <div class="process-header">
+            <div class="process-icon">💸</div>
+            <h3>Expense Management <small>Track business expenses — desktop and mobile</small></h3>
+        </div>
+        <div class="waterfall-steps">
+
+            <div class="step">
+                <div class="step-dot">1</div>
+                <div class="step-card">
+                    <h4>Set Up Expense Categories</h4>
+                    <p>Define categories for expenses — Travel, Office Supplies, Utilities, Rent, Marketing, etc. Each category gets a name and optional description.</p>
+                    <span class="who">Admin</span>
+                </div>
+            </div>
+
+            <div class="step">
+                <div class="step-dot">2</div>
+                <div class="step-card">
+                    <h4>Create Expense (Desktop or Mobile)</h4>
+                    <p><strong>Desktop:</strong> Fill in expense number, date, amount, category, vendor, and payment method from the web dashboard.<br><br>
+                    <strong>Mobile:</strong> Open app → Take photo of receipt → Select category → Enter amount → Choose payment method → Swipe to submit. Quick and simple for field staff.</p>
+                    <span class="who">Any Employee</span>
+                </div>
+            </div>
+
+            <div class="step">
+                <div class="step-dot">3</div>
+                <div class="step-card">
+                    <h4>Review &amp; Approve</h4>
+                    <p>Submitted expenses appear in the dashboard with status "pending". Manager reviews the receipt photo, amount, and category. They can approve or reject (with reason).</p>
+                    <span class="who">Manager / Admin</span>
+                </div>
+            </div>
+
+            <div class="step">
+                <div class="step-dot">4</div>
+                <div class="step-card">
+                    <h4>Track in Reports</h4>
+                    <p>Approved expenses flow into financial reports. View expenses by category, by date range, by vendor, or by employee. Helps management control costs.</p>
+                    <span class="who">Management</span>
+                </div>
+            </div>
+
+            <div class="step">
+                <div class="step-dot">✓</div>
+                <div class="step-card" style="background: rgba(219,39,119,0.05); border-color: rgba(236,72,153,0.2);">
+                    <h4>Result</h4>
+                    <p>Every rupee spent is tracked with receipt proof. No paper expense reports. Mobile staff can submit expenses in seconds from the field.</p>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <div class="divider"></div>
+
+    <!-- ════════════════════════════════════════ -->
+    <!--       6. CRM & CUSTOMER CARE            -->
+    <!-- ════════════════════════════════════════ -->
+    <div class="process-flow theme-cyan">
+        <div class="process-header">
+            <div class="process-icon">🤝</div>
+            <h3>CRM &amp; Customer Care <small>Manage leads and support tickets</small></h3>
+        </div>
+        <div class="waterfall-steps">
+
+            <div class="step">
+                <div class="step-dot">1</div>
+                <div class="step-card">
+                    <h4>Capture a Lead (CRM)</h4>
+                    <p>When a potential customer shows interest, create a lead entry with their name, contact info, source (website, referral, walk-in), and estimated deal value.</p>
+                    <span class="who">Sales Team</span>
+                </div>
+            </div>
+
+            <div class="step">
+                <div class="step-dot">2</div>
+                <div class="step-card">
+                    <h4>Follow Up &amp; Nurture</h4>
+                    <p>Track follow-up activities — calls, meetings, emails. Update the lead's status as it progresses through the pipeline (New → Contacted → Qualified → Proposal → Negotiation).</p>
+                    <span class="who">Sales Team</span>
+                </div>
+            </div>
+
+            <div class="step">
+                <div class="step-dot">3</div>
+                <div class="step-card">
+                    <h4>Convert to Customer</h4>
+                    <p>When the lead agrees to buy, convert them into a registered Customer in the system. Now you can create sales orders and invoices for them.</p>
+                    <span class="who">Sales Team</span>
+                </div>
+            </div>
+
+            <div class="step">
+                <div class="step-dot">4</div>
+                <div class="step-card">
+                    <h4>Handle Support Tickets (CARE)</h4>
+                    <p>After the sale, if the customer has an issue, create a service ticket. Assign it to a team member, track priority, status (open → in progress → resolved → closed), and resolution notes.</p>
+                    <span class="who">Support Team</span>
+                </div>
+            </div>
+
+            <div class="step">
+                <div class="step-dot">✓</div>
+                <div class="step-card" style="background: rgba(8,145,178,0.05); border-color: rgba(6,182,212,0.2);">
+                    <h4>Result</h4>
+                    <p>Complete customer lifecycle — from first contact as a lead, through the sale, to after-sales support. Nothing falls through the cracks.</p>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <div class="divider"></div>
+
+    <!-- ════════════════════════════════════════ -->
+    <!--       7. REPORTING & INSIGHTS           -->
+    <!-- ════════════════════════════════════════ -->
+    <div class="process-flow theme-red">
+        <div class="process-header">
+            <div class="process-icon">📊</div>
+            <h3>Reporting &amp; Insights <small>Business intelligence from all your data</small></h3>
+        </div>
+        <div class="waterfall-steps">
+
+            <div class="step">
+                <div class="step-dot">1</div>
+                <div class="step-card">
+                    <h4>Dashboard Overview</h4>
+                    <p>The moment you log in, the dashboard shows key metrics — total sales, total purchases, outstanding receivables, payables, stock value, and expense summaries. At a glance, you know how the business is doing.</p>
+                    <span class="who">All Users</span>
+                </div>
+            </div>
+
+            <div class="step">
+                <div class="step-dot">2</div>
+                <div class="step-card">
+                    <h4>Run Detailed Reports</h4>
+                    <p>Choose from financial reports — Profit &amp; Loss, Sales by Customer, Purchases by Vendor, Inventory Valuation, Expense Breakdown, Stock Movement, and more. Filter by any date range.</p>
+                    <span class="who">Management / Accounts</span>
+                </div>
+            </div>
+
+            <div class="step">
+                <div class="step-dot">3</div>
+                <div class="step-card">
+                    <h4>Vendor / Customer Ledger</h4>
+                    <p>View a complete history of all transactions with any vendor or customer — every bill, invoice, payment, and credit. See the outstanding balance at any point in time.</p>
+                    <span class="who">Accounts</span>
+                </div>
+            </div>
+
+            <div class="step">
+                <div class="step-dot">4</div>
+                <div class="step-card">
+                    <h4>AI-Powered Insights</h4>
+                    <p>The AI module analyzes your data to surface patterns — slow-moving stock, top-selling items, seasonal trends, high-expense categories, and actionable recommendations.</p>
+                    <span class="who">Management</span>
+                </div>
+            </div>
+
+            <div class="step">
+                <div class="step-dot">✓</div>
+                <div class="step-card" style="background: rgba(220,38,38,0.05); border-color: rgba(239,68,68,0.2);">
+                    <h4>Result</h4>
+                    <p>Data-driven decisions. No guesswork. Every transaction across procurement, sales, warehouse, and expenses feeds into unified reports.</p>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+</div>
+
+<div class="footer">
+    2XG ERP System — Business Process Documentation &middot; Feb 2026
+</div>
+
+</body>
+</html>

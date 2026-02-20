@@ -1,0 +1,1154 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>2XG ERP System - Architecture Flow Document</title>
+<style>
+  @page {
+    size: A4;
+    margin: 15mm 18mm;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    color: #1e293b;
+    line-height: 1.5;
+    background: #fff;
+    font-size: 11px;
+  }
+
+  /* Cover Page */
+  .cover {
+    page-break-after: always;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    min-height: 95vh;
+    text-align: center;
+    background: linear-gradient(135deg, #0f172a 0%, #1e3a5f 50%, #0f172a 100%);
+    color: white;
+    padding: 40px;
+    border-radius: 0;
+  }
+  .cover-logo {
+    font-size: 64px;
+    font-weight: 900;
+    letter-spacing: -2px;
+    margin-bottom: 8px;
+    background: linear-gradient(135deg, #60a5fa, #a78bfa);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+  .cover-subtitle {
+    font-size: 26px;
+    font-weight: 300;
+    color: #94a3b8;
+    margin-bottom: 50px;
+  }
+  .cover-title {
+    font-size: 36px;
+    font-weight: 700;
+    margin-bottom: 12px;
+    line-height: 1.2;
+  }
+  .cover-desc {
+    font-size: 16px;
+    color: #cbd5e1;
+    max-width: 500px;
+    margin-bottom: 60px;
+  }
+  .cover-meta {
+    font-size: 13px;
+    color: #64748b;
+  }
+  .cover-meta span {
+    display: block;
+    margin: 4px 0;
+  }
+
+  /* Section Headers */
+  h1 {
+    font-size: 22px;
+    font-weight: 800;
+    color: #0f172a;
+    margin: 30px 0 6px 0;
+    padding-bottom: 6px;
+    border-bottom: 3px solid #3b82f6;
+    display: inline-block;
+  }
+  h2 {
+    font-size: 16px;
+    font-weight: 700;
+    color: #1e40af;
+    margin: 20px 0 8px 0;
+  }
+  h3 {
+    font-size: 13px;
+    font-weight: 700;
+    color: #334155;
+    margin: 14px 0 6px 0;
+  }
+  p { margin: 4px 0 8px 0; font-size: 11px; }
+
+  /* Tables */
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 8px 0 16px 0;
+    font-size: 10.5px;
+  }
+  th {
+    background: #1e3a5f;
+    color: white;
+    padding: 7px 10px;
+    text-align: left;
+    font-weight: 600;
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  td {
+    padding: 6px 10px;
+    border-bottom: 1px solid #e2e8f0;
+    vertical-align: top;
+  }
+  tr:nth-child(even) { background: #f8fafc; }
+  tr:hover { background: #eff6ff; }
+
+  /* Code / Diagram blocks */
+  .diagram-box {
+    background: #0f172a;
+    color: #e2e8f0;
+    padding: 16px 18px;
+    border-radius: 8px;
+    font-family: 'Cascadia Code', 'Fira Code', 'Consolas', monospace;
+    font-size: 10px;
+    line-height: 1.6;
+    margin: 10px 0 16px 0;
+    white-space: pre;
+    overflow-x: auto;
+    border-left: 4px solid #3b82f6;
+  }
+  .diagram-box .highlight { color: #60a5fa; font-weight: bold; }
+  .diagram-box .green { color: #4ade80; }
+  .diagram-box .yellow { color: #fbbf24; }
+  .diagram-box .red { color: #f87171; }
+  .diagram-box .purple { color: #c084fc; }
+
+  /* Status badges */
+  .badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 9px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  .badge-exists { background: #dcfce7; color: #166534; }
+  .badge-enhance { background: #fef3c7; color: #92400e; }
+  .badge-new { background: #ede9fe; color: #5b21b6; }
+
+  /* Info boxes */
+  .info-box {
+    padding: 12px 16px;
+    border-radius: 6px;
+    margin: 8px 0 14px 0;
+    font-size: 11px;
+  }
+  .info-blue { background: #eff6ff; border-left: 4px solid #3b82f6; }
+  .info-amber { background: #fffbeb; border-left: 4px solid #f59e0b; }
+  .info-green { background: #f0fdf4; border-left: 4px solid #22c55e; }
+  .info-red { background: #fef2f2; border-left: 4px solid #ef4444; }
+
+  /* Columns */
+  .two-col {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    margin: 8px 0;
+  }
+  .three-col {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 12px;
+    margin: 8px 0;
+  }
+  .col-card {
+    border: 1px solid #e2e8f0;
+    border-radius: 6px;
+    padding: 12px;
+    background: #fafbfc;
+  }
+  .col-card h4 {
+    font-size: 11px;
+    font-weight: 700;
+    color: #1e40af;
+    margin-bottom: 6px;
+  }
+
+  /* Lists */
+  ul { margin: 4px 0 8px 18px; font-size: 11px; }
+  li { margin: 2px 0; }
+
+  /* Page break */
+  .page-break { page-break-before: always; }
+
+  /* Phase timeline */
+  .phase-container { margin: 10px 0; }
+  .phase {
+    display: flex;
+    align-items: flex-start;
+    margin: 10px 0;
+    position: relative;
+  }
+  .phase-marker {
+    min-width: 90px;
+    padding: 6px 12px;
+    border-radius: 6px;
+    font-size: 11px;
+    font-weight: 700;
+    color: white;
+    text-align: center;
+    margin-right: 14px;
+    flex-shrink: 0;
+  }
+  .phase-1 { background: #3b82f6; }
+  .phase-2 { background: #8b5cf6; }
+  .phase-3 { background: #f59e0b; }
+  .phase-4 { background: #22c55e; }
+  .phase-content {
+    flex: 1;
+    border: 1px solid #e2e8f0;
+    border-radius: 6px;
+    padding: 10px 14px;
+    background: #fff;
+  }
+  .phase-content h4 {
+    font-size: 12px;
+    font-weight: 700;
+    margin-bottom: 4px;
+    color: #0f172a;
+  }
+  .phase-content ul {
+    margin-left: 16px;
+    font-size: 10.5px;
+  }
+
+  /* TOC */
+  .toc { margin: 10px 0; }
+  .toc-item {
+    display: flex;
+    justify-content: space-between;
+    padding: 6px 0;
+    border-bottom: 1px dotted #cbd5e1;
+    font-size: 12px;
+  }
+  .toc-item:hover { background: #f8fafc; }
+  .toc-section { font-weight: 700; color: #1e40af; }
+  .toc-page { color: #64748b; font-weight: 600; }
+
+  /* Footer for print */
+  @media print {
+    body { font-size: 10px; }
+    .diagram-box { font-size: 9px; padding: 12px; }
+    table { font-size: 9.5px; }
+    .cover { min-height: 100vh; }
+    .no-break { page-break-inside: avoid; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ==================== COVER PAGE ==================== -->
+<div class="cover">
+  <div class="cover-logo">2XG</div>
+  <div class="cover-subtitle">Enterprise Resource Planning</div>
+  <div class="cover-title">System Architecture<br>Flow Document</div>
+  <div class="cover-desc">
+    Comprehensive architecture blueprint covering current modules,
+    new enhancements, and implementation roadmap for the 2XG ERP system.
+  </div>
+  <div class="cover-meta">
+    <span>Version 2.0 | February 2026</span>
+    <span>Prepared for: 2XG Growth</span>
+    <span>Stack: React + Express + Supabase (PostgreSQL)</span>
+    <span>Deployment: Coolify (OVH Self-Hosted)</span>
+  </div>
+</div>
+
+<!-- ==================== TABLE OF CONTENTS ==================== -->
+<div>
+  <h1>Table of Contents</h1>
+  <div class="toc">
+    <div class="toc-item"><span class="toc-section">1. Executive Summary</span><span class="toc-page">3</span></div>
+    <div class="toc-item"><span class="toc-section">2. Current System Overview</span><span class="toc-page">3</span></div>
+    <div class="toc-item"><span>&nbsp;&nbsp;&nbsp;2.1 Existing Modules (28 APIs)</span><span class="toc-page">3</span></div>
+    <div class="toc-item"><span>&nbsp;&nbsp;&nbsp;2.2 Tech Stack</span><span class="toc-page">3</span></div>
+    <div class="toc-item"><span>&nbsp;&nbsp;&nbsp;2.3 Current Data Flow</span><span class="toc-page">4</span></div>
+    <div class="toc-item"><span class="toc-section">3. Gap Analysis: Current vs Required</span><span class="toc-page">4</span></div>
+    <div class="toc-item"><span class="toc-section">4. Module 1: Enhanced Warehouse & Bin Management</span><span class="toc-page">5</span></div>
+    <div class="toc-item"><span class="toc-section">5. Module 2: Serial Tracking & Auto-Yield</span><span class="toc-page">6</span></div>
+    <div class="toc-item"><span class="toc-section">6. Module 3: Sales CRM + KYC Enhancement</span><span class="toc-page">7</span></div>
+    <div class="toc-item"><span class="toc-section">7. Module 4: Stock Ordering & Discrepancy Flow</span><span class="toc-page">8</span></div>
+    <div class="toc-item"><span class="toc-section">8. Module 5: Stock Count + Auto-Correction</span><span class="toc-page">9</span></div>
+    <div class="toc-item"><span class="toc-section">9. Module 6: Issue Bin Workflow</span><span class="toc-page">10</span></div>
+    <div class="toc-item"><span class="toc-section">10. Complete Data Flow (All Modules Connected)</span><span class="toc-page">11</span></div>
+    <div class="toc-item"><span class="toc-section">11. Database Schema Changes</span><span class="toc-page">12</span></div>
+    <div class="toc-item"><span class="toc-section">12. New API Endpoints</span><span class="toc-page">13</span></div>
+    <div class="toc-item"><span class="toc-section">13. File Changes Summary</span><span class="toc-page">13</span></div>
+    <div class="toc-item"><span class="toc-section">14. Implementation Roadmap</span><span class="toc-page">14</span></div>
+  </div>
+</div>
+
+<!-- ==================== SECTION 1: EXECUTIVE SUMMARY ==================== -->
+<div class="page-break">
+  <h1>1. Executive Summary</h1>
+  <p>
+    The 2XG ERP system is a production-deployed monorepo application serving as the central business management platform for 2XG Growth.
+    This document outlines the architecture for 6 new/enhanced modules that extend the current system to support
+    <strong>serial-level inventory tracking</strong>, <strong>advanced warehouse bin management</strong>,
+    <strong>goods receipt with discrepancy handling</strong>, <strong>enhanced sales CRM with KYC</strong>,
+    <strong>scheduled stock audits with auto-correction</strong>, and an <strong>Issue Bin lifecycle workflow</strong>.
+  </p>
+  <div class="info-blue info-box">
+    <strong>Key Principle:</strong> All 28 existing APIs and 48 existing pages remain untouched. New modules are added alongside existing ones,
+    following the established Route &rarr; Controller &rarr; Service &rarr; Supabase pattern.
+  </div>
+
+  <h1>2. Current System Overview</h1>
+
+  <h2>2.1 Existing Modules (28 API Routes, 48 Pages, 55 Components)</h2>
+  <div class="two-col">
+    <div class="col-card">
+      <h4>Core Business Modules</h4>
+      <ul>
+        <li>Items / Inventory Management</li>
+        <li>Purchase Orders + Bills</li>
+        <li>Sales Orders + Invoices</li>
+        <li>Payments Made / Received</li>
+        <li>Vendor Credits</li>
+        <li>Expenses + Categories</li>
+        <li>Transfer Orders</li>
+        <li>Delivery Challans</li>
+      </ul>
+    </div>
+    <div class="col-card">
+      <h4>Supporting Modules</h4>
+      <ul>
+        <li>Customer Management</li>
+        <li>Vendor Management</li>
+        <li>Bin Locations (basic)</li>
+        <li>Stock Count (basic)</li>
+        <li>POS Sessions</li>
+        <li>Brands & Manufacturers</li>
+        <li>Reports & AI Insights</li>
+        <li>CRM / CARE / Logistics</li>
+      </ul>
+    </div>
+  </div>
+
+  <h2>2.2 Tech Stack</h2>
+  <table>
+    <tr><th>Layer</th><th>Technology</th><th>Details</th></tr>
+    <tr><td><strong>Frontend</strong></td><td>React 18 + Vite + TypeScript</td><td>Tailwind CSS, React Router, Axios, Lucide Icons</td></tr>
+    <tr><td><strong>Backend</strong></td><td>Express.js + TypeScript</td><td>28 route files, JWT auth, Helmet, Morgan, CORS</td></tr>
+    <tr><td><strong>Database</strong></td><td>PostgreSQL (Supabase)</td><td>Self-hosted, PostgREST gateway, Service Role Key (bypasses RLS)</td></tr>
+    <tr><td><strong>Auth</strong></td><td>Custom JWT</td><td>bcrypt passwords, 7-day expiry, web + mobile user support</td></tr>
+    <tr><td><strong>Deployment</strong></td><td>Coolify (OVH Server)</td><td>Docker-based PaaS, auto-deploy on push to main</td></tr>
+    <tr><td><strong>URLs</strong></td><td>Production</td><td>Frontend: erp.2xg.in | Backend: api.erp.2xg.in</td></tr>
+  </table>
+
+  <h2>2.3 Current Data Flow</h2>
+  <div class="diagram-box"><span class="highlight">User Action</span> (React Component)
+    &darr;
+<span class="highlight">Frontend Service</span> (axios + JWT header)
+    &darr;
+<span class="highlight">Backend Route</span> &rarr; Auth Middleware &rarr; Controller &rarr; Service
+    &darr;
+<span class="highlight">Supabase Client</span> (PostgREST API)
+    &darr;
+<span class="highlight">PostgreSQL</span> Database
+    &darr;
+<span class="green">Response:</span> { success: boolean, data?: T, error?: string }</div>
+</div>
+
+<!-- ==================== SECTION 3: GAP ANALYSIS ==================== -->
+<div class="page-break">
+  <h1>3. Gap Analysis: Current vs Required</h1>
+  <table>
+    <tr><th>Feature</th><th>Status</th><th>Current State</th><th>Required Enhancement</th></tr>
+    <tr>
+      <td>Items / Inventory</td>
+      <td><span class="badge badge-exists">EXISTS</span></td>
+      <td>Quantity-based stock tracking (current_stock)</td>
+      <td>Per-unit serial tracking, assembly state</td>
+    </tr>
+    <tr>
+      <td>Bin Locations</td>
+      <td><span class="badge badge-enhance">ENHANCE</span></td>
+      <td>Basic bin CRUD with location_code, capacity</td>
+      <td>Bin categories (Electric/Gear/Kids/Issue/Box), state (Assembled/Saleable)</td>
+    </tr>
+    <tr>
+      <td>Transfer Orders</td>
+      <td><span class="badge badge-enhance">ENHANCE</span></td>
+      <td>Manual transfer between locations</td>
+      <td>Auto-generation from stock count discrepancy</td>
+    </tr>
+    <tr>
+      <td>Stock Count</td>
+      <td><span class="badge badge-enhance">ENHANCE</span></td>
+      <td>Basic counting interface</td>
+      <td>Scheduled (Mon/Wed/Fri), physical vs accounting, auto-correction</td>
+    </tr>
+    <tr>
+      <td>Purchase Orders</td>
+      <td><span class="badge badge-enhance">ENHANCE</span></td>
+      <td>Full PO CRUD with GST</td>
+      <td>Goods receipt linking, partial receipt status, shortage handling</td>
+    </tr>
+    <tr>
+      <td>Delivery Challans</td>
+      <td><span class="badge badge-enhance">ENHANCE</span></td>
+      <td>Manual DC creation</td>
+      <td>Auto-DC from reverse pick-up / self pick-up sales</td>
+    </tr>
+    <tr>
+      <td>Customers</td>
+      <td><span class="badge badge-enhance">ENHANCE</span></td>
+      <td>Basic CRUD with name, email, GSTIN</td>
+      <td>Full KYC, B2B/B2C type, pin code, alt mobile</td>
+    </tr>
+    <tr>
+      <td>Sales Orders</td>
+      <td><span class="badge badge-enhance">ENHANCE</span></td>
+      <td>Standard sales order flow</td>
+      <td>Exchange flow, accessory list, delivery type, salesperson assignment</td>
+    </tr>
+    <tr>
+      <td>Vendor Credits</td>
+      <td><span class="badge badge-enhance">ENHANCE</span></td>
+      <td>Manual credit note creation</td>
+      <td>Auto-trigger from goods receipt discrepancy</td>
+    </tr>
+    <tr>
+      <td>Serial Tracking</td>
+      <td><span class="badge badge-new">NEW</span></td>
+      <td>Does not exist</td>
+      <td>Per-unit serial numbers, full lifecycle history, auto-yield</td>
+    </tr>
+    <tr>
+      <td>Goods Receipt (GRN)</td>
+      <td><span class="badge badge-new">NEW</span></td>
+      <td>Does not exist</td>
+      <td>Receipt against PO, inspection, discrepancy (shortage/damage/mismatch)</td>
+    </tr>
+    <tr>
+      <td>Issue Bin Workflow</td>
+      <td><span class="badge badge-new">NEW</span></td>
+      <td>Does not exist</td>
+      <td>Damaged/returned item lifecycle: repair, replace, scrap, return-to-vendor</td>
+    </tr>
+  </table>
+</div>
+
+<!-- ==================== MODULE 1: WAREHOUSE ==================== -->
+<div class="page-break">
+  <h1>4. Module 1: Enhanced Warehouse & Bin Management</h1>
+  <div class="info-amber info-box">
+    <strong>Type:</strong> Enhancement of existing module &nbsp;|&nbsp;
+    <strong>Affects:</strong> bin_locations table, binLocations.service.ts, BinLocationsPage.tsx
+  </div>
+
+  <h2>4.1 Warehouse Hierarchy</h2>
+  <div class="diagram-box"><span class="highlight">WAREHOUSE HIERARCHY</span>
+
+<span class="green">Location</span> (Godown / Store)
+  &boxur;&boxh; <span class="yellow">Bin Category</span>
+       &boxur;&boxh; <span class="purple">Electric Bin</span>     &larr; E-bikes, electric scooters
+       &boxur;&boxh; <span class="purple">Gear Bin</span>         &larr; Geared cycles/bikes
+       &boxur;&boxh; <span class="purple">Non-Gear Bin</span>     &larr; Single-speed cycles
+       &boxur;&boxh; <span class="purple">Kids Bin</span>         &larr; Children's cycles
+       &boxur;&boxh; <span class="red">Issue Bin</span>        &larr; Damaged / returned items
+       &boxvr;&boxh; <span class="yellow">Box Bin</span>          &larr; Inbound unprocessed stock
+
+  Each Bin tracks:
+    &bull; <span class="green">Assembly State</span>: Assembled / Unassembled
+    &bull; <span class="green">Saleability</span>:    Saleable / Non-Saleable
+    &bull; <span class="green">Serial Items</span>:   Linked serial numbers</div>
+
+  <h2>4.2 Database Changes (ALTER bin_locations)</h2>
+  <table>
+    <tr><th>Column</th><th>Type</th><th>Values</th><th>Purpose</th></tr>
+    <tr><td><code>location_type</code></td><td>TEXT</td><td><code>godown</code>, <code>store</code></td><td>Physical location classification</td></tr>
+    <tr><td><code>bin_category</code></td><td>TEXT</td><td><code>electric</code>, <code>gear</code>, <code>non_gear</code>, <code>kids</code>, <code>issue</code>, <code>box</code></td><td>Product category this bin holds</td></tr>
+    <tr><td><code>assembly_state</code></td><td>TEXT</td><td><code>assembled</code>, <code>unassembled</code>, <code>na</code></td><td>Assembly tracking for bin contents</td></tr>
+    <tr><td><code>saleability</code></td><td>TEXT</td><td><code>saleable</code>, <code>non_saleable</code></td><td>Whether items in this bin can be sold</td></tr>
+  </table>
+
+  <h2>4.3 Internal Transfer Logic</h2>
+  <div class="diagram-box"><span class="highlight">STOCK MOVEMENT THROUGH BINS</span>
+
+  <span class="yellow">Goods Receipt (Inbound)</span>
+      &darr;
+  <span class="purple">Box Bin</span> (Unassembled, Non-Saleable)
+      &darr; <span class="green">[Assembly Process]</span>
+  <span class="purple">Category Bin</span> (Electric/Gear/Non-Gear/Kids)
+  (Assembled, Saleable)              &larr;&larr; <span class="green">Auto-Yield triggers here</span>
+      &darr;
+  <span class="green">Available for Sale</span>
+      &darr; <span class="red">[If returned/damaged]</span>
+  <span class="red">Issue Bin</span> (Non-Saleable)
+      &darr;
+  Resolution: Repair / Replace / Scrap / Return to Vendor</div>
+</div>
+
+<!-- ==================== MODULE 2: SERIAL TRACKING ==================== -->
+<div class="page-break">
+  <h1>5. Module 2: Serial Tracking & Auto-Yield</h1>
+  <div class="info-green info-box">
+    <strong>Type:</strong> New module &nbsp;|&nbsp;
+    <strong>New Tables:</strong> serial_numbers, serial_history &nbsp;|&nbsp;
+    <strong>New API:</strong> /api/serial-tracking
+  </div>
+
+  <h2>5.1 Serial Lifecycle Flow</h2>
+  <div class="diagram-box"><span class="highlight">SERIAL NUMBER LIFECYCLE</span>
+
+  <span class="green">Item</span> (SKU: GEAR-001)
+    &boxvr;&boxh; <span class="yellow">Serial #030</span>
+    &boxv;     &boxur;&boxh; Status: <span class="green">active</span> / <span class="yellow">issued</span> / <span class="red">returned</span> / <span class="purple">replaced</span>
+    &boxv;     &boxur;&boxh; Current Bin: Gear Bin (Store)
+    &boxv;     &boxvr;&boxh; <span class="highlight">History Timeline:</span>
+    &boxv;          &boxur;&boxh; 2026-01-10  <span class="green">Inbound (I/B)</span> &rarr; Box Bin
+    &boxv;          &boxur;&boxh; 2026-01-12  <span class="green">Assembled</span>     &rarr; Gear Bin (Store)
+    &boxv;          &boxur;&boxh; 2026-01-20  <span class="green">SOLD</span>          &rarr; Invoice #INV-00045
+    &boxv;          &boxur;&boxh; 2026-02-01  <span class="red">RETURNED</span>      &rarr; Issue Bin
+    &boxv;          &boxur;&boxh; 2026-02-02  <span class="yellow">Credit Note</span>   #CN-0012 issued
+    &boxv;          &boxvr;&boxh; 2026-02-05  <span class="purple">Replacement</span>   #030-R &rarr; Gear Bin
+    &boxv;
+    &boxvr;&boxh; <span class="yellow">Serial #028</span>
+          &boxvr;&boxh; Status: <span class="green">active</span> (in stock, saleable)</div>
+
+  <h2>5.2 New Tables</h2>
+  <div class="two-col">
+    <div>
+      <h3>serial_numbers</h3>
+      <table>
+        <tr><th>Column</th><th>Type</th></tr>
+        <tr><td><code>id</code></td><td>UUID (PK)</td></tr>
+        <tr><td><code>item_id</code></td><td>UUID &rarr; items</td></tr>
+        <tr><td><code>serial_no</code></td><td>TEXT UNIQUE</td></tr>
+        <tr><td><code>status</code></td><td>TEXT (active/issued/returned/replaced/scrapped)</td></tr>
+        <tr><td><code>current_bin_id</code></td><td>UUID &rarr; bin_locations</td></tr>
+        <tr><td><code>assembly_state</code></td><td>TEXT</td></tr>
+        <tr><td><code>saleability</code></td><td>TEXT</td></tr>
+        <tr><td><code>created_at</code></td><td>TIMESTAMP</td></tr>
+      </table>
+    </div>
+    <div>
+      <h3>serial_history</h3>
+      <table>
+        <tr><th>Column</th><th>Type</th></tr>
+        <tr><td><code>id</code></td><td>UUID (PK)</td></tr>
+        <tr><td><code>serial_id</code></td><td>UUID &rarr; serial_numbers</td></tr>
+        <tr><td><code>event_type</code></td><td>TEXT</td></tr>
+        <tr><td><code>from_bin_id</code></td><td>UUID (nullable)</td></tr>
+        <tr><td><code>to_bin_id</code></td><td>UUID (nullable)</td></tr>
+        <tr><td><code>reference_type</code></td><td>TEXT (PO/SO/GRN/CN/TO)</td></tr>
+        <tr><td><code>reference_id</code></td><td>UUID</td></tr>
+        <tr><td><code>notes</code></td><td>TEXT</td></tr>
+        <tr><td><code>created_at</code></td><td>TIMESTAMP</td></tr>
+      </table>
+    </div>
+  </div>
+
+  <h2>5.3 Auto-Yield Logic</h2>
+  <div class="info-blue info-box">
+    <strong>Auto-Yield Rule:</strong> When a serial item is moved from <strong>Box Bin</strong> to any <strong>Category Bin</strong>
+    (Electric/Gear/Non-Gear/Kids), the system automatically sets <code>assembly_state = 'assembled'</code> and
+    <code>saleability = 'saleable'</code>. This represents the physical assembly process being completed.
+  </div>
+
+  <h2>5.4 Event Types</h2>
+  <table>
+    <tr><th>Event</th><th>Trigger</th><th>Effect on Serial</th></tr>
+    <tr><td><code>inbound</code></td><td>Goods Receipt completed</td><td>Serial created, placed in Box Bin</td></tr>
+    <tr><td><code>assembled</code></td><td>Transfer from Box Bin &rarr; Category Bin</td><td>Auto-yield: Assembled + Saleable</td></tr>
+    <tr><td><code>transferred</code></td><td>Transfer Order between bins</td><td>Updates current_bin_id</td></tr>
+    <tr><td><code>sold</code></td><td>Invoice/Sales Order completed</td><td>Status = sold, linked to invoice</td></tr>
+    <tr><td><code>returned</code></td><td>Customer return</td><td>Moves to Issue Bin</td></tr>
+    <tr><td><code>issued_cn</code></td><td>Credit Note generated</td><td>CN reference linked</td></tr>
+    <tr><td><code>replaced</code></td><td>Replacement unit received</td><td>New serial created, old marked replaced</td></tr>
+    <tr><td><code>scrapped</code></td><td>Item write-off</td><td>Status = scrapped, Non-Saleable</td></tr>
+  </table>
+</div>
+
+<!-- ==================== MODULE 3: SALES CRM ==================== -->
+<div class="page-break">
+  <h1>6. Module 3: Sales CRM + KYC Enhancement</h1>
+  <div class="info-amber info-box">
+    <strong>Type:</strong> Enhancement of existing modules &nbsp;|&nbsp;
+    <strong>Affects:</strong> customers table, sales_orders table, customers.service.ts, sales-orders.service.ts
+  </div>
+
+  <h2>6.1 Sales CRM KYC Flow</h2>
+  <div class="diagram-box"><span class="highlight">SALES CRM KYC CAPTURE (at point of sale)</span>
+
+  <span class="green">Customer Details</span>
+    &boxur;&boxh; Name, Phone, Email, Pin Code
+    &boxur;&boxh; Customer Type: <span class="yellow">B2B</span> / <span class="purple">B2C</span>
+    &boxv;     &boxur;&boxh; B2B &rarr; GSTIN <span class="red">required</span>, GST Tax Invoice
+    &boxv;     &boxvr;&boxh; B2C &rarr; GSTIN optional, Retail Invoice
+    &boxur;&boxh; Alt Mobile No
+    &boxur;&boxh; Accessory List (items sold with main product)
+    &boxvr;&boxh; <span class="highlight">Delivery Details:</span>
+          &boxur;&boxh; Delivery Date
+          &boxur;&boxh; <span class="green">Self Pick-up?</span>
+          &boxv;     &boxvr;&boxh; YES &rarr; Auto-generate Delivery Challan (D.C)
+          &boxur;&boxh; <span class="yellow">Reverse Pick-up?</span>
+          &boxv;     &boxvr;&boxh; YES &rarr; Auto-generate D.C + assign delivery driver
+          &boxvr;&boxh; <span class="purple">Exchange?</span>
+                &boxvr;&boxh; YES &rarr; Salesperson enters exchange value
+                       &rarr; Old item &rarr; Issue Bin
+                       &rarr; Exchange value deducted from invoice</div>
+
+  <h2>6.2 Database Changes</h2>
+  <div class="two-col">
+    <div>
+      <h3>ALTER customers table</h3>
+      <table>
+        <tr><th>Column</th><th>Type</th></tr>
+        <tr><td><code>customer_type</code></td><td>TEXT (b2b/b2c)</td></tr>
+        <tr><td><code>pin_code</code></td><td>TEXT</td></tr>
+        <tr><td><code>alt_phone</code></td><td>TEXT</td></tr>
+        <tr><td><code>kyc_completed</code></td><td>BOOLEAN</td></tr>
+      </table>
+    </div>
+    <div>
+      <h3>ALTER sales_orders table</h3>
+      <table>
+        <tr><th>Column</th><th>Type</th></tr>
+        <tr><td><code>delivery_type</code></td><td>TEXT (self_pickup/delivery/reverse_pickup)</td></tr>
+        <tr><td><code>is_exchange</code></td><td>BOOLEAN</td></tr>
+        <tr><td><code>exchange_value</code></td><td>DECIMAL</td></tr>
+        <tr><td><code>exchange_item_desc</code></td><td>TEXT</td></tr>
+        <tr><td><code>salesperson_id</code></td><td>UUID</td></tr>
+        <tr><td><code>auto_dc_generated</code></td><td>BOOLEAN</td></tr>
+      </table>
+    </div>
+  </div>
+
+  <h3>NEW TABLE: sale_accessories</h3>
+  <table>
+    <tr><th>Column</th><th>Type</th><th>Purpose</th></tr>
+    <tr><td><code>id</code></td><td>UUID (PK)</td><td>Primary key</td></tr>
+    <tr><td><code>sales_order_id</code></td><td>UUID &rarr; sales_orders</td><td>Parent sales order</td></tr>
+    <tr><td><code>item_id</code></td><td>UUID &rarr; items</td><td>Accessory item</td></tr>
+    <tr><td><code>item_name</code></td><td>TEXT</td><td>Denormalized name</td></tr>
+    <tr><td><code>quantity</code></td><td>INTEGER</td><td>Qty sold with main product</td></tr>
+  </table>
+
+  <h2>6.3 Auto-Trigger Logic</h2>
+  <div class="info-blue info-box">
+    <strong>When delivery_type = 'reverse_pickup' or 'self_pickup':</strong><br>
+    &rarr; sales-orders.service.ts auto-calls deliveryChallansService.create() and links the DC to the Sales Order.
+  </div>
+  <div class="info-green info-box">
+    <strong>When is_exchange = true:</strong><br>
+    &rarr; Exchange value is deducted from total_amount on the generated invoice.<br>
+    &rarr; The exchanged old item is recorded into the Issue Bin with source_type = 'sales_order'.
+  </div>
+</div>
+
+<!-- ==================== MODULE 4: GOODS RECEIPT ==================== -->
+<div class="page-break">
+  <h1>7. Module 4: Stock Ordering & Discrepancy Flow (GRN)</h1>
+  <div class="info-green info-box">
+    <strong>Type:</strong> New module &nbsp;|&nbsp;
+    <strong>New Tables:</strong> goods_receipts, goods_receipt_items &nbsp;|&nbsp;
+    <strong>New API:</strong> /api/goods-receipts
+  </div>
+
+  <h2>7.1 Goods Receipt Flow</h2>
+  <div class="diagram-box"><span class="highlight">STOCK ORDERING &rarr; GOODS RECEIPT &rarr; DISCREPANCY HANDLING</span>
+
+  <span class="green">PO Created</span> (15 pcs ordered from Vendor)
+      &darr;
+  Expected Lead Time: 10 days
+      &darr;
+  <span class="yellow">Goods Receipt (GRN)</span> created against PO
+      &boxur;&boxh; Received: <span class="green">10 pcs</span> (physically arrived)
+      &boxur;&boxh; Shortage: <span class="red">5 pcs</span>  (not delivered)
+      &boxur;&boxh; Damaged:  <span class="red">1 pc</span>   (arrived damaged)
+      &boxvr;&boxh; Mismatch: <span class="red">3 pcs</span>  (wrong item/spec)
+
+  <span class="highlight">SYSTEM AUTO-ACTIONS:</span>
+      &boxur;&boxh; <span class="green">6 Good pcs</span>     &rarr; Box Bin (Inbound) + create serial numbers
+      &boxur;&boxh; <span class="red">1 Damaged pc</span>   &rarr; Issue Bin + serial marked 'issued'
+      &boxur;&boxh; <span class="red">3 Mismatch pcs</span> &rarr; Issue Bin + serial marked 'issued'
+      &boxur;&boxh; <span class="yellow">Auto Credit Note</span> generated for 4 pcs (damage + mismatch)
+      &boxur;&boxh; <span class="yellow">PO Status</span> updated to 'partial_received'
+      &boxvr;&boxh; Option: <span class="purple">Re-order shortage</span> OR adjust PO
+
+  <span class="highlight">PO STATUS FLOW:</span>
+  draft &rarr; sent &rarr; <span class="yellow">partial_received</span> &rarr; <span class="green">received</span> &rarr; closed
+                      &darr;
+                 <span class="red">discrepancy_flagged</span></div>
+
+  <h2>7.2 New Tables</h2>
+  <div class="two-col">
+    <div>
+      <h3>goods_receipts</h3>
+      <table>
+        <tr><th>Column</th><th>Type</th></tr>
+        <tr><td><code>id</code></td><td>UUID (PK)</td></tr>
+        <tr><td><code>purchase_order_id</code></td><td>UUID &rarr; purchase_orders</td></tr>
+        <tr><td><code>grn_number</code></td><td>TEXT (auto-generated)</td></tr>
+        <tr><td><code>receipt_date</code></td><td>DATE</td></tr>
+        <tr><td><code>received_by</code></td><td>UUID &rarr; users</td></tr>
+        <tr><td><code>status</code></td><td>TEXT</td></tr>
+        <tr><td><code>notes</code></td><td>TEXT</td></tr>
+        <tr><td><code>created_at</code></td><td>TIMESTAMP</td></tr>
+      </table>
+    </div>
+    <div>
+      <h3>goods_receipt_items</h3>
+      <table>
+        <tr><th>Column</th><th>Type</th></tr>
+        <tr><td><code>id</code></td><td>UUID (PK)</td></tr>
+        <tr><td><code>goods_receipt_id</code></td><td>UUID &rarr; goods_receipts</td></tr>
+        <tr><td><code>po_item_id</code></td><td>UUID &rarr; purchase_order_items</td></tr>
+        <tr><td><code>item_id</code></td><td>UUID &rarr; items</td></tr>
+        <tr><td><code>ordered_qty</code></td><td>INTEGER</td></tr>
+        <tr><td><code>received_qty</code></td><td>INTEGER</td></tr>
+        <tr><td><code>damaged_qty</code></td><td>INTEGER</td></tr>
+        <tr><td><code>mismatch_qty</code></td><td>INTEGER</td></tr>
+        <tr><td><code>shortage_qty</code></td><td>INTEGER (auto-calc)</td></tr>
+        <tr><td><code>destination_bin_id</code></td><td>UUID &rarr; bin_locations</td></tr>
+        <tr><td><code>issue_bin_id</code></td><td>UUID &rarr; bin_locations</td></tr>
+      </table>
+    </div>
+  </div>
+
+  <h2>7.3 Completion Trigger Logic</h2>
+  <div class="diagram-box"><span class="highlight">ON GOODS RECEIPT COMPLETION:</span>
+
+  1. Good items &rarr; <span class="green">items.current_stock += received_qty</span>
+  2. Good items &rarr; <span class="green">Create serial_numbers (status: active, bin: Box Bin)</span>
+  3. Good items &rarr; <span class="green">Create serial_history entries (event: inbound)</span>
+  4. Damaged/Mismatch &rarr; <span class="red">Move to Issue Bin (create issue_bin_entries)</span>
+  5. IF damaged + mismatch > 0 &rarr; <span class="yellow">Auto-create Vendor Credit (CN)</span>
+  6. IF shortage > 0 &rarr; <span class="yellow">PO status = 'partial_received'</span>
+  7. IF all items received &rarr; <span class="green">PO status = 'received'</span></div>
+</div>
+
+<!-- ==================== MODULE 5: STOCK COUNT ==================== -->
+<div class="page-break">
+  <h1>8. Module 5: Enhanced Stock Count + Auto-Correction</h1>
+  <div class="info-amber info-box">
+    <strong>Type:</strong> Enhancement of existing module &nbsp;|&nbsp;
+    <strong>Affects:</strong> Stock count tables, stockCount.service.ts, StockCountPage.tsx
+  </div>
+
+  <h2>8.1 Stock Count Audit Flow</h2>
+  <div class="diagram-box"><span class="highlight">STOCK COUNT / AUDIT WORKFLOW</span>
+
+  <span class="green">Schedule:</span> Monday / Wednesday / Friday (configurable)
+
+  1. <span class="yellow">Create Stock Count</span>
+     &boxvr;&boxh; Select: Specific bin OR full warehouse
+     &boxvr;&boxh; System snapshots current accounting_stock
+
+  2. <span class="yellow">Physical Count</span>
+     &boxvr;&boxh; Staff enters actual qty per item
+     &boxvr;&boxh; If serial-tracked: scan/enter serial numbers
+
+  3. <span class="highlight">System Compare:</span>
+     &boxur;&boxh; Accounting Stock (DB current_stock)  vs  Physical Stock (counted)
+
+  4. <span class="highlight">Discrepancy Actions:</span>
+     &boxur;&boxh; <span class="green">Surplus (+3 pcs)</span>
+     &boxv;     &boxvr;&boxh; Auto-generate Transfer Order Draft
+     &boxv;         (from "Unknown Source" to correct bin)
+     &boxur;&boxh; <span class="red">Shortage (-2 pcs)</span>
+     &boxv;     &boxur;&boxh; Auto-generate Transfer Order Draft (if likely misplaced)
+     &boxv;     &boxvr;&boxh; OR Adjustment Entry (if confirmed loss)
+     &boxvr;&boxh; <span class="green">Match (0)</span>
+           &boxvr;&boxh; Mark as verified &check;
+
+  5. <span class="yellow">Manager Approval:</span> Reviews auto-generated drafts
+  6. <span class="green">Execute:</span> Approved drafts update stock
+
+  <span class="highlight">STATUS FLOW:</span>
+  scheduled &rarr; in_progress &rarr; pending_review &rarr; approved &rarr; closed</div>
+
+  <h2>8.2 Database Enhancements</h2>
+  <table>
+    <tr><th>New Column (on stock count tables)</th><th>Type</th><th>Purpose</th></tr>
+    <tr><td><code>scheduled_date</code></td><td>DATE</td><td>Planned count date</td></tr>
+    <tr><td><code>schedule_day</code></td><td>TEXT</td><td>monday / wednesday / friday</td></tr>
+    <tr><td><code>bin_id</code></td><td>UUID</td><td>Which bin is being counted</td></tr>
+    <tr><td><code>accounting_stock</code></td><td>INTEGER</td><td>System qty snapshot at count time</td></tr>
+    <tr><td><code>physical_stock</code></td><td>INTEGER</td><td>Actual counted qty</td></tr>
+    <tr><td><code>discrepancy_qty</code></td><td>INTEGER</td><td>physical - accounting (auto-calculated)</td></tr>
+    <tr><td><code>auto_action</code></td><td>TEXT</td><td>transfer_order_draft / adjustment / none</td></tr>
+    <tr><td><code>auto_reference_id</code></td><td>UUID</td><td>FK to auto-generated TO or adjustment</td></tr>
+  </table>
+</div>
+
+<!-- ==================== MODULE 6: ISSUE BIN ==================== -->
+<div class="page-break">
+  <h1>9. Module 6: Issue Bin Workflow</h1>
+  <div class="info-green info-box">
+    <strong>Type:</strong> New module &nbsp;|&nbsp;
+    <strong>New Table:</strong> issue_bin_entries &nbsp;|&nbsp;
+    <strong>New API:</strong> /api/issue-bin
+  </div>
+
+  <h2>9.1 Issue Bin Lifecycle</h2>
+  <div class="diagram-box"><span class="highlight">ISSUE BIN LIFECYCLE</span>
+
+  <span class="red">Item enters Issue Bin when:</span>
+    &boxur;&boxh; Customer Return       (from Sales Order)
+    &boxur;&boxh; Damaged on Receipt    (from GRN inspection)
+    &boxur;&boxh; Mismatch on Receipt   (from GRN - wrong item/spec)
+    &boxvr;&boxh; Failed Quality Check  (from Stock Count)
+
+  <span class="yellow">Item in Issue Bin:</span>
+    &boxur;&boxh; Status: <span class="red">pending_review</span>
+    &boxur;&boxh; Linked to: Credit Note / Return Order / GRN
+    &boxvr;&boxh; <span class="highlight">Resolution Options:</span>
+
+         <span class="green">&boxur;&boxh; "Repairable"</span>
+         &boxv;     &boxvr;&boxh; Send to assembly &rarr; back to Category Bin (Saleable)
+         &boxv;
+         <span class="yellow">&boxur;&boxh; "Replace"</span>
+         &boxv;     &boxvr;&boxh; Wait for vendor replacement
+         &boxv;           &boxur;&boxh; On arrival: New unit &rarr; correct Bin (Saleable)
+         &boxv;           &boxvr;&boxh; Old unit &rarr; Scrap or return to vendor
+         &boxv;
+         <span class="red">&boxur;&boxh; "Scrap"</span>
+         &boxv;     &boxvr;&boxh; Mark Non-Saleable, write-off from inventory
+         &boxv;
+         <span class="purple">&boxvr;&boxh; "Return to Vendor"</span>
+               &boxvr;&boxh; Link to Vendor Credit, schedule return pickup
+
+  <span class="red">IMPORTANT: Issue Bin items are NEVER available for sale</span></div>
+
+  <h2>9.2 issue_bin_entries Table</h2>
+  <table>
+    <tr><th>Column</th><th>Type</th><th>Purpose</th></tr>
+    <tr><td><code>id</code></td><td>UUID (PK)</td><td>Primary key</td></tr>
+    <tr><td><code>serial_id</code></td><td>UUID &rarr; serial_numbers</td><td>If serial tracked (nullable)</td></tr>
+    <tr><td><code>item_id</code></td><td>UUID &rarr; items</td><td>Which item</td></tr>
+    <tr><td><code>quantity</code></td><td>INTEGER</td><td>Qty in issue bin (if not serial tracked)</td></tr>
+    <tr><td><code>bin_id</code></td><td>UUID &rarr; bin_locations</td><td>Which Issue Bin</td></tr>
+    <tr><td><code>reason</code></td><td>TEXT</td><td>customer_return / damaged_receipt / mismatch / quality_fail</td></tr>
+    <tr><td><code>source_type</code></td><td>TEXT</td><td>sales_order / goods_receipt / stock_count</td></tr>
+    <tr><td><code>source_id</code></td><td>UUID</td><td>FK to source document</td></tr>
+    <tr><td><code>resolution</code></td><td>TEXT</td><td>pending / repairable / replace / scrap / return_to_vendor</td></tr>
+    <tr><td><code>credit_note_id</code></td><td>UUID</td><td>FK to vendor_credits (if CN issued)</td></tr>
+    <tr><td><code>replacement_serial_id</code></td><td>UUID</td><td>FK to replacement serial number</td></tr>
+    <tr><td><code>resolved_at</code></td><td>TIMESTAMP</td><td>When issue was resolved</td></tr>
+    <tr><td><code>resolved_by</code></td><td>UUID &rarr; users</td><td>Who resolved it</td></tr>
+    <tr><td><code>notes</code></td><td>TEXT</td><td>Resolution notes</td></tr>
+    <tr><td><code>created_at</code></td><td>TIMESTAMP</td><td>When item entered Issue Bin</td></tr>
+  </table>
+</div>
+
+<!-- ==================== SECTION 10: COMPLETE DATA FLOW ==================== -->
+<div class="page-break">
+  <h1>10. Complete Data Flow (All Modules Connected)</h1>
+  <div class="diagram-box" style="font-size: 9.5px; line-height: 1.7;">
+                            <span class="highlight">VENDOR</span>
+                              &boxv;
+                  <span class="green">&boxdr;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxdl;</span>
+                  <span class="green">&boxv; PURCHASE &boxv;</span>
+                  <span class="green">&boxv;  ORDER   &boxv;</span>
+                  <span class="green">&boxdr;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxdl;</span>
+                              &boxv;
+                  <span class="yellow">&boxdr;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxdl;</span>
+                  <span class="yellow">&boxv;  GOODS   &boxv;</span>  &larr;&larr; <span class="purple">NEW MODULE</span>
+                  <span class="yellow">&boxv; RECEIPT  &boxv;</span>
+                  <span class="yellow">&boxdr;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxdl;</span>
+                       &boxv;             &boxv;
+          <span class="green">Good Items</span>         <span class="red">Damaged/Mismatch</span>
+                       &darr;             &darr;
+              <span class="yellow">&boxdr;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxdl;</span>      <span class="red">&boxdr;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxdl;</span>
+              <span class="yellow">&boxv; BOX BIN  &boxv;</span>      <span class="red">&boxv; ISSUE   &boxv;</span> &larr;&larr; <span class="purple">NEW MODULE</span>
+              <span class="yellow">&boxdr;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxdl;</span>      <span class="red">&boxv;  BIN    &boxv;</span>
+                       &boxv;            <span class="red">&boxdr;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxdl;</span>
+          <span class="green">[Assembly / Auto-Yield]</span>       &boxv;
+                       &darr;            &darr;
+              <span class="green">&boxdr;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxdl;</span>  <span class="yellow">&boxdr;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxdl;</span>
+              <span class="green">&boxv; CATEGORY   &boxv;</span>  <span class="yellow">&boxv;  CREDIT   &boxv;</span>
+              <span class="green">&boxv;  BIN        &boxv;</span>  <span class="yellow">&boxv;   NOTE    &boxv;</span>
+              <span class="green">&boxv;(Saleable)   &boxv;</span>  <span class="yellow">&boxdr;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxdl;</span>
+              <span class="green">&boxdr;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxdl;</span>
+                       &boxv;
+          <span class="highlight">&boxdr;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxdl;</span>      <span class="highlight">&boxdr;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxdl;</span>
+          <span class="highlight">&boxv; SALES CRM &boxv;</span> &rarr; <span class="highlight">&boxv;  SALES    &boxv;</span>
+          <span class="highlight">&boxv;  (KYC)    &boxv;</span>      <span class="highlight">&boxv;  ORDER    &boxv;</span>
+          <span class="highlight">&boxdr;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxdl;</span>      <span class="highlight">&boxdr;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxdl;</span>
+                                   &boxv;       &boxv;         &boxv;
+                          <span class="green">INVOICE</span>    <span class="yellow">AUTO D.C</span>   <span class="purple">EXCHANGE</span>
+                         (B2B/B2C)  (reverse/    (old item
+                                   self pickup)  &rarr; Issue Bin)
+
+  <span class="highlight">&boxdr;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxdl;</span>
+  <span class="highlight">&boxv;  STOCK COUNT (Mon / Wed / Fri)              &boxv;</span>
+  <span class="highlight">&boxv;    Physical vs Accounting comparison          &boxv;</span>
+  <span class="highlight">&boxv;    &boxur;&boxh; Match &rarr; Verified                         &boxv;</span>
+  <span class="highlight">&boxv;    &boxur;&boxh; Surplus &rarr; Auto Transfer Order Draft       &boxv;</span>
+  <span class="highlight">&boxv;    &boxvr;&boxh; Shortage &rarr; Auto Adjustment / PO            &boxv;</span>
+  <span class="highlight">&boxdr;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxdl;</span>
+
+  <span class="green">&boxdr;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxdl;</span>
+  <span class="green">&boxv;  SERIAL TRACKING (across ALL flows)          &boxv;</span>
+  <span class="green">&boxv;  #030: I/B &rarr; Box &rarr; Assembled &rarr; Gear Bin      &boxv;</span>
+  <span class="green">&boxv;        &rarr; Sold &rarr; Returned &rarr; Issue &rarr; Replaced  &boxv;</span>
+  <span class="green">&boxdr;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxdl;</span></div>
+</div>
+
+<!-- ==================== SECTION 11: DB SCHEMA CHANGES ==================== -->
+<div class="page-break">
+  <h1>11. Database Schema Changes Summary</h1>
+
+  <h2>11.1 New Tables (4)</h2>
+  <table>
+    <tr><th>Table</th><th>Purpose</th><th>Key Relationships</th></tr>
+    <tr><td><code>serial_numbers</code></td><td>Per-unit tracking with status and location</td><td>items, bin_locations</td></tr>
+    <tr><td><code>serial_history</code></td><td>Complete audit trail for each serial</td><td>serial_numbers, bin_locations</td></tr>
+    <tr><td><code>goods_receipts</code> + <code>goods_receipt_items</code></td><td>Receipt verification against POs</td><td>purchase_orders, purchase_order_items, items</td></tr>
+    <tr><td><code>issue_bin_entries</code></td><td>Damaged/returned item lifecycle</td><td>serial_numbers, items, bin_locations, vendor_credits</td></tr>
+    <tr><td><code>sale_accessories</code></td><td>Accessories sold with main product</td><td>sales_orders, items</td></tr>
+  </table>
+
+  <h2>11.2 Altered Tables (4)</h2>
+  <table>
+    <tr><th>Table</th><th>New Columns</th></tr>
+    <tr><td><code>bin_locations</code></td><td>location_type, bin_category, assembly_state, saleability</td></tr>
+    <tr><td><code>customers</code></td><td>customer_type, pin_code, alt_phone, kyc_completed</td></tr>
+    <tr><td><code>sales_orders</code></td><td>delivery_type, is_exchange, exchange_value, exchange_item_desc, salesperson_id, auto_dc_generated</td></tr>
+    <tr><td><code>stock_counts / stock_count_items</code></td><td>scheduled_date, schedule_day, bin_id, accounting_stock, physical_stock, discrepancy_qty, auto_action, auto_reference_id</td></tr>
+  </table>
+
+  <h2>11.3 Updated PO Status Values</h2>
+  <table>
+    <tr><th>Current Statuses</th><th>New Statuses Added</th></tr>
+    <tr><td>draft, sent, received, closed</td><td><code>partial_received</code>, <code>discrepancy_flagged</code></td></tr>
+  </table>
+
+  <div class="info-red info-box">
+    <strong>IMPORTANT:</strong> After ALL DDL changes, run <code>NOTIFY pgrst, 'reload schema';</code> to refresh the PostgREST cache.
+    All new columns must use snake_case naming. Never rename existing columns.
+  </div>
+
+  <h1>12. New API Endpoints</h1>
+  <table>
+    <tr><th>Endpoint</th><th>Method</th><th>Purpose</th></tr>
+    <tr><td colspan="3" style="background: #1e3a5f; color: white; font-weight: 700;">/api/serial-tracking</td></tr>
+    <tr><td><code>/</code></td><td>GET</td><td>List all serials (filter by item, bin, status)</td></tr>
+    <tr><td><code>/:id</code></td><td>GET</td><td>Serial detail + full history timeline</td></tr>
+    <tr><td><code>/</code></td><td>POST</td><td>Register new serial number</td></tr>
+    <tr><td><code>/:id/move</code></td><td>PUT</td><td>Move serial between bins (triggers auto-yield)</td></tr>
+    <tr><td><code>/:id/history</code></td><td>GET</td><td>Serial event timeline</td></tr>
+    <tr><td colspan="3" style="background: #1e3a5f; color: white; font-weight: 700;">/api/goods-receipts</td></tr>
+    <tr><td><code>/</code></td><td>GET</td><td>List all GRNs (filter by PO, date, status)</td></tr>
+    <tr><td><code>/:id</code></td><td>GET</td><td>GRN detail with items and discrepancies</td></tr>
+    <tr><td><code>/</code></td><td>POST</td><td>Create GRN against a Purchase Order</td></tr>
+    <tr><td><code>/:id</code></td><td>PUT</td><td>Update GRN (inspection results)</td></tr>
+    <tr><td><code>/:id/complete</code></td><td>POST</td><td>Complete receipt (triggers all auto-actions)</td></tr>
+    <tr><td colspan="3" style="background: #1e3a5f; color: white; font-weight: 700;">/api/issue-bin</td></tr>
+    <tr><td><code>/</code></td><td>GET</td><td>List all issue bin entries (filter by reason, resolution)</td></tr>
+    <tr><td><code>/:id</code></td><td>GET</td><td>Issue entry detail with linked documents</td></tr>
+    <tr><td><code>/</code></td><td>POST</td><td>Add item to issue bin</td></tr>
+    <tr><td><code>/:id/resolve</code></td><td>PUT</td><td>Resolve issue (repair/replace/scrap/return)</td></tr>
+  </table>
+</div>
+
+<!-- ==================== SECTION 13: FILE CHANGES ==================== -->
+<div class="page-break">
+  <h1>13. File Changes Summary</h1>
+
+  <h2>13.1 New Files to Create (9 backend + 10 frontend = 19 files)</h2>
+  <table>
+    <tr><th>Module</th><th>Backend Files</th><th>Frontend Files</th></tr>
+    <tr>
+      <td><strong>Serial Tracking</strong></td>
+      <td>
+        services/serial-tracking.service.ts<br>
+        controllers/serial-tracking.controller.ts<br>
+        routes/serial-tracking.routes.ts
+      </td>
+      <td>
+        services/serial-tracking.service.ts<br>
+        pages/SerialTrackingPage.tsx<br>
+        pages/SerialDetailPage.tsx<br>
+        components/serial-tracking/SerialHistoryTimeline.tsx
+      </td>
+    </tr>
+    <tr>
+      <td><strong>Goods Receipt</strong></td>
+      <td>
+        services/goods-receipt.service.ts<br>
+        controllers/goods-receipt.controller.ts<br>
+        routes/goods-receipt.routes.ts
+      </td>
+      <td>
+        services/goods-receipt.service.ts<br>
+        pages/GoodsReceiptPage.tsx<br>
+        pages/GoodsReceiptDetailPage.tsx<br>
+        components/goods-receipt/NewGoodsReceiptForm.tsx
+      </td>
+    </tr>
+    <tr>
+      <td><strong>Issue Bin</strong></td>
+      <td>
+        services/issue-bin.service.ts<br>
+        controllers/issue-bin.controller.ts<br>
+        routes/issue-bin.routes.ts
+      </td>
+      <td>
+        services/issue-bin.service.ts<br>
+        pages/IssueBinPage.tsx<br>
+        components/issue-bin/ResolveIssueModal.tsx
+      </td>
+    </tr>
+  </table>
+
+  <h2>13.2 Existing Files to Modify (9 files)</h2>
+  <table>
+    <tr><th>File</th><th>Changes Required</th></tr>
+    <tr><td>backend/src/<strong>server.ts</strong></td><td>Register 3 new route prefixes: /api/serial-tracking, /api/goods-receipts, /api/issue-bin</td></tr>
+    <tr><td>frontend/src/<strong>App.tsx</strong></td><td>Add ~12 new routes for Serial, GRN, and Issue Bin pages</td></tr>
+    <tr><td>frontend/src/components/layout/<strong>Sidebar.tsx</strong></td><td>Add navigation items: Serial Tracking, Goods Receipt, Issue Bin</td></tr>
+    <tr><td>backend/src/services/<strong>binLocations.service.ts</strong></td><td>Add filters by bin_category, assembly_state, saleability</td></tr>
+    <tr><td>backend/src/services/<strong>customers.service.ts</strong></td><td>Handle new KYC fields (customer_type, pin_code, alt_phone)</td></tr>
+    <tr><td>backend/src/services/<strong>sales-orders.service.ts</strong></td><td>Add exchange logic, delivery_type, auto-DC trigger</td></tr>
+    <tr><td>backend/src/services/<strong>purchase-orders.service.ts</strong></td><td>Add partial_received / discrepancy_flagged statuses, GRN linking</td></tr>
+    <tr><td>backend/src/services/<strong>items.service.ts</strong></td><td>Link serial numbers to items, assembly state awareness</td></tr>
+    <tr><td>frontend/src/services/<strong>stockCount.service.ts</strong></td><td>Add scheduling, auto-correction, discrepancy APIs</td></tr>
+  </table>
+</div>
+
+<!-- ==================== SECTION 14: IMPLEMENTATION ROADMAP ==================== -->
+<div class="page-break">
+  <h1>14. Implementation Roadmap</h1>
+  <p>Each phase can be deployed independently without breaking production. Dependencies flow downward.</p>
+
+  <div class="phase-container">
+    <div class="phase">
+      <div class="phase-marker phase-1">Phase 1<br><small>Foundation</small></div>
+      <div class="phase-content">
+        <h4>Database Foundation (No dependencies on other new modules)</h4>
+        <ul>
+          <li><strong>1a.</strong> ALTER <code>bin_locations</code> table &mdash; add location_type, bin_category, assembly_state, saleability columns</li>
+          <li><strong>1b.</strong> CREATE <code>serial_numbers</code> + <code>serial_history</code> tables</li>
+          <li><strong>1c.</strong> ALTER <code>customers</code> table &mdash; add customer_type, pin_code, alt_phone, kyc_completed columns</li>
+          <li><strong>1d.</strong> Run <code>NOTIFY pgrst, 'reload schema';</code></li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="phase">
+      <div class="phase-marker phase-2">Phase 2<br><small>Core Flows</small></div>
+      <div class="phase-content">
+        <h4>Core New Workflows (Depends on Phase 1 tables)</h4>
+        <ul>
+          <li><strong>2a.</strong> Build Goods Receipt (GRN) module &mdash; CREATE tables, backend service/controller/routes, frontend pages</li>
+          <li><strong>2b.</strong> Build Issue Bin workflow &mdash; CREATE table, backend service/controller/routes, frontend pages + ResolveIssueModal</li>
+          <li><strong>2c.</strong> Build Serial Tracking module &mdash; backend service/controller/routes, frontend pages + SerialHistoryTimeline</li>
+          <li><strong>2d.</strong> Implement Auto-Yield logic in serial tracking service (Box Bin &rarr; Category Bin = assembled + saleable)</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="phase">
+      <div class="phase-marker phase-3">Phase 3<br><small>Business Logic</small></div>
+      <div class="phase-content">
+        <h4>Business Logic Integration (Depends on Phase 2 modules)</h4>
+        <ul>
+          <li><strong>3a.</strong> Sales CRM KYC flow &mdash; enhance customer forms with B2B/B2C, accessory list</li>
+          <li><strong>3b.</strong> GRN discrepancy handling &mdash; auto Credit Note, auto Issue Bin entry, PO status updates</li>
+          <li><strong>3c.</strong> Exchange flow in Sales Orders &mdash; salesperson valuation, old item &rarr; Issue Bin, invoice adjustment</li>
+          <li><strong>3d.</strong> Auto-DC generation &mdash; trigger DC from reverse/self pickup sales orders</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="phase">
+      <div class="phase-marker phase-4">Phase 4<br><small>Automation</small></div>
+      <div class="phase-content">
+        <h4>Scheduled Automation (Depends on Phase 3 integrations)</h4>
+        <ul>
+          <li><strong>4a.</strong> Stock Count scheduling &mdash; Mon/Wed/Fri auto-creation, physical vs accounting comparison</li>
+          <li><strong>4b.</strong> Stock Count auto-correction &mdash; auto Transfer Order Draft / Adjustment Entry generation</li>
+          <li><strong>4c.</strong> Serial History Timeline UI &mdash; visual lifecycle display on item detail pages</li>
+          <li><strong>4d.</strong> Manager approval workflow for auto-generated drafts (TO, adjustments)</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <h2>14.1 Phase Dependency Graph</h2>
+  <div class="diagram-box"><span class="highlight">IMPLEMENTATION DEPENDENCY FLOW</span>
+
+  <span class="green">Phase 1</span> (Foundation)
+    &boxur;&boxh; 1a. Bin table columns
+    &boxur;&boxh; 1b. Serial tables
+    &boxur;&boxh; 1c. Customer KYC columns
+    &boxvr;&boxh; 1d. PostgREST reload
+         &boxv;
+         &darr;
+  <span class="purple">Phase 2</span> (Core Workflows) &mdash; depends on Phase 1 tables
+    &boxur;&boxh; 2a. GRN module        (needs bins)
+    &boxur;&boxh; 2b. Issue Bin module   (needs bins + serials)
+    &boxur;&boxh; 2c. Serial Tracking    (needs serial tables)
+    &boxvr;&boxh; 2d. Auto-Yield logic   (needs bins + serials)
+         &boxv;
+         &darr;
+  <span class="yellow">Phase 3</span> (Business Logic) &mdash; depends on Phase 2 modules
+    &boxur;&boxh; 3a. Sales CRM KYC     (needs customer columns)
+    &boxur;&boxh; 3b. GRN discrepancy   (needs GRN + Issue Bin)
+    &boxur;&boxh; 3c. Exchange flow     (needs Issue Bin + Sales Orders)
+    &boxvr;&boxh; 3d. Auto-DC           (needs Sales Orders + DC service)
+         &boxv;
+         &darr;
+  <span class="green">Phase 4</span> (Automation) &mdash; depends on Phase 3 integrations
+    &boxur;&boxh; 4a. Stock Count scheduling
+    &boxur;&boxh; 4b. Auto-correction
+    &boxur;&boxh; 4c. Serial Timeline UI
+    &boxvr;&boxh; 4d. Approval workflows</div>
+
+  <div class="info-blue info-box" style="margin-top: 20px;">
+    <strong>Deployment Note:</strong> Each phase is independently deployable. Push to <code>main</code> branch after each phase
+    passes <code>npm run build</code> in both <code>/backend</code> and <code>/frontend</code>. Coolify auto-deploys on push.
+  </div>
+</div>
+
+<!-- ==================== FINAL PAGE ==================== -->
+<div class="page-break" style="display: flex; flex-direction: column; justify-content: center; align-items: center; min-height: 80vh; text-align: center;">
+  <div style="font-size: 40px; font-weight: 900; color: #1e3a5f; margin-bottom: 8px;">2XG</div>
+  <div style="font-size: 18px; color: #64748b; margin-bottom: 40px;">Enterprise Resource Planning</div>
+  <div style="font-size: 16px; color: #334155; font-weight: 600; margin-bottom: 20px;">Architecture Flow Document v2.0</div>
+  <div style="width: 60px; height: 3px; background: #3b82f6; margin: 20px auto;"></div>
+  <div style="font-size: 12px; color: #94a3b8; margin-top: 20px;">
+    <p>Modules: 6 New/Enhanced</p>
+    <p>New Tables: 5 | Altered Tables: 4</p>
+    <p>New API Endpoints: 14 | New Files: 19</p>
+    <p>Modified Files: 9</p>
+  </div>
+  <div style="margin-top: 60px; font-size: 11px; color: #cbd5e1;">
+    Prepared for 2XG Growth | February 2026<br>
+    Stack: React + Express + Supabase (PostgreSQL)<br>
+    Deployed via Coolify on OVH Self-Hosted Infrastructure
+  </div>
+</div>
+
+</body>
+</html>

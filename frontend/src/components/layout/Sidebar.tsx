@@ -13,7 +13,6 @@ import {
   FileText,
   Search,
   Brain,
-  ExternalLink,
   ChevronDown,
   ChevronRight,
   FolderPlus,
@@ -30,10 +29,12 @@ import {
   FilePlus,
   FileCheck,
   Clock,
-  Calculator, // Added for the POS icon
+  Calculator,
   TrendingUp,
   MapPin,
-  AlertTriangle
+  AlertTriangle,
+  Bike,
+  BarChart3
 } from 'lucide-react';
 
 interface SidebarProps {
@@ -44,6 +45,7 @@ interface SidebarProps {
 const Sidebar = ({ isOpen, onClose }: SidebarProps) => {
   const location = useLocation();
   const { canAccessModule } = usePermissions();
+  const [isBuildlineOpen, setIsBuildlineOpen] = useState(false);
   const [isItemsOpen, setIsItemsOpen] = useState(false);
   const [isPurchaseOpen, setIsPurchaseOpen] = useState(false);
   const [isSalesOpen, setIsSalesOpen] = useState(false);
@@ -83,15 +85,43 @@ const Sidebar = ({ isOpen, onClose }: SidebarProps) => {
         <nav className="mt-6 pb-6 overflow-y-auto flex-1">
           {/* BUILDLINE Section */}
           <div className="mb-6 border-b border-slate-700 pb-6">
-            <a
-              href="https://docs.google.com/document/d/1_MAorKNpbdesPiKaR1y_sCHRU9yso1ZlBOSUQcxrpwc/edit?pli=1&tab=t.0"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-center gap-3 px-6 py-3 hover:bg-slate-700 transition-colors border-l-4 border-transparent hover:border-green-500"
+            <button
+              onClick={() => setIsBuildlineOpen(!isBuildlineOpen)}
+              className={`w-full flex items-center justify-between px-6 py-3 transition-colors border-l-4 ${
+                location.pathname.startsWith('/buildline')
+                  ? 'bg-slate-700 border-green-500 text-white'
+                  : 'border-transparent hover:bg-slate-700 hover:border-green-500'
+              }`}
             >
-              <ExternalLink size={20} />
-              <span className="font-medium">BUILDLINE</span>
-            </a>
+              <div className="flex items-center gap-3">
+                <Bike size={20} />
+                <span className="font-medium">BUILDLINE</span>
+              </div>
+              {isBuildlineOpen ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+            </button>
+
+            {isBuildlineOpen && (
+              <div className="bg-slate-900">
+                <Link
+                  to="/buildline"
+                  className={`flex items-center gap-3 px-6 py-2 pl-12 hover:bg-slate-700 transition-colors text-sm ${
+                    location.pathname === '/buildline' ? 'text-white' : 'text-slate-300'
+                  } hover:text-white`}
+                >
+                  <Bike size={16} />
+                  <span>Assembly Line</span>
+                </Link>
+                <Link
+                  to="/buildline/dashboard"
+                  className={`flex items-center gap-3 px-6 py-2 pl-12 hover:bg-slate-700 transition-colors text-sm ${
+                    location.pathname === '/buildline/dashboard' ? 'text-white' : 'text-slate-300'
+                  } hover:text-white`}
+                >
+                  <BarChart3 size={16} />
+                  <span>Analytics</span>
+                </Link>
+              </div>
+            )}
           </div>
 
           {/* Item with Dropdown */}

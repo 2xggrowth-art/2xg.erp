@@ -68,6 +68,11 @@ import DamageReportsPage from './pages/DamageReportsPage';
 import ExchangesPage from './pages/ExchangesPage';
 import StockCountPage from './pages/StockCountPage';
 
+// Buildline
+import BuildlinePage from './pages/BuildlinePage';
+import BuildlineDashboardPage from './pages/BuildlineDashboardPage';
+import { Toaster } from 'react-hot-toast';
+
 function App() {
   return (
     <Router>
@@ -180,7 +185,12 @@ function App() {
 
             {/* Damage Reports */}
             <Route path="/inventory/damage-reports" element={<ProtectedRoute><DashboardLayout><DamageReportsPage /></DashboardLayout></ProtectedRoute>} />
+
+            {/* Buildline Routes */}
+            <Route path="/buildline" element={<ProtectedRoute><DashboardLayout><BuildlinePage /></DashboardLayout></ProtectedRoute>} />
+            <Route path="/buildline/dashboard" element={<ProtectedRoute><DashboardLayout><BuildlineDashboardPage /></DashboardLayout></ProtectedRoute>} />
           </Routes>
+          <Toaster position="top-right" />
         </DateFilterProvider>
       </AuthProvider>
     </Router>

@@ -3758,58 +3758,247 @@ function BinsScreen({ navigation }: any) {
 function ScheduleScreen({ navigation }: any) {
   const [schedules, setSchedules] = useState<ScheduleConfig[]>([]);
   const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [selectedIdx, setSelectedIdx] = useState(0);
+  const [showLocationPicker, setShowLocationPicker] = useState(false);
+  const [showAddHoliday, setShowAddHoliday] = useState(false);
+  const [holidayDate, setHolidayDate] = useState('');
+  const [holidayName, setHolidayName] = useState('');
 
   useEffect(() => {
-    api.get('/admin/schedules').then(res => setSchedules(res.data || res || []))
-      .catch(() => {
-        // Mock schedule if API not available
-        setSchedules([{
-          location_id: '1', location_name: 'Main Warehouse',
-          regular_days: [false, true, true, true, true, true, false],
-          high_value_daily: true, overrides: [], holidays: [],
-        }]);
-      }).finally(() => setLoading(false));
+    api.get('/admin/schedules').then(res => {
+      const data = res.data || res || [];
+      setSchedules(data.length > 0 ? data : [{
+        location_id: '1', location_name: 'Main Warehouse',
+        regular_days: [false, true, true, true, true, true, false],
+        high_value_daily: false, overrides: [], holidays: [],
+      }]);
+    }).catch(() => {
+      setSchedules([{
+        location_id: '1', location_name: 'Main Warehouse',
+        regular_days: [false, true, true, true, true, true, false],
+        high_value_daily: false, overrides: [], holidays: [],
+      }]);
+    }).finally(() => setLoading(false));
   }, []);
 
   const dayLabels = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
+  // Generate override options for current week
+  const getWeekOverrides = () => {
+    const today = new Date();
+    const startOfWeek = new Date(today);
+    startOfWeek.setDate(today.getDate() - today.getDay()); // Sunday
+    const days: { date: string; dayName: string; dayIndex: number; isScheduled: boolean }[] = [];
+    for (let i = 0; i < 7; i++) {
+      const d = new Date(startOfWeek);
+      d.setDate(startOfWeek.getDate() + i);
+      if (d >= today) { // only future days
+        const dateStr = d.toISOString().split('T')[0];
+        days.push({
+          date: dateStr,
+          dayName: dayLabels[i],
+          dayIndex: i,
+          isScheduled: sched?.regular_days?.[i] ?? false,
+        });
+      }
+    }
+    return days;
+  };
+
+  const sched = schedules[selectedIdx];
+
+  const toggleOverride = (date: string, skip: boolean) => {
+    if (!sched) return;
+    const updated = [...schedules];
+    const overrides = [...(updated[selectedIdx].overrides || [])];
+    const existingIdx = overrides.findIndex(o => o.date === date);
+    if (existingIdx >= 0) {
+      overrides.splice(existingIdx, 1); // toggle off
+    } else {
+      overrides.push({ date, skip, reason: skip ? 'Skipped this week' : 'Extra count this week' });
+    }
+    updated[selectedIdx] = { ...updated[selectedIdx], overrides };
+    setSchedules(updated);
+  };
+
+  const addHoliday = () => {
+    if (!holidayDate || !holidayName || !sched) return;
+    const updated = [...schedules];
+    const holidays = [...(updated[selectedIdx].holidays || [])];
+    holidays.push({ date: holidayDate, name: holidayName });
+    holidays.sort((a, b) => a.date.localeCompare(b.date));
+    updated[selectedIdx] = { ...updated[selectedIdx], holidays };
+    setSchedules(updated);
+    setHolidayDate('');
+    setHolidayName('');
+    setShowAddHoliday(false);
+  };
+
+  const removeHoliday = (idx: number) => {
+    if (!sched) return;
+    const updated = [...schedules];
+    const holidays = [...(updated[selectedIdx].holidays || [])];
+    holidays.splice(idx, 1);
+    updated[selectedIdx] = { ...updated[selectedIdx], holidays };
+    setSchedules(updated);
+  };
+
+  const handleSave = () => {
+    setSaving(true);
+    api.put('/admin/schedules', { schedules })
+      .then((res: any) => {
+        if (res.success) Alert.alert('Saved', 'Schedule updated successfully');
+        else Alert.alert('Error', res.error || 'Failed to save');
+      })
+      .catch((e: any) => Alert.alert('Error', e.message || 'Failed to save'))
+      .finally(() => setSaving(false));
+  };
+
   if (loading) return <View style={styles.centered}><ActivityIndicator size="large" color={COLORS.primary} /></View>;
+  if (!sched) return <View style={styles.centered}><Text style={{ color: COLORS.gray500 }}>No locations found</Text></View>;
+
+  const weekOverrides = getWeekOverrides();
 
   return (
     <View style={styles.container}>
-      <Header title="Schedule Config" onBack={() => navigation.goBack()} />
+      <Header title="Schedule Config" subtitle="Configure count schedule per location" onBack={() => navigation.goBack()} />
       <ScrollView style={{ flex: 1, padding: 16 }}>
-        {schedules.map((sched, si) => (
-          <View key={si} style={styles.countCard}>
-            <Text style={{ fontSize: 16, fontWeight: '600', color: COLORS.gray900, marginBottom: 12 }}>{sched.location_name}</Text>
-            <Text style={styles.inputLabel}>Count Days</Text>
-            <View style={{ flexDirection: 'row', gap: 8, marginBottom: 16 }}>
-              {dayLabels.map((day, di) => (
-                <TouchableOpacity key={di} style={[styles.scheduleDay, sched.regular_days[di] && styles.scheduleDayDone]}
-                  onPress={() => {
-                    const updated = [...schedules];
-                    updated[si].regular_days[di] = !updated[si].regular_days[di];
-                    setSchedules(updated);
-                  }}>
-                  <Text style={[styles.scheduleDayText, sched.regular_days[di] && { color: COLORS.success, fontWeight: '700' as any }]}>{day}</Text>
-                  {sched.regular_days[di] && <Text style={styles.scheduleDayCheck}>✓</Text>}
-                </TouchableOpacity>
-              ))}
+        {/* Location Selector */}
+        {schedules.length > 1 && (
+          <TouchableOpacity style={{ backgroundColor: COLORS.white, borderWidth: 1, borderColor: COLORS.gray200, borderRadius: 10, padding: 14, marginBottom: 16, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}
+            onPress={() => setShowLocationPicker(true)}>
+            <View>
+              <Text style={{ fontSize: 11, color: COLORS.gray500, marginBottom: 2 }}>Location</Text>
+              <Text style={{ fontSize: 15, fontWeight: '600', color: COLORS.gray900 }}>{sched.location_name}</Text>
             </View>
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 12, borderTopWidth: 1, borderTopColor: COLORS.gray200 }}>
-              <Text style={{ fontSize: 14, color: COLORS.gray700 }}>High-value items daily</Text>
-              <Switch value={sched.high_value_daily} onValueChange={(v) => {
-                const updated = [...schedules]; updated[si].high_value_daily = v; setSchedules(updated);
-              }} trackColor={{ false: COLORS.gray300, true: COLORS.primaryLight }} thumbColor={sched.high_value_daily ? COLORS.primary : COLORS.gray400} />
-            </View>
+            <Text style={{ fontSize: 18, color: COLORS.gray400 }}>▼</Text>
+          </TouchableOpacity>
+        )}
+
+        {/* Regular Schedule */}
+        <Text style={{ fontSize: 13, fontWeight: '700', color: COLORS.gray700, marginBottom: 10 }}>Regular Schedule</Text>
+        <View style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap', marginBottom: 20 }}>
+          {dayLabels.map((day, di) => (
+            <TouchableOpacity key={di} style={[styles.scheduleDay, sched.regular_days[di] && styles.scheduleDayDone]}
+              onPress={() => {
+                const updated = [...schedules];
+                updated[selectedIdx].regular_days[di] = !updated[selectedIdx].regular_days[di];
+                setSchedules(updated);
+              }}>
+              <Text style={[styles.scheduleDayText, sched.regular_days[di] && { color: COLORS.success, fontWeight: '700' as any }]}>{day}</Text>
+              {sched.regular_days[di] && <Text style={styles.scheduleDayCheck}>✓</Text>}
+            </TouchableOpacity>
+          ))}
+        </View>
+
+        {/* Divider */}
+        <View style={{ height: 1, backgroundColor: COLORS.gray200, marginBottom: 12 }} />
+
+        {/* High-Value Item Schedule */}
+        <Text style={{ fontSize: 13, fontWeight: '700', color: COLORS.gray700, marginBottom: 10 }}>High-Value Item Schedule</Text>
+        <View style={{ backgroundColor: COLORS.warningLight, padding: 12, borderRadius: 8, marginBottom: 12 }}>
+          <Text style={{ fontSize: 12, fontWeight: '600', color: COLORS.warning }}>Items marked as high-value will be counted daily</Text>
+        </View>
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 8, marginBottom: 16 }}>
+          <Text style={{ fontSize: 14, color: COLORS.gray700 }}>Enable daily high-value count</Text>
+          <Switch value={sched.high_value_daily} onValueChange={(v) => {
+            const updated = [...schedules]; updated[selectedIdx].high_value_daily = v; setSchedules(updated);
+          }} trackColor={{ false: COLORS.gray300, true: COLORS.primaryLight }} thumbColor={sched.high_value_daily ? COLORS.primary : COLORS.gray400} />
+        </View>
+
+        {/* Divider */}
+        <View style={{ height: 1, backgroundColor: COLORS.gray200, marginBottom: 12 }} />
+
+        {/* Override This Week */}
+        <Text style={{ fontSize: 13, fontWeight: '700', color: COLORS.gray700, marginBottom: 10 }}>Override This Week</Text>
+        <View style={{ backgroundColor: COLORS.white, borderWidth: 1, borderColor: COLORS.gray200, borderRadius: 10, padding: 14, marginBottom: 16 }}>
+          {weekOverrides.length === 0 ? (
+            <Text style={{ fontSize: 13, color: COLORS.gray400, textAlign: 'center' }}>No remaining days this week</Text>
+          ) : weekOverrides.map((wd, i) => {
+            const isOverridden = (sched.overrides || []).some(o => o.date === wd.date);
+            const label = wd.isScheduled
+              ? `Skip ${wd.dayName} (${new Date(wd.date + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })})`
+              : `Add extra count ${wd.dayName} (${new Date(wd.date + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })})`;
+            return (
+              <View key={i} style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 8, borderBottomWidth: i < weekOverrides.length - 1 ? 1 : 0, borderBottomColor: COLORS.gray100 }}>
+                <Text style={{ fontSize: 13, color: COLORS.gray600, flex: 1, marginRight: 8 }}>{label}</Text>
+                <Switch value={isOverridden} onValueChange={() => toggleOverride(wd.date, wd.isScheduled)}
+                  trackColor={{ false: COLORS.gray300, true: COLORS.primary }} thumbColor={COLORS.white} />
+              </View>
+            );
+          })}
+        </View>
+
+        {/* Divider */}
+        <View style={{ height: 1, backgroundColor: COLORS.gray200, marginBottom: 12 }} />
+
+        {/* Holidays */}
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+          <Text style={{ fontSize: 13, fontWeight: '700', color: COLORS.gray700 }}>Holidays</Text>
+          <TouchableOpacity onPress={() => setShowAddHoliday(!showAddHoliday)}>
+            <Text style={{ fontSize: 13, fontWeight: '600', color: COLORS.primary }}>{showAddHoliday ? 'Cancel' : '+ Add'}</Text>
+          </TouchableOpacity>
+        </View>
+        {showAddHoliday && (
+          <View style={{ backgroundColor: COLORS.primaryLight, borderRadius: 10, padding: 14, marginBottom: 12 }}>
+            <Text style={{ fontSize: 12, color: COLORS.gray600, marginBottom: 6 }}>Date (YYYY-MM-DD)</Text>
+            <TextInput style={{ backgroundColor: COLORS.white, borderWidth: 1, borderColor: COLORS.gray200, borderRadius: 8, padding: 10, fontSize: 14, marginBottom: 10 }}
+              value={holidayDate} onChangeText={setHolidayDate} placeholder="2026-03-14" placeholderTextColor={COLORS.gray400} />
+            <Text style={{ fontSize: 12, color: COLORS.gray600, marginBottom: 6 }}>Holiday Name</Text>
+            <TextInput style={{ backgroundColor: COLORS.white, borderWidth: 1, borderColor: COLORS.gray200, borderRadius: 8, padding: 10, fontSize: 14, marginBottom: 10 }}
+              value={holidayName} onChangeText={setHolidayName} placeholder="e.g. Holi" placeholderTextColor={COLORS.gray400} />
+            <TouchableOpacity style={[styles.primaryBtn, { paddingVertical: 10 }]} onPress={addHoliday}>
+              <Text style={styles.primaryBtnText}>Add Holiday</Text>
+            </TouchableOpacity>
           </View>
-        ))}
-        <TouchableOpacity style={[styles.primaryBtn, { marginTop: 16 }]} onPress={() => {
-          api.put('/admin/schedules', { schedules }).then(() => Alert.alert('Saved', 'Schedule updated')).catch((e: any) => Alert.alert('Error', e.message));
-        }}>
-          <Text style={styles.primaryBtnText}>Save Schedule</Text>
+        )}
+        <View style={{ backgroundColor: COLORS.white, borderWidth: 1, borderColor: COLORS.gray200, borderRadius: 10, padding: 14, marginBottom: 20 }}>
+          {(!sched.holidays || sched.holidays.length === 0) ? (
+            <Text style={{ fontSize: 13, color: COLORS.gray400, textAlign: 'center' }}>No holidays configured</Text>
+          ) : sched.holidays.map((h, i) => (
+            <View key={i} style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 6, borderBottomWidth: i < sched.holidays.length - 1 ? 1 : 0, borderBottomColor: COLORS.gray100 }}>
+              <Text style={{ fontSize: 13, color: COLORS.gray600 }}>
+                {new Date(h.date + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} — {h.name}
+              </Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                <Text style={{ fontSize: 11, color: COLORS.danger, fontWeight: '600' }}>No Count</Text>
+                <TouchableOpacity onPress={() => removeHoliday(i)}>
+                  <Text style={{ fontSize: 16, color: COLORS.gray400 }}>✕</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          ))}
+        </View>
+
+        {/* Save Button */}
+        <TouchableOpacity style={[styles.primaryBtn, { marginBottom: 32 }, saving && { opacity: 0.6 }]} onPress={handleSave} disabled={saving}>
+          <Text style={styles.primaryBtnText}>{saving ? 'Saving...' : 'Save Schedule'}</Text>
         </TouchableOpacity>
       </ScrollView>
+
+      {/* Location Picker Modal */}
+      {showLocationPicker && (
+        <Modal visible transparent animationType="slide" onRequestClose={() => setShowLocationPicker(false)}>
+          <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}>
+            <View style={{ backgroundColor: COLORS.white, borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 20, maxHeight: '50%' }}>
+              <Text style={{ fontSize: 17, fontWeight: '700', color: COLORS.gray900, marginBottom: 16 }}>Select Location</Text>
+              <ScrollView>
+                {schedules.map((s, i) => (
+                  <TouchableOpacity key={i} style={{ padding: 14, borderBottomWidth: 1, borderBottomColor: COLORS.gray100, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}
+                    onPress={() => { setSelectedIdx(i); setShowLocationPicker(false); }}>
+                    <Text style={{ fontSize: 15, color: i === selectedIdx ? COLORS.primary : COLORS.gray700, fontWeight: i === selectedIdx ? '600' : '400' }}>{s.location_name}</Text>
+                    {i === selectedIdx && <Text style={{ color: COLORS.primary, fontWeight: '700' }}>✓</Text>}
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+              <TouchableOpacity style={{ padding: 14, alignItems: 'center', marginTop: 8 }} onPress={() => setShowLocationPicker(false)}>
+                <Text style={{ fontSize: 15, fontWeight: '600', color: COLORS.gray500 }}>Close</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </Modal>
+      )}
     </View>
   );
 }

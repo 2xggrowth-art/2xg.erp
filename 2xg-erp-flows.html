@@ -1,0 +1,589 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>2XG ERP - Complete System Flow</title>
+<style>
+  @page { size: A4; margin: 14mm 16mm; }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    color: #1e293b;
+    line-height: 1.5;
+    background: #fff;
+    font-size: 11px;
+  }
+
+  /* Cover */
+  .cover {
+    page-break-after: always;
+    display: flex; flex-direction: column;
+    justify-content: center; align-items: center;
+    min-height: 95vh; text-align: center;
+    background: linear-gradient(135deg, #0f172a 0%, #1e3a5f 50%, #0f172a 100%);
+    color: white; padding: 40px;
+  }
+  .cover-logo { font-size: 64px; font-weight: 900; letter-spacing: -2px; margin-bottom: 8px; background: linear-gradient(135deg, #60a5fa, #a78bfa); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+  .cover-subtitle { font-size: 24px; font-weight: 300; color: #94a3b8; margin-bottom: 50px; }
+  .cover-title { font-size: 34px; font-weight: 700; margin-bottom: 12px; }
+  .cover-desc { font-size: 15px; color: #cbd5e1; max-width: 500px; margin-bottom: 60px; }
+  .cover-meta { font-size: 12px; color: #64748b; }
+  .cover-meta span { display: block; margin: 4px 0; }
+
+  h1 { font-size: 20px; font-weight: 800; color: #0f172a; margin: 24px 0 6px 0; padding-bottom: 5px; border-bottom: 3px solid #3b82f6; display: inline-block; }
+  h2 { font-size: 15px; font-weight: 700; color: #1e40af; margin: 16px 0 8px 0; }
+  h3 { font-size: 12px; font-weight: 700; color: #334155; margin: 12px 0 4px 0; }
+  p { margin: 4px 0 8px 0; font-size: 11px; }
+
+  .page-break { page-break-before: always; }
+
+  .diagram-box {
+    background: #0f172a; color: #e2e8f0;
+    padding: 18px 20px; border-radius: 8px;
+    font-family: 'Cascadia Code', 'Fira Code', 'Consolas', monospace;
+    font-size: 10.5px; line-height: 1.7;
+    margin: 10px 0 16px 0; white-space: pre;
+    overflow-x: auto; border-left: 4px solid #3b82f6;
+  }
+  .hl { color: #60a5fa; font-weight: bold; }
+  .gr { color: #4ade80; }
+  .yl { color: #fbbf24; }
+  .rd { color: #f87171; }
+  .pr { color: #c084fc; }
+  .cy { color: #22d3ee; }
+  .wh { color: #f1f5f9; font-weight: bold; }
+
+  table { width: 100%; border-collapse: collapse; margin: 8px 0 14px 0; font-size: 10.5px; }
+  th { background: #1e3a5f; color: white; padding: 6px 10px; text-align: left; font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; }
+  td { padding: 5px 10px; border-bottom: 1px solid #e2e8f0; vertical-align: top; }
+  tr:nth-child(even) { background: #f8fafc; }
+
+  .info-box { padding: 10px 14px; border-radius: 6px; margin: 8px 0 12px 0; font-size: 11px; }
+  .info-blue { background: #eff6ff; border-left: 4px solid #3b82f6; }
+  .info-green { background: #f0fdf4; border-left: 4px solid #22c55e; }
+  .info-amber { background: #fffbeb; border-left: 4px solid #f59e0b; }
+
+  .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin: 8px 0; }
+
+  .flow-label {
+    display: inline-block; padding: 3px 10px; border-radius: 12px;
+    font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px;
+  }
+  .fl-purchase { background: #dbeafe; color: #1e40af; }
+  .fl-sales { background: #dcfce7; color: #166534; }
+  .fl-inventory { background: #fef3c7; color: #92400e; }
+  .fl-expense { background: #fce7f3; color: #9d174d; }
+  .fl-logistics { background: #e0e7ff; color: #3730a3; }
+  .fl-pos { background: #f3e8ff; color: #6b21a8; }
+  .fl-crm { background: #ccfbf1; color: #115e59; }
+
+  @media print {
+    body { font-size: 10px; }
+    .diagram-box { font-size: 9.5px; padding: 14px; }
+    .cover { min-height: 100vh; }
+  }
+</style>
+</head>
+<body>
+
+<!-- COVER -->
+<div class="cover">
+  <div class="cover-logo">2XG</div>
+  <div class="cover-subtitle">Enterprise Resource Planning</div>
+  <div class="cover-title">Complete System Flow<br>Document</div>
+  <div class="cover-desc">
+    End-to-end flow diagrams for all modules in the 2XG ERP system.
+    Purchase, Sales, Inventory, Expenses, Logistics, POS, and CRM.
+  </div>
+  <div class="cover-meta">
+    <span>Version 1.0 | February 2026</span>
+    <span>28 API Routes | 48 Pages | 55 Components</span>
+    <span>React + Express + Supabase (PostgreSQL)</span>
+  </div>
+</div>
+
+<!-- PAGE 1: MASTER OVERVIEW -->
+<div>
+  <h1>1. Master System Overview</h1>
+  <p>All modules and how they connect to each other in the 2XG ERP system.</p>
+
+  <div class="diagram-box"><span class="wh">2XG ERP - COMPLETE MODULE MAP</span>
+
+  <span class="hl">PURCHASE SIDE</span>                              <span class="gr">SALES SIDE</span>
+  ============                              ==========
+
+  <span class="yl">[Item Master]</span> &lt;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&gt; <span class="yl">[Item Master]</span>
+       &darr;                                          &darr;
+  <span class="hl">[Purchase Order]</span> &larr;&rarr; <span class="cy">[Vendor]</span>         <span class="gr">[Sales Order]</span> &larr;&rarr; <span class="cy">[Customer]</span>
+       &darr;                                          &darr;
+  <span class="hl">[Bill]</span>                                   <span class="gr">[Invoice]</span>
+       &darr;                &darr;                       &darr;               &darr;
+  <span class="hl">[Payment Made]</span> &larr; <span class="pr">[Vendor Credit]</span>    <span class="gr">[Payment Received]</span>  &darr;
+       &darr;                                          &darr;           &darr;
+  <span class="yl">[Ledger]</span>                                 <span class="yl">[Ledger]</span>      <span class="gr">[Delivery Challan]</span>
+
+
+  <span class="yl">INVENTORY</span>                   <span class="rd">EXPENSES</span>              <span class="pr">SUPPORT</span>
+  =========                   ========              =======
+  <span class="yl">[Stock Count]</span>             <span class="rd">[Expense Category]</span>    <span class="pr">[Workchat/Tasks]</span>
+       &darr;                        &darr;                   <span class="pr">[Reports]</span>
+  <span class="yl">[Transfer Order]</span>         <span class="rd">[Expense Entry]</span>       <span class="pr">[AI Reporting]</span>
+       &darr;                        &darr;                   <span class="pr">[Search]</span>
+  <span class="yl">[Bin Locations]</span>          <span class="rd">[Approval]</span>            <span class="pr">[Settings]</span>
+
+  <span class="cy">POS</span>                      <span class="gr">CRM</span>                   <span class="hl">CARE</span>
+  ===                      ===                   ====
+  <span class="cy">[POS Session]</span>            <span class="gr">[Sales Pipeline]</span>      <span class="hl">[Service Tickets]</span>
+       &darr;
+  <span class="cy">[Quick Sale]</span></div>
+</div>
+
+<!-- PAGE 2: PURCHASE FLOW -->
+<div class="page-break">
+  <h1>2. Purchase Flow (Complete)</h1>
+  <span class="flow-label fl-purchase">Purchase Module</span>
+  <p>The full purchase cycle from item selection to final payment and ledger entry.</p>
+
+  <div class="diagram-box"><span class="wh">PURCHASE FLOW - STEP BY STEP</span>
+
+  <span class="hl">STEP 1: ITEM</span>
+  &boxdr;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxdl;
+  &boxv;  <span class="yl">Item Master</span>               &boxv;    Select items to purchase
+  &boxv;  SKU, Name, Cost Price,     &boxv;    from the item catalog.
+  &boxv;  Stock, UOM, Category       &boxv;    Items drive the PO line items.
+  &boxdr;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxdl;
+              &darr;
+  <span class="hl">STEP 2: PURCHASE ORDER (PO)</span>
+  &boxdr;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxdl;
+  &boxv;  <span class="gr">Purchase Order</span>            &boxv;    PO# auto-generated (PO-00001)
+  &boxv;  PO#, Date, Items,         &boxv;    Links to a <span class="cy">Vendor</span>
+  &boxv;  GST (CGST/SGST/IGST),     &boxv;    Contains line items with qty, rate
+  &boxv;  TDS/TCS, Discount,        &boxv;    Calculates subtotal, tax, total
+  &boxv;  Total Amount              &boxv;
+  &boxdr;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxdl;
+       &darr;                      &darr;
+       &darr;             <span class="cy">&boxdr;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxdl;</span>
+       &darr;             <span class="cy">&boxv;  Vendor Master   &boxv;</span>   Vendor name, contact,
+       &darr;             <span class="cy">&boxv;  supplier_name   &boxv;</span>   email, phone, city,
+       &darr;             <span class="cy">&boxv;  email, phone    &boxv;</span>   state, payment terms
+       &darr;             <span class="cy">&boxdr;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxdl;</span>
+       &darr;
+  <span class="hl">STEP 3: BILL</span>
+  &boxdr;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxdl;
+  &boxv;  <span class="yl">Bill</span>                      &boxv;    Created against a PO
+  &boxv;  Bill#, Bill Date,         &boxv;    Records vendor's invoice
+  &boxv;  Due Date, Items,          &boxv;    Tracks payment status:
+  &boxv;  GST, TCS/TDS,             &boxv;    <span class="gr">paid</span> / <span class="yl">partial</span> / <span class="rd">unpaid</span>
+  &boxv;  Total, Payment Status     &boxv;
+  &boxdr;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxdl;
+       &darr;                      &darr;
+       &darr;             <span class="pr">&boxdr;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxdl;</span>
+       &darr;             <span class="pr">&boxv; Vendor Credit   &boxv;</span>   Credit note from vendor
+       &darr;             <span class="pr">&boxv; (CN)            &boxv;</span>   for returns/discounts.
+       &darr;   <span class="pr">&darr;</span>         <span class="pr">&boxv; Reduces payable  &boxv;</span>   Reduces amount owed
+       &darr;   <span class="pr">&darr;</span>         <span class="pr">&boxdr;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxdl;</span>   to vendor.
+       &darr;   <span class="pr">&darr;</span>
+  <span class="hl">STEP 4: PAYMENT MADE</span>
+  &boxdr;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxdl;
+  &boxv;  <span class="gr">Payment Made</span>              &boxv;    Actual payment to vendor
+  &boxv;  Payment#, Date,           &boxv;    Can apply vendor credit
+  &boxv;  Amount, Mode,             &boxv;    Links to Bill(s)
+  &boxv;  Reference, Vendor         &boxv;    Modes: Cash/UPI/Bank/Cheque
+  &boxdr;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxdl;
+       &darr;
+  <span class="hl">STEP 5: LEDGER</span>
+  &boxdr;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxdl;
+  &boxv;  <span class="yl">Ledger Account</span>            &boxv;    Final record of all
+  &boxv;  All transactions          &boxv;    purchase transactions
+  &boxv;  per vendor                &boxv;    for accounting/reporting.
+  &boxdr;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxdl;
+
+  <span class="wh">PO STATUS FLOW:</span>
+  <span class="yl">draft</span> &rarr; <span class="hl">sent</span> &rarr; <span class="gr">received</span> &rarr; <span class="gr">closed</span></div>
+
+  <h3>Purchase Module Pages &amp; APIs</h3>
+  <table>
+    <tr><th>Page / Component</th><th>API Endpoint</th><th>Purpose</th></tr>
+    <tr><td>PurchaseOrderPage</td><td>GET /api/purchase-orders</td><td>List all POs</td></tr>
+    <tr><td>PurchaseOrderDetailPage</td><td>GET /api/purchase-orders/:id</td><td>View PO with items</td></tr>
+    <tr><td>NewPurchaseOrderForm</td><td>POST /api/purchase-orders</td><td>Create new PO</td></tr>
+    <tr><td>NewPurchaseOrderForm (edit)</td><td>PUT /api/purchase-orders/:id</td><td>Edit existing PO</td></tr>
+    <tr><td>BillsPage</td><td>GET /api/bills</td><td>List all bills</td></tr>
+    <tr><td>BillDetailPage</td><td>GET /api/bills/:id</td><td>View bill details</td></tr>
+    <tr><td>NewBillForm</td><td>POST /api/bills</td><td>Create bill against PO</td></tr>
+    <tr><td>PaymentMadePage</td><td>GET /api/payments</td><td>List payments to vendors</td></tr>
+    <tr><td>NewPaymentForm</td><td>POST /api/payments</td><td>Record payment</td></tr>
+    <tr><td>VendorCreditsPage</td><td>GET /api/vendor-credits</td><td>List vendor credit notes</td></tr>
+    <tr><td>NewVendorCreditForm</td><td>POST /api/vendor-credits</td><td>Create credit note</td></tr>
+    <tr><td>VendorManagementPage</td><td>GET /api/vendors</td><td>Manage vendor master</td></tr>
+  </table>
+</div>
+
+<!-- PAGE 3: SALES FLOW -->
+<div class="page-break">
+  <h1>3. Sales Flow (Complete)</h1>
+  <span class="flow-label fl-sales">Sales Module</span>
+  <p>The full sales cycle from customer selection to payment receipt, invoicing, and delivery.</p>
+
+  <div class="diagram-box"><span class="wh">SALES FLOW - STEP BY STEP</span>
+
+  <span class="gr">STEP 1: CUSTOMER</span>
+  &boxdr;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxdl;
+  &boxv;  <span class="cy">Customer Master</span>           &boxv;    customer_name, company,
+  &boxv;  Name, Email, Phone,       &boxv;    GSTIN, PAN, billing &amp;
+  &boxv;  GSTIN, Billing Address,   &boxv;    shipping addresses.
+  &boxv;  Shipping Address          &boxv;
+  &boxdr;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxdl;
+              &darr;
+  <span class="gr">STEP 2: SALES ORDER (SO)</span>
+  &boxdr;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxdl;
+  &boxv;  <span class="gr">Sales Order</span>               &boxv;    SO# auto-generated
+  &boxv;  SO#, Date, Customer,      &boxv;    Select <span class="yl">Items</span> from catalog
+  &boxv;  Items, Qty, Rate,         &boxv;    with qty and rate.
+  &boxv;  GST, Discount, Total      &boxv;    Calculates totals with GST.
+  &boxdr;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxdl;
+       &darr;                               &darr;
+       &darr;                               &darr;
+  <span class="gr">STEP 3: INVOICE</span>                 <span class="hl">STEP 3B: DELIVERY CHALLAN</span>
+  &boxdr;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxdl;     &boxdr;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxdl;
+  &boxv;  <span class="yl">Invoice</span>              &boxv;     &boxv;  <span class="pr">Delivery Challan</span>    &boxv;
+  &boxv;  Invoice#, Date,      &boxv;     &boxv;  DC#, Date, Items,   &boxv;
+  &boxv;  Customer, Items,     &boxv;     &boxv;  SO Reference,       &boxv;
+  &boxv;  GST, TCS/TDS,        &boxv;     &boxv;  Delivery Status     &boxv;
+  &boxv;  Payment Status       &boxv;     &boxdr;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxdl;
+  &boxdr;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxdl;
+       &darr;
+  <span class="gr">STEP 4: PAYMENT RECEIVED</span>
+  &boxdr;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxdl;
+  &boxv;  <span class="gr">Payment Received</span>          &boxv;    Payment from customer
+  &boxv;  Payment#, Date,           &boxv;    against invoice(s).
+  &boxv;  Amount, Mode,             &boxv;    Modes: Cash/UPI/Bank/Cheque
+  &boxv;  Customer, Invoice Ref     &boxv;    Updates invoice payment status.
+  &boxdr;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxdl;
+
+  <span class="wh">SO STATUS:</span> <span class="yl">draft</span> &rarr; <span class="hl">confirmed</span> &rarr; <span class="gr">delivered</span> &rarr; <span class="gr">closed</span>
+  <span class="wh">INVOICE STATUS:</span> <span class="rd">unpaid</span> &rarr; <span class="yl">partial</span> &rarr; <span class="gr">paid</span>
+  <span class="wh">DC STATUS:</span> <span class="yl">draft</span> &rarr; <span class="hl">in_transit</span> &rarr; <span class="gr">delivered</span></div>
+
+  <h3>Sales Module Pages &amp; APIs</h3>
+  <table>
+    <tr><th>Page / Component</th><th>API Endpoint</th><th>Purpose</th></tr>
+    <tr><td>SalesOrdersPage</td><td>GET /api/sales-orders</td><td>List all SOs</td></tr>
+    <tr><td>SalesOrderDetailPage</td><td>GET /api/sales-orders/:id</td><td>View SO with items</td></tr>
+    <tr><td>NewSalesOrderForm</td><td>POST /api/sales-orders</td><td>Create new SO</td></tr>
+    <tr><td>InvoicesPage</td><td>GET /api/invoices</td><td>List all invoices</td></tr>
+    <tr><td>InvoiceDetailPage</td><td>GET /api/invoices/:id</td><td>View invoice details</td></tr>
+    <tr><td>NewInvoiceForm</td><td>POST /api/invoices</td><td>Create invoice</td></tr>
+    <tr><td>PaymentsReceivedPage</td><td>GET /api/payments-received</td><td>List payments from customers</td></tr>
+    <tr><td>NewPaymentReceivedForm</td><td>POST /api/payments-received</td><td>Record customer payment</td></tr>
+    <tr><td>DeliveryChallansPage</td><td>GET /api/delivery-challans</td><td>List delivery challans</td></tr>
+    <tr><td>DeliveryChallanDetailPage</td><td>GET /api/delivery-challans/:id</td><td>View DC details</td></tr>
+    <tr><td>CustomerManagementPage</td><td>GET /api/customers</td><td>Manage customer master</td></tr>
+  </table>
+</div>
+
+<!-- PAGE 4: INVENTORY FLOW -->
+<div class="page-break">
+  <h1>4. Inventory Flow</h1>
+  <span class="flow-label fl-inventory">Inventory Module</span>
+  <p>Item management, stock counting, transfers, and bin locations.</p>
+
+  <div class="diagram-box"><span class="wh">INVENTORY FLOW</span>
+
+  <span class="yl">ITEM MASTER</span> (Central to everything)
+  &boxdr;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxdl;
+  &boxv;  <span class="yl">Items</span>                                   &boxv;
+  &boxv;  item_name, SKU, cost_price, unit_price  &boxv;
+  &boxv;  current_stock, reorder_point, UOM       &boxv;
+  &boxv;  category (via product_categories)       &boxv;
+  &boxv;  brand, manufacturer                     &boxv;
+  &boxdr;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxdl;
+       &darr;              &darr;                    &darr;
+       &darr;              &darr;                    &darr;
+  <span class="gr">[Stock Count]</span>   <span class="hl">[Transfer Order]</span>     <span class="pr">[Bin Location]</span>
+       &darr;              &darr;                    &darr;
+  Physical vs     Move stock between    Track where items
+  System count    locations/bins.       are physically stored.
+       &darr;              &darr;
+  Discrepancy     from_location &rarr;
+  detection       to_location
+
+
+  <span class="wh">ITEM CONNECTIONS TO OTHER MODULES:</span>
+
+  <span class="yl">[Item]</span> &rarr; used in &rarr; <span class="hl">[Purchase Order Items]</span>   (what to buy)
+  <span class="yl">[Item]</span> &rarr; used in &rarr; <span class="gr">[Sales Order Items]</span>      (what to sell)
+  <span class="yl">[Item]</span> &rarr; used in &rarr; <span class="gr">[Invoice Items]</span>          (what was invoiced)
+  <span class="yl">[Item]</span> &rarr; used in &rarr; <span class="hl">[Bill Items]</span>             (what was billed)
+  <span class="yl">[Item]</span> &rarr; used in &rarr; <span class="cy">[POS Sale Items]</span>         (quick sale)
+  <span class="yl">[Item]</span> &rarr; used in &rarr; <span class="pr">[DC Items]</span>               (what was delivered)
+  <span class="yl">[Item]</span> &rarr; used in &rarr; <span class="yl">[Transfer Order Items]</span>   (what was moved)
+
+
+  <span class="wh">STOCK COUNT FLOW:</span>
+  <span class="yl">Create Count</span> &rarr; <span class="hl">Physical Verification</span> &rarr; <span class="gr">Compare</span> &rarr; <span class="gr">Approve</span></div>
+
+  <h3>Inventory Module Pages &amp; APIs</h3>
+  <table>
+    <tr><th>Page / Component</th><th>API Endpoint</th><th>Purpose</th></tr>
+    <tr><td>ItemsPage</td><td>GET /api/items</td><td>List all items</td></tr>
+    <tr><td>ItemDetailPage</td><td>GET /api/items/:id</td><td>View item details</td></tr>
+    <tr><td>NewItemForm</td><td>POST /api/items</td><td>Create new item</td></tr>
+    <tr><td>NewItemForm (edit)</td><td>PUT /api/items/:id</td><td>Edit item</td></tr>
+    <tr><td>StockCountPage</td><td>GET /api/items/stock-counts</td><td>List stock counts</td></tr>
+    <tr><td>NewStockCountPage</td><td>POST /api/items/stock-counts</td><td>Create stock count</td></tr>
+    <tr><td>TransferOrdersPage</td><td>GET /api/transfer-orders</td><td>List transfers</td></tr>
+    <tr><td>NewTransferOrderForm</td><td>POST /api/transfer-orders</td><td>Create transfer</td></tr>
+    <tr><td>BinLocationsPage</td><td>GET /api/bin-locations</td><td>Manage bin locations</td></tr>
+    <tr><td>BrandManufacturerPage</td><td>GET /api/brands, /api/manufacturers</td><td>Manage brands &amp; manufacturers</td></tr>
+  </table>
+</div>
+
+<!-- PAGE 5: EXPENSE + POS + CRM FLOWS -->
+<div class="page-break">
+  <h1>5. Expense Flow</h1>
+  <span class="flow-label fl-expense">Expense Module</span>
+
+  <div class="diagram-box"><span class="wh">EXPENSE FLOW</span>
+
+  <span class="rd">[Expense Category]</span>   &larr; Manage categories (add/delete)
+       &darr;
+  <span class="rd">[New Expense]</span>
+  &boxdr;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxdl;
+  &boxv;  Category, Item/Description   &boxv;
+  &boxv;  Amount, Payment Mode         &boxv;
+  &boxv;  Date, Branch, Paid By        &boxv;
+  &boxv;  Voucher Upload (image/PDF)   &boxv;
+  &boxdr;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxdl;
+       &darr;
+  <span class="yl">[Approval Workflow]</span>
+  <span class="yl">Pending</span> &rarr; <span class="gr">Approved</span> / <span class="rd">Rejected</span>
+       &darr;
+  Auto-approved if amount &le; 2000 INR
+
+  <span class="wh">PAYMENT MODES:</span> Cash | UPI | Debit Card | Credit Card | Bank Transfer</div>
+
+  <h1>6. POS Flow</h1>
+  <span class="flow-label fl-pos">Point of Sale</span>
+
+  <div class="diagram-box"><span class="wh">POS FLOW</span>
+
+  <span class="pr">[Open POS Session]</span>
+       &darr;
+  <span class="pr">[Select Items]</span> &rarr; Search catalog, add to cart
+       &darr;
+  <span class="pr">[Apply Discounts]</span> &rarr; Per-item or overall
+       &darr;
+  <span class="pr">[Collect Payment]</span> &rarr; Cash / UPI / Card
+       &darr;
+  <span class="pr">[Generate Receipt]</span>
+       &darr;
+  <span class="pr">[Close Session]</span> &rarr; Session summary (total sales, items sold)</div>
+
+  <h1>7. CRM &amp; CARE Flows</h1>
+  <div class="two-col">
+    <div>
+      <span class="flow-label fl-crm">CRM / Sales Pipeline</span>
+      <div class="diagram-box" style="font-size: 10px;"><span class="wh">CRM FLOW</span>
+
+<span class="cy">[Lead Capture]</span>
+     &darr;
+<span class="cy">[Lead Qualification]</span>
+     &darr;
+<span class="cy">[Pipeline Stage]</span>
+  New &rarr; Contacted &rarr;
+  Qualified &rarr; Proposal &rarr;
+  Negotiation &rarr; <span class="gr">Won</span> / <span class="rd">Lost</span>
+     &darr;
+<span class="gr">[Convert to Customer]</span></div>
+    </div>
+    <div>
+      <span class="flow-label" style="background:#fef2f2;color:#991b1b;">CARE Module</span>
+      <div class="diagram-box" style="font-size: 10px;"><span class="wh">CARE FLOW</span>
+
+<span class="rd">[Service Ticket]</span>
+     &darr;
+<span class="rd">[Assign Agent]</span>
+     &darr;
+<span class="yl">[In Progress]</span>
+     &darr;
+<span class="gr">[Resolved]</span> / <span class="rd">[Escalated]</span></div>
+    </div>
+  </div>
+</div>
+
+<!-- PAGE 6: NAVIGATION & API MAP -->
+<div class="page-break">
+  <h1>8. Sidebar Navigation Map</h1>
+  <p>How every module connects through the sidebar navigation.</p>
+
+  <div class="diagram-box"><span class="wh">SIDEBAR NAVIGATION STRUCTURE</span>
+
+  <span class="yl">ITEMS</span> (Inventory)
+    &boxur;&boxh; Items                     &rarr; /items
+    &boxur;&boxh; Stock Count               &rarr; /items/stock-count
+    &boxur;&boxh; Bin Locations             &rarr; /items/bin-locations
+    &boxur;&boxh; Transfer Orders           &rarr; /inventory/transfer-orders
+    &boxvr;&boxh; New Category              &rarr; /items/new-category
+
+  <span class="hl">PURCHASE</span>
+    &boxur;&boxh; Vendor Management         &rarr; /vendor-management
+    &boxur;&boxh; Purchase Orders           &rarr; /purchase-orders
+    &boxur;&boxh; Bills                     &rarr; /purchases/bills
+    &boxur;&boxh; Payment Made              &rarr; /purchases/payments-made
+    &boxur;&boxh; Vendor Credits            &rarr; /purchases/vendor-credits
+    &boxvr;&boxh; Ledger Account            &rarr; /purchases/ledger-account
+
+  <span class="gr">SALES</span>
+    &boxur;&boxh; POS                       &rarr; /sales/pos
+    &boxur;&boxh; Customers                 &rarr; /sales/customers
+    &boxur;&boxh; Sales Orders              &rarr; /sales/sales-orders
+    &boxur;&boxh; Invoices                  &rarr; /sales/invoices
+    &boxvr;&boxh; Payment Received          &rarr; /sales/payment-received
+
+  <span class="pr">LOGISTICS</span>
+    &boxur;&boxh; Create Delivery Challan   &rarr; /logistics/create-delivery-challan
+    &boxur;&boxh; Delivery Challan          &rarr; /logistics/delivery-challan
+    &boxvr;&boxh; Pending Delivery          &rarr; (coming soon)
+
+  <span class="wh">OTHER</span>
+    &boxur;&boxh; 2XG CARE                  &rarr; /care
+    &boxur;&boxh; Expenses                  &rarr; /expenses
+    &boxur;&boxh; Workchat                  &rarr; /tasks
+    &boxur;&boxh; 2XG Earn                  &rarr; (coming soon)
+    &boxur;&boxh; Reports                   &rarr; /reports
+    &boxur;&boxh; Search                    &rarr; /search
+    &boxur;&boxh; Sales Pipeline            &rarr; /crm
+    &boxur;&boxh; AI Advanced Reporting     &rarr; /ai-reporting
+    &boxvr;&boxh; Settings                  &rarr; /settings</div>
+</div>
+
+<!-- PAGE 7: ALL APIs -->
+<div class="page-break">
+  <h1>9. Complete API Map (28 Route Prefixes)</h1>
+
+  <table>
+    <tr><th>#</th><th>Route Prefix</th><th>Key Endpoints</th><th>Module</th></tr>
+    <tr><td>1</td><td><code>/api/auth</code></td><td>login, verify, register, change-password, users</td><td>Auth</td></tr>
+    <tr><td>2</td><td><code>/api/mobile-auth</code></td><td>login (phone+PIN), verify</td><td>Mobile Auth</td></tr>
+    <tr><td>3</td><td><code>/api/erp</code></td><td>dashboard metrics</td><td>Dashboard</td></tr>
+    <tr><td>4</td><td><code>/api/items</code></td><td>CRUD, generate-sku, stock-counts, import</td><td>Items</td></tr>
+    <tr><td>5</td><td><code>/api/vendors</code></td><td>CRUD, search</td><td>Vendors</td></tr>
+    <tr><td>6</td><td><code>/api/customers</code></td><td>CRUD, search</td><td>Customers</td></tr>
+    <tr><td>7</td><td><code>/api/purchase-orders</code></td><td>CRUD, generate-po-number, summary</td><td>Purchase</td></tr>
+    <tr><td>8</td><td><code>/api/bills</code></td><td>CRUD, summary</td><td>Purchase</td></tr>
+    <tr><td>9</td><td><code>/api/payments</code></td><td>CRUD, summary</td><td>Purchase</td></tr>
+    <tr><td>10</td><td><code>/api/vendor-credits</code></td><td>CRUD</td><td>Purchase</td></tr>
+    <tr><td>11</td><td><code>/api/purchases</code></td><td>overview, summary</td><td>Purchase</td></tr>
+    <tr><td>12</td><td><code>/api/sales</code></td><td>overview, summary</td><td>Sales</td></tr>
+    <tr><td>13</td><td><code>/api/sales-orders</code></td><td>CRUD, generate-so-number</td><td>Sales</td></tr>
+    <tr><td>14</td><td><code>/api/invoices</code></td><td>CRUD, generate-invoice-number</td><td>Sales</td></tr>
+    <tr><td>15</td><td><code>/api/payments-received</code></td><td>CRUD</td><td>Sales</td></tr>
+    <tr><td>16</td><td><code>/api/delivery-challans</code></td><td>CRUD, generate-dc-number</td><td>Logistics</td></tr>
+    <tr><td>17</td><td><code>/api/transfer-orders</code></td><td>CRUD</td><td>Inventory</td></tr>
+    <tr><td>18</td><td><code>/api/bin-locations</code></td><td>CRUD</td><td>Inventory</td></tr>
+    <tr><td>19</td><td><code>/api/brands</code></td><td>CRUD, bulk-create</td><td>Inventory</td></tr>
+    <tr><td>20</td><td><code>/api/manufacturers</code></td><td>CRUD</td><td>Inventory</td></tr>
+    <tr><td>21</td><td><code>/api/expenses</code></td><td>CRUD, categories, summary, by-category</td><td>Expenses</td></tr>
+    <tr><td>22</td><td><code>/api/tasks</code></td><td>CRUD</td><td>Workchat</td></tr>
+    <tr><td>23</td><td><code>/api/reports</code></td><td>dashboard, category-sales, overdue</td><td>Reports</td></tr>
+    <tr><td>24</td><td><code>/api/search</code></td><td>global search</td><td>Search</td></tr>
+    <tr><td>25</td><td><code>/api/ai</code></td><td>insights, analytics</td><td>AI</td></tr>
+    <tr><td>26</td><td><code>/api/crm</code></td><td>leads, pipeline</td><td>CRM</td></tr>
+    <tr><td>27</td><td><code>/api/logistics</code></td><td>overview</td><td>Logistics</td></tr>
+    <tr><td>28</td><td><code>/api/pos-sessions</code></td><td>CRUD, session management</td><td>POS</td></tr>
+  </table>
+</div>
+
+<!-- PAGE 8: CROSS-MODULE CONNECTIONS -->
+<div class="page-break">
+  <h1>10. Cross-Module Connection Map</h1>
+  <p>How every entity relates to other entities across the system.</p>
+
+  <div class="diagram-box"><span class="wh">ENTITY RELATIONSHIP MAP</span>
+
+  <span class="yl">[Item]</span> &boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxdl;
+    &boxv;                                                       &boxv;
+    &boxur;&rarr; <span class="hl">purchase_order_items</span> (item_id, qty, rate)             &boxv;
+    &boxur;&rarr; <span class="hl">bill_items</span> (item_id, qty, rate)                      &boxv;
+    &boxur;&rarr; <span class="gr">sales_order_items</span> (item_id, qty, rate)               &boxv;
+    &boxur;&rarr; <span class="gr">invoice_items</span> (item_id, qty, rate, HSN)              &boxv;
+    &boxur;&rarr; <span class="pr">delivery_challan_items</span> (item_id, qty)                &boxv;
+    &boxur;&rarr; <span class="yl">transfer_order_items</span> (item_id, qty)                  &boxv;
+    &boxvr;&rarr; <span class="cy">pos_session_items</span> (item_id, qty, rate)               &boxv;
+                                                              &boxv;
+  <span class="cy">[Vendor]</span> &boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxdl;
+    &boxv;                                                       &boxv;
+    &boxur;&rarr; <span class="hl">purchase_orders</span> (supplier_id)                        &boxv;
+    &boxur;&rarr; <span class="hl">bills</span> (supplier_id)                                  &boxv;
+    &boxur;&rarr; <span class="hl">payments_made</span> (supplier_id)                          &boxv;
+    &boxvr;&rarr; <span class="pr">vendor_credits</span> (supplier_id)                         &boxv;
+                                                              &boxv;
+  <span class="cy">[Customer]</span> &boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxdl;
+    &boxv;                                                       &boxv;
+    &boxur;&rarr; <span class="gr">sales_orders</span> (customer_id)                           &boxv;
+    &boxur;&rarr; <span class="gr">invoices</span> (customer_id)                               &boxv;
+    &boxvr;&rarr; <span class="gr">payments_received</span> (customer_id)                      &boxv;
+                                                              &boxv;
+  <span class="wh">DOCUMENT CHAINS:</span>                                         &boxv;
+                                                              &boxv;
+  <span class="hl">PO</span> &rarr; <span class="hl">Bill</span> &rarr; <span class="hl">Payment Made</span>      (Purchase chain)          &boxv;
+  <span class="gr">SO</span> &rarr; <span class="gr">Invoice</span> &rarr; <span class="gr">Payment Received</span> (Sales chain)             &boxv;
+  <span class="gr">SO</span> &rarr; <span class="pr">Delivery Challan</span>             (Logistics chain)         &boxv;
+  <span class="hl">Bill</span> &rarr; <span class="pr">Vendor Credit</span> &rarr; <span class="hl">Payment</span>  (Credit adjustment chain)  &boxv;
+  &boxdr;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxdl;</div>
+
+  <h2>Authentication Flow</h2>
+  <div class="diagram-box" style="font-size: 10px;"><span class="wh">WEB AUTH</span>                               <span class="wh">MOBILE AUTH</span>
+
+<span class="cy">[Login Page]</span>                            <span class="cy">[Mobile App]</span>
+     &darr;                                       &darr;
+POST /api/auth/login                    POST /api/mobile-auth/login
+  email + password (bcrypt)               phone + PIN
+     &darr;                                       &darr;
+<span class="gr">[JWT Token]</span>                              <span class="gr">[JWT Token]</span>
+  { userId, email, role }                 { type: 'mobile', id }
+     &darr;                                       &darr;
+Stored in localStorage                  Stored in AsyncStorage
+     &darr;                                       &darr;
+Every request: Authorization: Bearer    Every request: Authorization: Bearer
+     &darr;                                       &darr;
+Auth middleware validates                Auth middleware validates
+against <span class="yl">users</span> table                     against <span class="yl">mobile_users</span> table</div>
+
+  <h2>Data Flow (Request Lifecycle)</h2>
+  <div class="diagram-box" style="font-size: 10px;"><span class="wh">REQUEST LIFECYCLE</span>
+
+<span class="cy">User Click</span> &rarr; <span class="gr">React Component</span> &rarr; <span class="yl">Frontend Service</span> (axios)
+                                           &darr;
+                                    <span class="hl">HTTP Request</span> + JWT Header
+                                           &darr;
+                                    <span class="pr">Express Route</span> &rarr; <span class="pr">Auth Middleware</span>
+                                           &darr;
+                                    <span class="pr">Controller</span> &rarr; <span class="pr">Service</span>
+                                           &darr;
+                                    <span class="yl">Supabase Client</span> (PostgREST)
+                                           &darr;
+                                    <span class="gr">PostgreSQL</span>
+                                           &darr;
+                                    Response: { success, data, error }</div>
+</div>
+
+<!-- FINAL PAGE -->
+<div class="page-break" style="display:flex;flex-direction:column;justify-content:center;align-items:center;min-height:80vh;text-align:center;">
+  <div style="font-size:40px;font-weight:900;color:#1e3a5f;margin-bottom:8px;">2XG</div>
+  <div style="font-size:18px;color:#64748b;margin-bottom:40px;">Enterprise Resource Planning</div>
+  <div style="font-size:16px;color:#334155;font-weight:600;margin-bottom:20px;">Complete System Flow Document</div>
+  <div style="width:60px;height:3px;background:#3b82f6;margin:20px auto;"></div>
+  <div style="font-size:13px;color:#94a3b8;margin-top:20px;">
+    <p style="margin:6px 0;"><strong>7 Module Flows</strong> documented</p>
+    <p style="margin:6px 0;">28 API Routes | 48 Pages | 55 Components</p>
+    <p style="margin:6px 0;">Purchase | Sales | Inventory | Expenses | Logistics | POS | CRM</p>
+  </div>
+  <div style="margin-top:60px;font-size:11px;color:#cbd5e1;">
+    Prepared for 2XG Growth | February 2026
+  </div>
+</div>
+
+</body>
+</html>

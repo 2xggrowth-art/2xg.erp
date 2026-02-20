@@ -1,8 +1,10 @@
 import { supabaseAdmin as supabase } from '../config/supabase';
 import { BatchesService } from './batches.service';
 import { placementTasksService } from './placementTasks.service';
+import { AssemblyService } from './assembly.service';
 
 const batchesService = new BatchesService();
+const assemblyService = new AssemblyService();
 
 export interface BinAllocation {
   bin_location_id: string;
@@ -313,6 +315,32 @@ export class BillsService {
         }
       } catch (placementErr) {
         console.error('Error creating placement tasks (non-blocking):', placementErr);
+      }
+
+      // Auto-create assembly journeys for serial-tracked items (non-blocking)
+      try {
+        for (const item of data.items) {
+          if (!item.item_id || !item.serial_numbers || item.serial_numbers.length === 0) continue;
+
+          const { data: itemRecord } = await supabase
+            .from('items')
+            .select('advanced_tracking_type, sku')
+            .eq('id', item.item_id)
+            .single();
+
+          if (itemRecord?.advanced_tracking_type === 'serial' && itemRecord.sku) {
+            const result = await assemblyService.bulkCreateJourneysFromBill({
+              serials: item.serial_numbers,
+              model_sku: itemRecord.sku,
+              grn_reference: bill.bill_number,
+            });
+            if (result.errors.length > 0) {
+              console.warn(`Assembly journey warnings for ${item.item_name}:`, result.errors);
+            }
+          }
+        }
+      } catch (assemblyErr) {
+        console.error('Error creating assembly journeys (non-blocking):', assemblyErr);
       }
 
       if (binAllocationWarnings.length > 0) {

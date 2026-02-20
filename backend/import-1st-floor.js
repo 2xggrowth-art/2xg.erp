@@ -1,0 +1,302 @@
+/**
+ * Import 1st Floor Inventory from consolidated Excel
+ * - Creates items (auto SKU, cost_price=0)
+ * - Creates a bill to add stock to "1st floor" bin at "bch" location
+ */
+
+const { createClient } = require('@supabase/supabase-js');
+const XLSX = require('xlsx');
+const path = require('path');
+require('dotenv').config({ path: path.join(__dirname, '.env') });
+
+const supabaseUrl = process.env.SUPABASE_URL?.trim();
+const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim();
+
+if (!supabaseUrl || !supabaseKey) {
+  console.error('Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY in .env');
+  process.exit(1);
+}
+
+const supabase = createClient(supabaseUrl, supabaseKey, {
+  auth: { autoRefreshToken: false, persistSession: false },
+  db: { schema: 'public' },
+  global: { headers: { 'Prefer': 'return=representation' } }
+});
+
+async function main() {
+  // 1. Read consolidated Excel
+  const excelPath = path.resolve('C:\\Users\\Admin\\Downloads\\1ST_FLOOR_INVENTORY_CONSOLIDATED.xlsx');
+  const workbook = XLSX.readFile(excelPath);
+  const sheet = workbook.Sheets[workbook.SheetNames[0]];
+  const rows = XLSX.utils.sheet_to_json(sheet);
+
+  console.log(`Read ${rows.length} unique items from Excel\n`);
+
+  // 2. Find or create location "bch"
+  let { data: location } = await supabase
+    .from('locations')
+    .select('id, name')
+    .ilike('name', 'bch')
+    .single();
+
+  if (!location) {
+    console.log('Location "bch" not found, creating...');
+    const { data: newLoc, error: locErr } = await supabase
+      .from('locations')
+      .insert({ name: 'bch', description: 'BCH Location', status: 'active' })
+      .select()
+      .single();
+    if (locErr) { console.error('Failed to create location:', locErr); process.exit(1); }
+    location = newLoc;
+  }
+  console.log(`Location: ${location.name} (${location.id})`);
+
+  // 3. Find or create bin "1st floor" at this location
+  let { data: bin } = await supabase
+    .from('bin_locations')
+    .select('id, bin_code, location_id')
+    .ilike('bin_code', '1st floor')
+    .eq('location_id', location.id)
+    .single();
+
+  if (!bin) {
+    // Check if bin exists with this code at any location
+    let { data: existingBin } = await supabase
+      .from('bin_locations')
+      .select('id, bin_code, location_id')
+      .ilike('bin_code', '1st floor')
+      .single();
+
+    if (existingBin) {
+      bin = existingBin;
+      console.log(`Found bin "1st floor" at different location, using it.`);
+    } else {
+      console.log('Bin "1st floor" not found, creating...');
+      const { data: newBin, error: binErr } = await supabase
+        .from('bin_locations')
+        .insert({ bin_code: '1st floor', location_id: location.id, description: '1st Floor Inventory', status: 'active' })
+        .select()
+        .single();
+      if (binErr) { console.error('Failed to create bin:', binErr); process.exit(1); }
+      bin = newBin;
+    }
+  }
+  console.log(`Bin: ${bin.bin_code} (${bin.id})\n`);
+
+  // 4. Get highest existing SKU number
+  const { data: existingSkus } = await supabase
+    .from('items')
+    .select('sku')
+    .like('sku', 'SKU-%')
+    .order('sku', { ascending: false })
+    .limit(1);
+
+  let nextSkuNum = 1;
+  if (existingSkus && existingSkus.length > 0) {
+    const match = existingSkus[0].sku.match(/SKU-(\d+)/);
+    if (match) nextSkuNum = parseInt(match[1]) + 1;
+  }
+  console.log(`Starting SKU number: SKU-${String(nextSkuNum).padStart(4, '0')}\n`);
+
+  // 5. Get all existing items to check for duplicates
+  const { data: allItems } = await supabase
+    .from('items')
+    .select('id, item_name, sku, size, color, variant, current_stock');
+
+  const existingItemMap = new Map();
+  if (allItems) {
+    for (const item of allItems) {
+      const key = `${(item.item_name || '').toLowerCase().trim()}|${(item.size || '').toLowerCase().trim()}|${(item.variant || '').toLowerCase().trim()}|${(item.color || '').toLowerCase().trim()}`;
+      existingItemMap.set(key, item);
+    }
+  }
+
+  // 6. Process each row - create items and collect bill items
+  const billItems = [];
+  let created = 0, found = 0, failed = 0;
+
+  for (const row of rows) {
+    const itemName = String(row['CYCLE NAME'] || '').trim();
+    const size = String(row['SIZE'] || '').trim();
+    const variant = String(row['MS / SS'] || '').trim();
+    const color = String(row['CLR'] || '').trim();
+    const qty = parseInt(row['QTY']) || 1;
+
+    if (!itemName) continue;
+
+    const key = `${itemName.toLowerCase()}|${size.toLowerCase()}|${variant.toLowerCase()}|${color.toLowerCase()}`;
+    let item = existingItemMap.get(key);
+
+    if (item) {
+      console.log(`  FOUND: ${itemName} (${size}, ${variant}, ${color}) → ${item.sku}`);
+      found++;
+    } else {
+      // Create new item
+      const sku = `SKU-${String(nextSkuNum).padStart(4, '0')}`;
+      nextSkuNum++;
+
+      const { data: newItem, error: itemErr } = await supabase
+        .from('items')
+        .insert({
+          item_name: itemName,
+          sku: sku,
+          size: size || null,
+          color: color || null,
+          variant: variant || null,
+          unit_price: 0,
+          cost_price: 0,
+          current_stock: 0,
+          unit_of_measurement: 'pieces',
+          item_type: 'goods',
+          is_active: true,
+          advanced_tracking_type: 'none',
+        })
+        .select()
+        .single();
+
+      if (itemErr) {
+        console.error(`  FAILED: ${itemName} (${sku}) - ${itemErr.message}`);
+        failed++;
+        continue;
+      }
+
+      item = newItem;
+      existingItemMap.set(key, item);
+      console.log(`  CREATED: ${itemName} (${size}, ${variant}, ${color}) → ${sku}`);
+      created++;
+    }
+
+    billItems.push({
+      item_id: item.id,
+      item_name: itemName,
+      quantity: qty,
+      unit_price: 0,
+      cost_price: 0,
+      tax_rate: 0,
+      discount: 0,
+      total: 0,
+      unit_of_measurement: 'pieces',
+      bin_allocations: [{
+        bin_location_id: bin.id,
+        bin_code: bin.bin_code,
+        quantity: qty,
+      }]
+    });
+  }
+
+  console.log(`\nItems: ${created} created, ${found} found, ${failed} failed`);
+  console.log(`Bill items to add: ${billItems.length}`);
+  const totalQty = billItems.reduce((sum, i) => sum + i.quantity, 0);
+  console.log(`Total quantity: ${totalQty}\n`);
+
+  if (billItems.length === 0) {
+    console.log('No items to process. Exiting.');
+    return;
+  }
+
+  // 7. Generate bill number
+  const { data: lastBill } = await supabase
+    .from('bills')
+    .select('bill_number')
+    .like('bill_number', 'BILL-%')
+    .order('bill_number', { ascending: false })
+    .limit(1);
+
+  let nextBillNum = 1;
+  if (lastBill && lastBill.length > 0) {
+    const match = lastBill[0].bill_number.match(/BILL-(\d+)/);
+    if (match) nextBillNum = parseInt(match[1]) + 1;
+  }
+  const billNumber = `BILL-${String(nextBillNum).padStart(4, '0')}`;
+
+  // 8. Create the bill
+  const today = new Date().toISOString().split('T')[0];
+  const { data: bill, error: billErr } = await supabase
+    .from('bills')
+    .insert({
+      bill_number: billNumber,
+      vendor_name: '1st Floor Inventory Import',
+      bill_date: today,
+      due_date: today,
+      subtotal: 0,
+      tax_amount: 0,
+      discount_amount: 0,
+      total_amount: 0,
+      status: 'open',
+      payment_status: 'unpaid',
+      notes: 'Auto-imported from 1st Floor Inventory Excel',
+    })
+    .select()
+    .single();
+
+  if (billErr) {
+    console.error('Failed to create bill:', billErr);
+    process.exit(1);
+  }
+  console.log(`Created bill: ${billNumber} (${bill.id})`);
+
+  // 9. Create bill items and bin allocations
+  let itemsAdded = 0;
+  for (const bi of billItems) {
+    // Create bill item
+    const { data: billItem, error: biErr } = await supabase
+      .from('bill_items')
+      .insert({
+        bill_id: bill.id,
+        item_id: bi.item_id,
+        item_name: bi.item_name,
+        quantity: bi.quantity,
+        unit_price: 0,
+        tax_rate: 0,
+        discount: 0,
+        total: 0,
+        unit_of_measurement: bi.unit_of_measurement,
+      })
+      .select()
+      .single();
+
+    if (biErr) {
+      console.error(`  Failed bill item: ${bi.item_name} - ${biErr.message}`);
+      continue;
+    }
+
+    // Create bin allocation
+    const { error: allocErr } = await supabase
+      .from('bill_item_bin_allocations')
+      .insert({
+        bill_item_id: billItem.id,
+        bin_location_id: bin.id,
+        quantity: bi.quantity,
+      });
+
+    if (allocErr) {
+      console.error(`  Failed bin allocation: ${bi.item_name} - ${allocErr.message}`);
+      continue;
+    }
+
+    // Update item current_stock
+    const { error: stockErr } = await supabase.rpc('exec_sql', {
+      sql: `UPDATE items SET current_stock = COALESCE(current_stock, 0) + ${bi.quantity} WHERE id = '${bi.item_id}'`
+    });
+
+    if (stockErr) {
+      // Fallback: direct update
+      const existing = await supabase.from('items').select('current_stock').eq('id', bi.item_id).single();
+      const currentStock = (existing.data?.current_stock || 0) + bi.quantity;
+      await supabase.from('items').update({ current_stock: currentStock }).eq('id', bi.item_id);
+    }
+
+    itemsAdded++;
+  }
+
+  console.log(`\n=== DONE ===`);
+  console.log(`Bill: ${billNumber}`);
+  console.log(`Items added to bill: ${itemsAdded}/${billItems.length}`);
+  console.log(`Total quantity added to bin "${bin.bin_code}": ${totalQty}`);
+  console.log(`Location: ${location.name}`);
+}
+
+main().catch(err => {
+  console.error('Script error:', err);
+  process.exit(1);
+});
