@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useCallback } from 'react';
 import { Camera, Image, FolderOpen, X, RefreshCw } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -18,8 +18,17 @@ export const PhotoUpload = ({
   const [capturing, setCapturing] = useState(false);
   const [cameraError, setCameraError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const videoRef = useRef<HTMLVideoElement>(null);
+  const videoRef = useRef<HTMLVideoElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
+
+  // Callback ref: when the video element mounts, attach the stream
+  const videoCallbackRef = useCallback((node: HTMLVideoElement | null) => {
+    videoRef.current = node;
+    if (node && streamRef.current) {
+      node.srcObject = streamRef.current;
+      node.play().catch(() => {});
+    }
+  }, []);
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
@@ -81,10 +90,14 @@ export const PhotoUpload = ({
         video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } },
       });
       streamRef.current = stream;
+      // Set capturing first so the <video> element renders,
+      // then the videoCallbackRef will attach the stream
+      setCapturing(true);
+      // Also try attaching directly if the ref is already set
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
+        videoRef.current.play().catch(() => {});
       }
-      setCapturing(true);
     } catch (err: any) {
       console.error('Camera access error:', err);
       setCameraError(
@@ -98,13 +111,19 @@ export const PhotoUpload = ({
   const capturePhoto = () => {
     if (!videoRef.current) return;
 
+    const video = videoRef.current;
+    if (video.videoWidth === 0 || video.videoHeight === 0) {
+      toast.error('Camera not ready yet. Please wait a moment.');
+      return;
+    }
+
     const canvas = document.createElement('canvas');
-    canvas.width = videoRef.current.videoWidth;
-    canvas.height = videoRef.current.videoHeight;
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    ctx.drawImage(videoRef.current, 0, 0);
+    ctx.drawImage(video, 0, 0);
     const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
     onChange([...photos, dataUrl]);
     stopCamera();
@@ -187,7 +206,7 @@ export const PhotoUpload = ({
       {/* Camera Capture */}
       {capturing && (
         <div className="relative rounded-lg overflow-hidden bg-black">
-          <video ref={videoRef} autoPlay playsInline muted className="w-full max-h-[300px]" />
+          <video ref={videoCallbackRef} autoPlay playsInline muted className="w-full max-h-[300px]" />
           <div className="absolute bottom-3 left-0 right-0 flex justify-center gap-3">
             <button
               type="button"

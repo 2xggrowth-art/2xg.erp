@@ -13,7 +13,7 @@ export interface QueueBike {
   model_sku: string;
   frame_number?: string;
   current_status: string;
-  checklist: Record<string, boolean> | null;
+  checklist: Record<string, any> | null;
   priority: boolean;
   qc_status?: string;
   qc_failure_reason?: string;
@@ -124,7 +124,7 @@ export const TechnicianDashboard = () => {
     }
   };
 
-  const handleChecklistComplete = async (barcode: string, checklist: object) => {
+  const handleChecklistComplete = async (barcode: string, checklist: Record<string, string>) => {
     try {
       await assemblyService.completeAssembly(barcode, checklist);
       toast.success('Assembly completed! Bike is now ready for sale.');
@@ -137,7 +137,7 @@ export const TechnicianDashboard = () => {
     }
   };
 
-  const handleChecklistUpdate = async (barcode: string, checklist: object) => {
+  const handleChecklistUpdate = async (barcode: string, checklist: Record<string, string>) => {
     try {
       await assemblyService.updateChecklist(barcode, checklist);
       toast.success('Progress saved');
