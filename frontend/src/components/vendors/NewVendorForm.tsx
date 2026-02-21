@@ -1,7 +1,16 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { ArrowLeft, User, Save } from 'lucide-react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { vendorsService } from '../../services/vendors.service';
+
+const INDIAN_STATES = [
+  'Andhra Pradesh', 'Arunachal Pradesh', 'Assam', 'Bihar', 'Chhattisgarh',
+  'Delhi', 'Goa', 'Gujarat', 'Haryana', 'Himachal Pradesh',
+  'Jharkhand', 'Karnataka', 'Kerala', 'Madhya Pradesh', 'Maharashtra',
+  'Manipur', 'Meghalaya', 'Mizoram', 'Nagaland', 'Odisha',
+  'Punjab', 'Rajasthan', 'Sikkim', 'Tamil Nadu', 'Telangana',
+  'Tripura', 'Uttar Pradesh', 'Uttarakhand', 'West Bengal',
+];
 
 const NewVendorForm = () => {
   const navigate = useNavigate();
@@ -10,6 +19,9 @@ const NewVendorForm = () => {
   const [loading, setLoading] = useState(false);
   const [fetchingData, setFetchingData] = useState(false);
   const [activeTab, setActiveTab] = useState('other-details');
+  const [stateSearch, setStateSearch] = useState('');
+  const [stateDropdownOpen, setStateDropdownOpen] = useState(false);
+  const stateRef = useRef<HTMLDivElement>(null);
 
   const [formData, setFormData] = useState({
     salutation: 'Mr.',
@@ -52,6 +64,17 @@ const NewVendorForm = () => {
       fetchVendorData();
     }
   }, [id, isEditMode]);
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (stateRef.current && !stateRef.current.contains(e.target as Node)) {
+        setStateDropdownOpen(false);
+        setStateSearch(formData.sourceOfSupply || '');
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [formData.sourceOfSupply]);
 
   const fetchVendorData = async () => {
     try {
@@ -111,6 +134,7 @@ const NewVendorForm = () => {
           branch: '',
           remarks: vendor.notes || ''
         });
+        setStateSearch(vendor.source_of_supply || '');
       }
     } catch (error: any) {
       console.error('Error fetching vendor:', error);
@@ -520,20 +544,41 @@ const NewVendorForm = () => {
                     <label className="col-span-3 text-sm font-medium text-red-500">
                       Source of Supply<span>*</span>
                     </label>
-                    <div className="col-span-9">
-                      <select
-                        name="sourceOfSupply"
-                        value={formData.sourceOfSupply}
-                        onChange={handleInputChange}
+                    <div className="col-span-9 relative" ref={stateRef}>
+                      <input
+                        type="text"
+                        value={stateSearch}
+                        onChange={(e) => {
+                          setStateSearch(e.target.value);
+                          setStateDropdownOpen(true);
+                        }}
+                        onFocus={() => setStateDropdownOpen(true)}
+                        placeholder="Type to search state..."
                         className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        required
-                      >
-                        <option value="">Select</option>
-                        <option value="Karnataka">Karnataka</option>
-                        <option value="Maharashtra">Maharashtra</option>
-                        <option value="Tamil Nadu">Tamil Nadu</option>
-                        <option value="Delhi">Delhi</option>
-                      </select>
+                        autoComplete="off"
+                      />
+                      {stateDropdownOpen && (
+                        <div className="absolute z-50 w-full mt-1 max-h-48 overflow-y-auto bg-white border border-gray-300 rounded-lg shadow-lg">
+                          {INDIAN_STATES
+                            .filter(s => s.toLowerCase().includes(stateSearch.toLowerCase()))
+                            .map(state => (
+                              <div
+                                key={state}
+                                onClick={() => {
+                                  setFormData(prev => ({ ...prev, sourceOfSupply: state }));
+                                  setStateSearch(state);
+                                  setStateDropdownOpen(false);
+                                }}
+                                className="px-4 py-2 hover:bg-blue-50 cursor-pointer text-sm text-gray-700"
+                              >
+                                {state}
+                              </div>
+                            ))}
+                          {INDIAN_STATES.filter(s => s.toLowerCase().includes(stateSearch.toLowerCase())).length === 0 && (
+                            <div className="px-4 py-2 text-sm text-gray-400">No states found</div>
+                          )}
+                        </div>
+                      )}
                     </div>
                   </div>
 

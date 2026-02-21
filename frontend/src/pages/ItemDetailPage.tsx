@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { itemsService, Item } from '../services/items.service';
 import { binLocationService } from '../services/binLocation.service';
 import { batchesService, ItemBatch } from '../services/batches.service';
-import { ArrowLeft, Edit2, Trash2, Package, DollarSign, TrendingUp, AlertCircle, MapPin, Layers } from 'lucide-react';
+import { ArrowLeft, Edit2, Trash2, Package, TrendingUp, AlertCircle, MapPin, Layers } from 'lucide-react';
 
 const ItemDetailPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -195,7 +195,7 @@ const ItemDetailPage: React.FC = () => {
           <div className="bg-white rounded-lg shadow p-6">
             <div className="flex items-center gap-3">
               <div className="p-3 bg-green-100 rounded-lg">
-                <DollarSign className="h-6 w-6 text-green-600" />
+                <span className="h-6 w-6 text-green-600 flex items-center justify-center font-bold text-lg">₹</span>
               </div>
               <div>
                 <p className="text-sm text-gray-600">Unit Price</p>
@@ -239,6 +239,10 @@ const ItemDetailPage: React.FC = () => {
             <div className="p-6 space-y-4">
               <DetailRow label="Item Name" value={item.item_name} />
               <DetailRow label="SKU" value={item.sku} />
+              <DetailRow label="Type" value={item.item_type || 'N/A'} />
+              <DetailRow label="Size" value={item.size || 'N/A'} />
+              <DetailRow label="Color" value={item.color || 'N/A'} />
+              <DetailRow label="Variant" value={item.variant || 'N/A'} />
               <DetailRow label="Unit of Measurement" value={item.unit_of_measurement} />
               <DetailRow label="Description" value={item.description || 'N/A'} />
               <DetailRow label="Barcode" value={item.barcode || 'N/A'} />
@@ -273,22 +277,7 @@ const ItemDetailPage: React.FC = () => {
               <DetailRow label="Manufacturer" value={item.manufacturer || 'N/A'} />
               <DetailRow label="Brand" value={item.brand || 'N/A'} />
               <DetailRow label="HSN Code" value={item.hsn_code || 'N/A'} />
-              <DetailRow label="Weight" value={item.weight ? `${item.weight} kg` : 'N/A'} />
-              <DetailRow label="Dimensions" value={item.dimensions || 'N/A'} />
               <DetailRow label="Returnable" value={item.is_returnable ? 'Yes' : 'No'} />
-            </div>
-          </div>
-
-          {/* Identifiers */}
-          <div className="bg-white rounded-lg shadow">
-            <div className="px-6 py-4 border-b border-gray-200">
-              <h2 className="text-lg font-semibold text-gray-900">Identifiers</h2>
-            </div>
-            <div className="p-6 space-y-4">
-              <DetailRow label="UPC" value={item.upc || 'N/A'} />
-              <DetailRow label="MPN" value={item.mpn || 'N/A'} />
-              <DetailRow label="EAN" value={item.ean || 'N/A'} />
-              <DetailRow label="ISBN" value={item.isbn || 'N/A'} />
               <DetailRow label="Created At" value={new Date(item.created_at).toLocaleString()} />
               <DetailRow label="Updated At" value={new Date(item.updated_at).toLocaleString()} />
             </div>
