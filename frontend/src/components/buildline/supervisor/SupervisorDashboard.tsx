@@ -2,8 +2,6 @@ import { useState, useEffect } from 'react';
 import { assemblyService } from '../../../services/assembly.service';
 import { KanbanBoard } from './KanbanBoard';
 import { AssignmentPanel } from './AssignmentPanel';
-import { InwardBikeForm } from './InwardBikeForm';
-import { BulkInwardModal } from './BulkInwardModal';
 import { ManageTechnicians } from './ManageTechnicians';
 import { ManageLocations } from './ManageLocations';
 import toast from 'react-hot-toast';
@@ -13,8 +11,7 @@ export const SupervisorDashboard = () => {
   const [kanban, setKanban] = useState<KanbanItem[]>([]);
   const [technicians, setTechnicians] = useState<TechnicianWorkload[]>([]);
   const [loading, setLoading] = useState(true);
-  const [view, setView] = useState<'kanban' | 'assign' | 'inward' | 'manage'>('kanban');
-  const [showBulkInwardModal, setShowBulkInwardModal] = useState(false);
+  const [view, setView] = useState<'kanban' | 'assign' | 'manage'>('kanban');
 
   useEffect(() => {
     loadData();
@@ -84,7 +81,7 @@ export const SupervisorDashboard = () => {
           </div>
 
           <div className="flex gap-1 sm:gap-2 overflow-x-auto pb-1">
-            {(['kanban', 'assign', 'inward', 'manage'] as const).map((v) => (
+            {(['kanban', 'assign', 'manage'] as const).map((v) => (
               <button
                 key={v}
                 onClick={() => setView(v)}
@@ -92,7 +89,7 @@ export const SupervisorDashboard = () => {
                   view === v ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                 }`}
               >
-                {v === 'kanban' ? 'Kanban' : v === 'assign' ? 'Assign' : v === 'inward' ? 'Inward' : 'Manage'}
+                {v === 'kanban' ? 'Kanban' : v === 'assign' ? 'Assign' : 'Manage'}
               </button>
             ))}
             <button
@@ -115,26 +112,6 @@ export const SupervisorDashboard = () => {
           <AssignmentPanel bikes={inwardedBikes} technicians={technicians} onAssign={handleAssign} />
         )}
 
-        {view === 'inward' && (
-          <div className="space-y-6">
-            <div className="bg-white rounded-lg shadow p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h2 className="text-xl font-bold text-gray-900">Inward Cycles</h2>
-                  <p className="text-sm text-gray-600 mt-1">Add cycles to the system - single or bulk import</p>
-                </div>
-                <button
-                  onClick={() => setShowBulkInwardModal(true)}
-                  className="px-6 py-3 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-lg hover:from-blue-700 hover:to-blue-800 transition-all font-medium shadow-lg hover:shadow-xl"
-                >
-                  Bulk Inward
-                </button>
-              </div>
-            </div>
-            <InwardBikeForm onSuccess={loadData} />
-          </div>
-        )}
-
         {view === 'manage' && (
           <div className="space-y-8">
             <ManageLocations onSuccess={loadData} />
@@ -143,15 +120,6 @@ export const SupervisorDashboard = () => {
         )}
       </div>
 
-      {showBulkInwardModal && (
-        <BulkInwardModal
-          onClose={() => setShowBulkInwardModal(false)}
-          onSuccess={() => {
-            loadData();
-            setShowBulkInwardModal(false);
-          }}
-        />
-      )}
     </div>
   );
 };

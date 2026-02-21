@@ -5,6 +5,7 @@ import { itemsService, Item as ItemType } from '../services/items.service';
 import BulkActionBar, { createBulkDeleteAction, createBulkExportAction } from '../components/common/BulkActionBar';
 import { parseCSV, jsonToCSV, downloadCSV } from '../utils/csvParser';
 import { generateImportTemplate, mapCSVToItemData, mapItemToCSV, EXPORT_COLUMN_ORDER } from '../utils/itemImportTemplate';
+import ItemDetailPanel from '../components/items/ItemDetailPanel';
 
 interface Item {
   id: string;
@@ -29,6 +30,7 @@ const ItemsPage = () => {
   const [error, setError] = useState<string | null>(null);
   const [selectedItems, setSelectedItems] = useState<string[]>([]);
   const [refreshKey, setRefreshKey] = useState(0);
+  const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
   const [showActionsMenu, setShowActionsMenu] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
   const [importFile, setImportFile] = useState<File | null>(null);
@@ -278,14 +280,16 @@ const ItemsPage = () => {
   };
 
   return (
-    <div className="h-full flex flex-col bg-gray-50">
+    <div className="h-full flex bg-gray-50">
+      {/* Left: Items List */}
+      <div className={`flex flex-col bg-gray-50 transition-all duration-300 ${selectedItemId ? 'w-1/3 min-w-[320px] border-r border-gray-200' : 'w-full'}`}>
       {/* Header */}
       <div className="bg-white border-b border-gray-200">
         <div className="px-6 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               <Package className="w-6 h-6 text-blue-600" />
-              <h1 className="text-2xl font-semibold text-gray-800">Items</h1>
+              <h1 className={`font-semibold text-gray-800 ${selectedItemId ? 'text-lg' : 'text-2xl'}`}>Items</h1>
             </div>
             <div className="flex items-center gap-2">
               {/* New Button */}
@@ -420,32 +424,38 @@ const ItemsPage = () => {
               <table className="w-full">
                 <thead className="bg-gray-50 border-b border-gray-200">
                   <tr>
-                    <th className="px-6 py-3 text-left">
-                      <input
-                        type="checkbox"
-                        checked={selectedItems.length === filteredItems.length && filteredItems.length > 0}
-                        onChange={handleSelectAll}
-                        className="rounded"
-                      />
-                    </th>
+                    {!selectedItemId && (
+                      <th className="px-6 py-3 text-left">
+                        <input
+                          type="checkbox"
+                          checked={selectedItems.length === filteredItems.length && filteredItems.length > 0}
+                          onChange={handleSelectAll}
+                          className="rounded"
+                        />
+                      </th>
+                    )}
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       NAME
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      SKU
-                    </th>
-                    <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      STOCK ON HAND
-                    </th>
-                    <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      REORDER LEVEL
-                    </th>
+                    {!selectedItemId && (
+                      <>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          SKU
+                        </th>
+                        <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          STOCK ON HAND
+                        </th>
+                        <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          REORDER LEVEL
+                        </th>
+                      </>
+                    )}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-200">
                   {filteredItems.length === 0 ? (
                     <tr>
-                      <td colSpan={5} className="px-6 py-12 text-center">
+                      <td colSpan={selectedItemId ? 1 : 5} className="px-6 py-12 text-center">
                         <div className="flex flex-col items-center justify-center text-gray-400">
                           <Package className="w-12 h-12 mb-3" />
                           <p className="text-lg font-medium">No items found</p>
@@ -459,43 +469,52 @@ const ItemsPage = () => {
                     filteredItems.map((item) => (
                       <tr
                         key={item.id}
-                        className="hover:bg-gray-50 cursor-pointer transition-colors"
-                        onClick={() => navigate(`/items/${item.id}`)}
+                        className={`hover:bg-blue-50 cursor-pointer transition-colors ${selectedItemId === item.id ? 'bg-blue-50 border-l-2 border-l-blue-600' : ''}`}
+                        onClick={() => setSelectedItemId(item.id)}
                       >
-                        <td className="px-6 py-4" onClick={(e) => e.stopPropagation()}>
-                          <input
-                            type="checkbox"
-                            checked={selectedItems.includes(item.id)}
-                            onChange={() => handleSelectItem(item.id)}
-                            className="rounded"
-                          />
-                        </td>
-                        <td className="px-6 py-4">
+                        {!selectedItemId && (
+                          <td className="px-6 py-4" onClick={(e) => e.stopPropagation()}>
+                            <input
+                              type="checkbox"
+                              checked={selectedItems.includes(item.id)}
+                              onChange={() => handleSelectItem(item.id)}
+                              className="rounded"
+                            />
+                          </td>
+                        )}
+                        <td className={selectedItemId ? 'px-4 py-3' : 'px-6 py-4'}>
                           <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 bg-gray-100 rounded flex items-center justify-center">
-                              <Package className="w-5 h-5 text-gray-400" />
+                            <div className={`${selectedItemId ? 'w-8 h-8' : 'w-10 h-10'} bg-gray-100 rounded flex items-center justify-center flex-shrink-0`}>
+                              <Package className={`${selectedItemId ? 'w-4 h-4' : 'w-5 h-5'} text-gray-400`} />
                             </div>
-                            <div>
-                              <div className="text-sm font-medium text-blue-600 hover:underline">
+                            <div className="min-w-0">
+                              <div className={`font-medium text-blue-600 hover:underline truncate ${selectedItemId ? 'text-xs' : 'text-sm'}`}>
                                 {item.name}
                               </div>
                               {(item.color || item.variant || item.size) && (
-                                <div className="text-xs text-gray-500">
+                                <div className="text-xs text-gray-500 truncate">
                                   {[item.color, item.variant, item.size].filter(Boolean).join(' | ')}
                                 </div>
+                              )}
+                              {selectedItemId && (
+                                <div className="text-xs text-gray-400">{item.sku}</div>
                               )}
                             </div>
                           </div>
                         </td>
-                        <td className="px-6 py-4">
-                          <div className="text-sm text-gray-900">{item.sku}</div>
-                        </td>
-                        <td className="px-6 py-4 text-center">
-                          <div className="text-sm text-gray-900">{item.stock_on_hand.toFixed(2)}</div>
-                        </td>
-                        <td className="px-6 py-4 text-center">
-                          <div className="text-sm text-gray-900">{item.reorder_level}</div>
-                        </td>
+                        {!selectedItemId && (
+                          <>
+                            <td className="px-6 py-4">
+                              <div className="text-sm text-gray-900">{item.sku}</div>
+                            </td>
+                            <td className="px-6 py-4 text-center">
+                              <div className="text-sm text-gray-900">{item.stock_on_hand.toFixed(2)}</div>
+                            </td>
+                            <td className="px-6 py-4 text-center">
+                              <div className="text-sm text-gray-900">{item.reorder_level}</div>
+                            </td>
+                          </>
+                        )}
                       </tr>
                     ))
                   )}
@@ -507,7 +526,7 @@ const ItemsPage = () => {
       </div>
 
       {/* Bulk Action Bar */}
-      {selectedItems.length > 0 && (
+      {selectedItems.length > 0 && !selectedItemId && (
         <BulkActionBar
           selectedCount={selectedItems.length}
           totalCount={filteredItems.length}
@@ -516,6 +535,21 @@ const ItemsPage = () => {
           actions={bulkActions}
           entityName="item"
         />
+      )}
+      </div>
+
+      {/* Right: Item Detail Panel */}
+      {selectedItemId && (
+        <div className="w-2/3 bg-gray-50 overflow-hidden">
+          <ItemDetailPanel
+            itemId={selectedItemId}
+            onClose={() => setSelectedItemId(null)}
+            onDeleted={() => {
+              setSelectedItemId(null);
+              fetchItems();
+            }}
+          />
+        </div>
       )}
 
       {/* Import Modal */}
