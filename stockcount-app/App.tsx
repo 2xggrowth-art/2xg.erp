@@ -1057,28 +1057,66 @@ function CounterDashboard({ navigation }: any) {
 
         <ScheduleBanner days={schedule} selectedDay={selectedDay} onDayPress={handleDayPress} />
 
-        {/* Available Bins to Claim */}
+        {/* Today's Scheduled Bins — shows all bins with status */}
         {availableCounts.length > 0 && (
           <View style={{ backgroundColor: COLORS.white, borderRadius: 12, padding: 16, marginBottom: 16 }}>
-            <Text style={{ fontSize: 14, fontWeight: '700', color: COLORS.gray800, marginBottom: 12 }}>Available Bins ({availableCounts.length})</Text>
-            {availableCounts.slice(0, 5).map((ac: any) => (
-              <View key={ac.id} style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: COLORS.gray100 }}>
-                <View style={{ flex: 1, marginRight: 12 }}>
-                  <Text style={{ fontSize: 14, fontWeight: '600', color: COLORS.gray800 }}>{ac.bin_code || 'Unknown Bin'}</Text>
-                  <Text style={{ fontSize: 12, color: COLORS.gray500, marginTop: 2 }}>{ac.location_name} {ac.total_items ? `• ${ac.total_items} items` : ''}</Text>
+            <Text style={{ fontSize: 14, fontWeight: '700', color: COLORS.gray800, marginBottom: 12 }}>Today's Bins ({availableCounts.length})</Text>
+            {availableCounts.map((ac: any) => {
+              const isClaimed = !!ac.assigned_to;
+              const isInProgress = ac.status === 'in_progress' || ac.status === 'recount';
+              const isSubmitted = ac.status === 'submitted' || ac.status === 'approved';
+              const isMyCount = ac.assigned_to === user?.id;
+              const progressPct = ac.progress ? Math.round((ac.progress.counted / ac.progress.total) * 100) : 0;
+
+              return (
+                <View key={ac.id} style={{ paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: COLORS.gray100 }}>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <View style={{ flex: 1, marginRight: 12 }}>
+                      <Text style={{ fontSize: 14, fontWeight: '600', color: COLORS.gray800 }}>{ac.bin_code || 'Unknown Bin'}</Text>
+                      <Text style={{ fontSize: 12, color: COLORS.gray500, marginTop: 2 }}>{ac.location_name} {ac.total_items ? `• ${ac.total_items} items` : ''}</Text>
+                    </View>
+
+                    {/* Status / Action */}
+                    {isSubmitted ? (
+                      <View style={{ backgroundColor: '#DEF7EC', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8 }}>
+                        <Text style={{ color: '#03543F', fontSize: 12, fontWeight: '600' }}>✓ Done</Text>
+                      </View>
+                    ) : isInProgress && !isMyCount ? (
+                      <View style={{ backgroundColor: '#FEF3C7', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8 }}>
+                        <Text style={{ color: '#92400E', fontSize: 12, fontWeight: '600' }}>In Progress</Text>
+                      </View>
+                    ) : isMyCount ? (
+                      <View style={{ backgroundColor: '#DBEAFE', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8 }}>
+                        <Text style={{ color: '#1E40AF', fontSize: 12, fontWeight: '600' }}>Yours</Text>
+                      </View>
+                    ) : (
+                      <TouchableOpacity
+                        style={{ backgroundColor: COLORS.primary, paddingHorizontal: 16, paddingVertical: 8, borderRadius: 8, opacity: claimingId === ac.id ? 0.6 : 1 }}
+                        onPress={() => handleClaim(ac.id)}
+                        disabled={claimingId === ac.id}
+                      >
+                        <Text style={{ color: COLORS.white, fontSize: 13, fontWeight: '600' }}>{claimingId === ac.id ? 'Claiming...' : 'Claim'}</Text>
+                      </TouchableOpacity>
+                    )}
+                  </View>
+
+                  {/* Progress bar for in-progress counts */}
+                  {isInProgress && ac.progress && (
+                    <View style={{ marginTop: 6 }}>
+                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 3 }}>
+                        <Text style={{ fontSize: 11, color: COLORS.gray500 }}>
+                          {ac.assigned_to_name || 'Counter'} — {ac.progress.counted}/{ac.progress.total} items
+                        </Text>
+                        <Text style={{ fontSize: 11, color: COLORS.gray500 }}>{progressPct}%</Text>
+                      </View>
+                      <View style={{ height: 4, backgroundColor: COLORS.gray100, borderRadius: 2 }}>
+                        <View style={{ height: 4, backgroundColor: isMyCount ? COLORS.primary : '#F59E0B', borderRadius: 2, width: `${progressPct}%` }} />
+                      </View>
+                    </View>
+                  )}
                 </View>
-                <TouchableOpacity
-                  style={{ backgroundColor: COLORS.primary, paddingHorizontal: 16, paddingVertical: 8, borderRadius: 8, opacity: claimingId === ac.id ? 0.6 : 1 }}
-                  onPress={() => handleClaim(ac.id)}
-                  disabled={claimingId === ac.id}
-                >
-                  <Text style={{ color: COLORS.white, fontSize: 13, fontWeight: '600' }}>{claimingId === ac.id ? 'Claiming...' : 'Claim'}</Text>
-                </TouchableOpacity>
-              </View>
-            ))}
-            {availableCounts.length > 5 && (
-              <Text style={{ fontSize: 12, color: COLORS.gray400, textAlign: 'center', marginTop: 8 }}>+{availableCounts.length - 5} more bins available</Text>
-            )}
+              );
+            })}
           </View>
         )}
 
