@@ -490,108 +490,76 @@ export const generateInvoicePDF = (invoice: InvoicePDFData): jsPDF => {
   currentY = totalsBottom;
 
   // ====================================================================
-  // SECTION 6: NOTES (bordered box, if present)
+  // SECTION 6: NOTES + BANK DETAILS + TERMS (left) + SIGNATURE (right)
   // ====================================================================
-  if (invoice.notes) {
-    const notesTop = currentY;
-    let ny = notesTop + pad + 3;
+  const bottomTop = currentY;
+  const bottomDivX = midX;
+  const leftW = bottomDivX - ML - pad * 2;
 
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(9);
-    doc.text('Notes', lLabelX, ny);
-    ny += 5;
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(8);
-    const noteLines = doc.splitTextToSize(invoice.notes, CW - pad * 2);
-    doc.text(noteLines, lLabelX, ny);
-    ny += noteLines.length * 4;
+  // -- LEFT SIDE: Notes, Bank Details, Terms --
+  let ly = bottomTop + pad + 3;
 
-    const notesBottom = ny + pad;
-    setBorder();
-    doc.rect(ML, notesTop, CW, notesBottom - notesTop);
-    currentY = notesBottom;
-  }
-
-  // ====================================================================
-  // SECTION 7: BANK DETAILS + AUTHORIZED SIGNATURE (bordered box with divider)
-  // ====================================================================
-  const bankTop = currentY;
-  const bankDivX = midX;
-
-  // -- LEFT SIDE: Bank Details --
-  let bky = bankTop + pad + 3;
+  // Notes
+  const notesText = invoice.notes || 'PLEASE CHECKOUT BHARATHCYCLEHUB.COM FOR MORE DETAILS.';
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(9);
-  doc.text('Bank Details', lLabelX, bky);
-  bky += 6;
-
+  doc.text('Notes', lLabelX, ly);
+  ly += 5;
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(8);
-  doc.text(`Bank Name:  ${company.bankName}`, lLabelX, bky);
-  bky += 4;
-  doc.text(`Account Holder:  ${company.accountHolder}`, lLabelX, bky);
-  bky += 4;
-  doc.text('Account Number:  ', lLabelX, bky);
-  doc.setFont('helvetica', 'bold');
-  doc.text(company.accountNumber, lLabelX + 32, bky);
-  doc.setFont('helvetica', 'normal');
-  bky += 4;
-  doc.text('IFSC:  ', lLabelX, bky);
-  doc.setFont('helvetica', 'bold');
-  doc.text(company.ifscCode, lLabelX + 11, bky);
-  doc.setFont('helvetica', 'normal');
-  bky += 4;
-  doc.text(`Branch:  ${company.branchName}`, lLabelX, bky);
-  bky += 4;
-  doc.text(`Account Type:  ${company.accountType}`, lLabelX, bky);
+  const noteLines = doc.splitTextToSize(notesText, leftW);
+  doc.text(noteLines, lLabelX, ly);
+  ly += noteLines.length * 4 + 4;
 
-  // -- RIGHT SIDE: For Company + Authorized Signature --
-  const sigLabelX = bankDivX + pad;
-  let sigy = bankTop + pad + 3;
+  // Bank Details (no header box, just listed)
+  doc.text(`Account Holder: ${company.accountHolder}`, lLabelX, ly);
+  ly += 4;
+  doc.text('Account Number: ', lLabelX, ly);
   doc.setFont('helvetica', 'bold');
-  doc.setFontSize(9);
-  doc.text(`For ${company.name}`, sigLabelX, sigy);
+  doc.text(company.accountNumber, lLabelX + 30, ly);
+  doc.setFont('helvetica', 'normal');
+  ly += 4;
+  doc.text('IFSC: ', lLabelX, ly);
+  doc.setFont('helvetica', 'bold');
+  doc.text(company.ifscCode, lLabelX + 11, ly);
+  doc.setFont('helvetica', 'normal');
+  ly += 4;
+  doc.text(`Branch: ${company.branchName}`, lLabelX, ly);
+  ly += 4;
+  doc.text(`Account Type: ${company.accountType}`, lLabelX, ly);
+  ly += 6;
 
-  // Signature line (right-aligned area)
-  const sigLineY = bky - 2;
+  // Terms & Conditions
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(8);
+  doc.text('Terms & Conditions', lLabelX, ly);
+  ly += 4;
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(7);
+  const termsText = invoice.terms_conditions || 'Good once sold will not be taken back or exchanged\nFrame and fork is guaranteed for long life regarding manufacturing defects only, please refer to the\nmanufacturer\'s warranty policy.\nNo guarantee for tyre, tube, plastic goods, side support wheel, wearable item and tricycles\n1 year service free at the store, this doesn\'t include the bicycle wash\nBusiness time 10:00 am to 9:00 pm';
+  const termLines = doc.splitTextToSize(termsText, leftW);
+  doc.text(termLines, lLabelX, ly);
+  ly += termLines.length * 3.5;
+
+  // -- RIGHT SIDE: Authorized Signature --
+  const sigLabelX = bottomDivX + pad;
+
+  // Signature line near bottom of left content
+  const sigLineY = ly - 6;
   setBorder();
   doc.line(sigLabelX + 10, sigLineY, RE - pad, sigLineY);
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(8);
   doc.text('Authorized Signature', RE - pad, sigLineY + 5, { align: 'right' });
 
-  const bankBottom = Math.max(bky + pad + 2, sigLineY + 10);
+  const bottomBottom = Math.max(ly + pad, sigLineY + 12);
 
-  // Draw bank section bordered box + vertical divider
+  // Draw bordered box + vertical divider
   setBorder();
-  doc.rect(ML, bankTop, CW, bankBottom - bankTop);
-  doc.line(bankDivX, bankTop, bankDivX, bankBottom);
+  doc.rect(ML, bottomTop, CW, bottomBottom - bottomTop);
+  doc.line(bottomDivX, bottomTop, bottomDivX, bottomBottom);
 
-  currentY = bankBottom;
-
-  // ====================================================================
-  // SECTION 8: TERMS & CONDITIONS (bordered box, always shown)
-  // ====================================================================
-  {
-    const termsTop = currentY;
-    let tcy = termsTop + pad + 3;
-
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(9);
-    doc.text('Terms & Conditions', lLabelX, tcy);
-    tcy += 5;
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(7);
-    const termsText = invoice.terms_conditions || 'Goods once sold will not be taken back or exchanged.\nAll disputes are subject to Bangalore jurisdiction only.';
-    const termLines = doc.splitTextToSize(termsText, CW - pad * 2);
-    doc.text(termLines, lLabelX, tcy);
-    tcy += termLines.length * 3.5;
-
-    const termsBottom = tcy + pad;
-    setBorder();
-    doc.rect(ML, termsTop, CW, termsBottom - termsTop);
-    currentY = termsBottom;
-  }
+  currentY = bottomBottom;
 
   // ====================================================================
   // FOOTER
