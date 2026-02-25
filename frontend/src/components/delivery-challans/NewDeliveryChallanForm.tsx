@@ -16,13 +16,36 @@ interface Invoice {
   items?: any[];
 }
 
+export interface DeliveryFormData {
+  customer_name: string;
+  invoice_number: string;
+  invoice_id: string;
+  alternate_phone: string;
+  delivery_location_type: string;
+  delivery_address: string;
+  product_name: string;
+  pincode: string;
+  free_accessories: string;
+  salesperson_id: string;
+  salesperson_name: string;
+  estimated_delivery_day: string;
+  reverse_pickup: string;
+  location: string;
+  reference_number: string;
+  challan_date: string;
+  challan_type: string;
+  notes: string;
+}
+
 interface NewDeliveryChallanFormProps {
   isModal?: boolean;
   onClose?: () => void;
   onSuccess?: () => void;
+  isPosMode?: boolean;
+  onSaveDeliveryData?: (data: DeliveryFormData, challanNumber: string) => void;
 }
 
-const NewDeliveryChallanForm = ({ isModal, onClose, onSuccess }: NewDeliveryChallanFormProps = {}) => {
+const NewDeliveryChallanForm = ({ isModal, onClose, onSuccess, isPosMode, onSaveDeliveryData }: NewDeliveryChallanFormProps = {}) => {
   const navigate = useNavigate();
   const { id } = useParams<{ id: string }>();
   const isEditMode = !isModal && !!id;
@@ -78,10 +101,12 @@ const NewDeliveryChallanForm = ({ isModal, onClose, onSuccess }: NewDeliveryChal
         }
       }
 
-      // Fetch invoices
-      const invoicesRes = await invoicesService.getAllInvoices({});
-      if (invoicesRes.success && invoicesRes.data?.invoices) {
-        setInvoices(invoicesRes.data.invoices);
+      // Fetch invoices (skip in POS mode - invoice is created after sale)
+      if (!isPosMode) {
+        const invoicesRes = await invoicesService.getAllInvoices({});
+        if (invoicesRes.success && invoicesRes.data?.invoices) {
+          setInvoices(invoicesRes.data.invoices);
+        }
       }
 
       // Fetch salespersons
@@ -210,11 +235,13 @@ const NewDeliveryChallanForm = ({ isModal, onClose, onSuccess }: NewDeliveryChal
     try {
       setLoading(true);
 
-      // Validation
-      if (!formData.invoice_number || formData.invoice_number.trim() === '') {
-        alert('Please select an invoice');
-        setLoading(false);
-        return;
+      // Validation - skip invoice validation in POS mode
+      if (!isPosMode) {
+        if (!formData.invoice_number || formData.invoice_number.trim() === '') {
+          alert('Please select an invoice');
+          setLoading(false);
+          return;
+        }
       }
 
       if (!formData.alternate_phone || formData.alternate_phone.trim() === '') {
@@ -256,6 +283,14 @@ const NewDeliveryChallanForm = ({ isModal, onClose, onSuccess }: NewDeliveryChal
 
       if (!formData.free_accessories || formData.free_accessories.trim() === '') {
         alert('Please enter list of free accessories');
+        setLoading(false);
+        return;
+      }
+
+      // In POS mode, save form data locally and let POS handle challan creation after invoice
+      if (isPosMode && onSaveDeliveryData) {
+        onSaveDeliveryData(formData, challanNumber);
+        if (onClose) onClose();
         setLoading(false);
         return;
       }
@@ -332,7 +367,8 @@ const NewDeliveryChallanForm = ({ isModal, onClose, onSuccess }: NewDeliveryChal
             <h2 className="text-xl font-semibold text-slate-800">Fill BCH-AFS salesform</h2>
           </div>
 
-          {/* Invoice Number - Dropdown */}
+          {/* Invoice Number - Dropdown (hidden in POS mode - invoice created after sale) */}
+          {!isPosMode && (
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-2">
               Select Invoice <span className="text-red-500">*</span>
@@ -356,6 +392,7 @@ const NewDeliveryChallanForm = ({ isModal, onClose, onSuccess }: NewDeliveryChal
               </div>
             )}
           </div>
+          )}
 
           {/* Delivery Location Type */}
           <div>

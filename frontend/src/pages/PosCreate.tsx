@@ -10,7 +10,8 @@ import { paymentsReceivedService } from '../services/payments-received.service';
 import { binLocationService } from '../services/binLocation.service';
 import { exchangesService, ExchangeItem } from '../services/exchanges.service';
 import SplitPaymentModal from '../components/pos/SplitPaymentModal';
-import NewDeliveryChallanForm from '../components/delivery-challans/NewDeliveryChallanForm';
+import NewDeliveryChallanForm, { DeliveryFormData } from '../components/delivery-challans/NewDeliveryChallanForm';
+import { deliveryChallansService } from '../services/delivery-challans.service';
 
 // Define the shape of a Cart Item
 interface BinAllocation {
@@ -121,6 +122,7 @@ const PosCreate: React.FC = () => {
   const [processingPayment, setProcessingPayment] = useState(false);
   const [showBillSuccess, setShowBillSuccess] = useState(false);
   const [generatedInvoice, setGeneratedInvoice] = useState<any>(null);
+  const [pendingDeliveryData, setPendingDeliveryData] = useState<{ formData: DeliveryFormData; challanNumber: string } | null>(null);
 
   const [newCustomer, setNewCustomer] = useState<CreateCustomerData>({
     display_name: '',
@@ -674,6 +676,11 @@ const PosCreate: React.FC = () => {
           }
         }
 
+        // Auto-create delivery challan if delivery was selected
+        if (deliveryOption === 'delivery' && pendingDeliveryData) {
+          await createDeliveryChallanFromPOS(response.data?.id, invoiceNumber, total);
+        }
+
         setGeneratedInvoice({
           ...invoiceData,
           id: response.data?.id,
@@ -833,6 +840,11 @@ const PosCreate: React.FC = () => {
           }
         }
 
+        // Auto-create delivery challan if delivery was selected
+        if (deliveryOption === 'delivery' && pendingDeliveryData) {
+          await createDeliveryChallanFromPOS(response.data?.id, invoiceNumber, total);
+        }
+
         setGeneratedInvoice({
           ...invoiceData,
           id: response.data?.id,
@@ -877,6 +889,34 @@ const PosCreate: React.FC = () => {
     }
   };
 
+  const createDeliveryChallanFromPOS = async (invoiceId: string, invoiceNumber: string, totalAmount: number) => {
+    if (!pendingDeliveryData) return;
+    try {
+      const { formData: deliveryData, challanNumber } = pendingDeliveryData;
+      // Get product names from cart
+      const productNames = cart.map(item => item.name).join(', ');
+      const challanData = {
+        ...deliveryData,
+        challan_number: challanNumber,
+        invoice_id: invoiceId,
+        invoice_number: invoiceNumber,
+        customer_name: selectedCustomer?.customer_name || 'Walk-in Customer',
+        product_name: deliveryData.product_name || productNames,
+        status: 'confirmed' as const,
+        subtotal: totalAmount,
+        total_amount: totalAmount,
+        items: []
+      };
+      await deliveryChallansService.createDeliveryChallan(challanData);
+    } catch (err) {
+      console.error('Error creating delivery challan from POS:', err);
+    }
+  };
+
+  const handleSaveDeliveryData = (formData: DeliveryFormData, challanNumber: string) => {
+    setPendingDeliveryData({ formData, challanNumber });
+  };
+
   const handleCompleteBill = () => {
     // Clear everything and start fresh
     setCart([]);
@@ -888,6 +928,7 @@ const PosCreate: React.FC = () => {
     setDiscountType('percentage');
     setDiscountValue(0);
     setDeliveryOption('self_pickup');
+    setPendingDeliveryData(null);
   };
 
   const handlePrintBill = () => {
@@ -2357,8 +2398,10 @@ const PosCreate: React.FC = () => {
             <div className="bg-white rounded-xl w-[700px] max-h-[90vh] overflow-y-auto shadow-2xl p-6">
               <NewDeliveryChallanForm
                 isModal
+                isPosMode
                 onClose={() => setShowDeliveryChallanModal(false)}
                 onSuccess={() => setShowDeliveryChallanModal(false)}
+                onSaveDeliveryData={handleSaveDeliveryData}
               />
             </div>
           </div>
