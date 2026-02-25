@@ -740,8 +740,7 @@ export class ItemsService {
         variant,
         size,
         preferred_vendor_id,
-        product_categories (name),
-        suppliers (id, supplier_name)
+        product_categories (name)
       `)
       .order('created_at', { ascending: false });
 

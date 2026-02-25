@@ -213,15 +213,17 @@ const NewBillForm = () => {
         }
 
         // Auto-populate vendor from item's preferred vendor if no vendor selected yet
-        if (!formData.vendor_id && selectedItem.preferred_vendor_id && selectedItem.suppliers) {
+        if (!formData.vendor_id && selectedItem.preferred_vendor_id) {
           const vendor = vendors.find(v => v.id === selectedItem.preferred_vendor_id);
-          setFormData(prev => ({
-            ...prev,
-            vendor_id: selectedItem.preferred_vendor_id || '',
-            vendor_name: vendor?.supplier_name || selectedItem.suppliers?.supplier_name || '',
-            vendor_email: vendor?.email || '',
-            vendor_phone: vendor?.phone || ''
-          }));
+          if (vendor) {
+            setFormData(prev => ({
+              ...prev,
+              vendor_id: vendor.id,
+              vendor_name: vendor.supplier_name || '',
+              vendor_email: vendor.email || '',
+              vendor_phone: vendor.phone || ''
+            }));
+          }
         }
 
         // Only generate serials for serial-tracked items
