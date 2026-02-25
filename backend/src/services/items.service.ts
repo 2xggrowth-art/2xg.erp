@@ -739,7 +739,9 @@ export class ItemsService {
         color,
         variant,
         size,
-        product_categories (name)
+        preferred_vendor_id,
+        product_categories (name),
+        suppliers (id, supplier_name)
       `)
       .order('created_at', { ascending: false });
 

@@ -38,6 +38,8 @@ export interface Item {
   is_premium_tagged?: boolean;
   incentive_type?: string;
   advanced_tracking_type?: 'none' | 'serial' | 'batches';
+  preferred_vendor_id?: string;
+  suppliers?: { id: string; supplier_name: string } | null;
   created_at: string;
   updated_at: string;
 }
