@@ -1,6 +1,6 @@
-import React, { useState, ChangeEvent, useEffect } from 'react';
+import React, { useState, useRef, useCallback, ChangeEvent, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Search, User, X, Plus, Edit2, ShoppingCart, Package, Trash2, Check, Printer, Clock, DollarSign, TrendingUp, MapPin, ArrowDownCircle, ArrowUpCircle, Repeat } from 'lucide-react';
+import { Search, User, X, Plus, Edit2, ShoppingCart, Package, Trash2, Check, Printer, Clock, DollarSign, TrendingUp, MapPin, ArrowDownCircle, ArrowUpCircle, Repeat, Lock } from 'lucide-react';
 import { customersService, Customer, CreateCustomerData } from '../services/customers.service';
 import { itemsService, Item } from '../services/items.service';
 import { salespersonService, Salesperson } from '../services/salesperson.service';
@@ -9,6 +9,7 @@ import { posSessionsService, PosSession } from '../services/pos-sessions.service
 import { paymentsReceivedService } from '../services/payments-received.service';
 import { binLocationService } from '../services/binLocation.service';
 import { exchangesService, ExchangeItem } from '../services/exchanges.service';
+import { posCodesService } from '../services/posCodes.service';
 import SplitPaymentModal from '../components/pos/SplitPaymentModal';
 import NewDeliveryChallanForm, { DeliveryFormData } from '../components/delivery-challans/NewDeliveryChallanForm';
 import { deliveryChallansService } from '../services/delivery-challans.service';
@@ -124,6 +125,14 @@ const PosCreate: React.FC = () => {
   const [generatedInvoice, setGeneratedInvoice] = useState<any>(null);
   const [pendingDeliveryData, setPendingDeliveryData] = useState<{ formData: DeliveryFormData; challanNumber: string } | null>(null);
 
+  // POS Code lock states
+  const [posLocked, setPosLocked] = useState(true);
+  const [posCodeInput, setPosCodeInput] = useState('');
+  const [posEmployeeName, setPosEmployeeName] = useState('');
+  const [posCodeError, setPosCodeError] = useState('');
+  const [posCodeLoading, setPosCodeLoading] = useState(false);
+  const INACTIVITY_TIMEOUT = 10 * 60 * 1000; // 10 minutes
+
   const [newCustomer, setNewCustomer] = useState<CreateCustomerData>({
     display_name: '',
     mobile: '',
@@ -168,6 +177,54 @@ const PosCreate: React.FC = () => {
       setShowStartSessionModal(true);
     }
   }, [activeTab, activeSession, sessionChecked]);
+
+  // Inactivity timer — lock POS 10 min after last sale only
+  const lastSaleTimeRef = useRef<number>(Date.now());
+
+  const resetInactivityTimer = useCallback(() => {
+    lastSaleTimeRef.current = Date.now();
+  }, []);
+
+  useEffect(() => {
+    if (posLocked) return;
+
+    // Set initial timestamp on unlock
+    lastSaleTimeRef.current = Date.now();
+
+    // Check every 30 seconds if 10 min passed since last sale
+    const interval = setInterval(() => {
+      const elapsed = Date.now() - lastSaleTimeRef.current;
+      if (elapsed >= INACTIVITY_TIMEOUT) {
+        setPosLocked(true);
+        setPosCodeInput('');
+        setPosCodeError('');
+      }
+    }, 30000);
+
+    return () => { clearInterval(interval); };
+  }, [posLocked]);
+
+  const handlePosCodeVerify = async () => {
+    if (!posCodeInput.trim()) {
+      setPosCodeError('Please enter your code');
+      return;
+    }
+    setPosCodeLoading(true);
+    setPosCodeError('');
+    try {
+      const res = await posCodesService.verifyCode(posCodeInput.trim());
+      if (res.data.success) {
+        setPosEmployeeName(res.data.data.employee_name);
+        setPosLocked(false);
+        setPosCodeInput('');
+        setPosCodeError('');
+      }
+    } catch (error: any) {
+      setPosCodeError(error.response?.data?.error || 'Invalid code');
+    } finally {
+      setPosCodeLoading(false);
+    }
+  };
 
   const fetchSalespersons = () => {
     try {
@@ -602,6 +659,12 @@ const PosCreate: React.FC = () => {
         paymentStatus = 'Unpaid';
       }
 
+      // Calculate GST from cart items (default 18% = 9% CGST + 9% SGST for intra-state)
+      const cartTaxableTotal = cart.reduce((sum, item) => sum + (item.qty * item.rate), 0) - discountAmount;
+      const posGstRate = 9; // Default 9% CGST + 9% SGST
+      const posCgstAmount = (cartTaxableTotal * posGstRate) / 100;
+      const posSgstAmount = (cartTaxableTotal * posGstRate) / 100;
+
       // Prepare invoice data
       const invoiceData = {
         customer_id: selectedCustomer?.id || null,
@@ -617,6 +680,16 @@ const PosCreate: React.FC = () => {
         salesperson_name: selectedSalesperson?.name || null,
         discount_type: discountType as 'percentage' | 'amount',
         discount_value: discountValue,
+        cgst_rate: posGstRate,
+        cgst_amount: Number(posCgstAmount.toFixed(2)),
+        sgst_rate: posGstRate,
+        sgst_amount: Number(posSgstAmount.toFixed(2)),
+        igst_rate: 0,
+        igst_amount: 0,
+        tax_amount: Number((posCgstAmount + posSgstAmount).toFixed(2)),
+        place_of_supply: 'Karnataka (29)',
+        supply_type: 'intra_state',
+        customer_gstin: (selectedCustomer as any)?.gstin || null,
         tds_tcs_type: null,
         tds_tcs_rate: 0,
         adjustment: 0,
@@ -628,7 +701,7 @@ const PosCreate: React.FC = () => {
         payment_status: paymentStatus,
         subject: 'POS',  // Mark this as a POS transaction
         pos_session_id: activeSession?.id || null,
-        customer_notes: `Payment Mode: ${mode}${refNumber ? `\nReference Number: ${refNumber}` : ''}${discountValue > 0 ? `\nDiscount: ${discountType === 'percentage' ? `${discountValue}%` : `₹${discountValue}`} (-₹${discountAmount.toFixed(2)})` : ''}${deliveryOption === 'delivery' ? '\nDelivery: Delivery' : '\nDelivery: Self Pickup'}${mode === 'CREDIT SALE' ? `\nAmount Paid: ₹${amountPaid.toFixed(2)}\nBalance Due: ₹${balanceDue.toFixed(2)}` : ''}`,
+        customer_notes: `Payment Mode: ${mode}${refNumber ? `\nReference Number: ${refNumber}` : ''}${discountValue > 0 ? `\nDiscount: ${discountType === 'percentage' ? `${discountValue}%` : `₹${discountValue}`} (-₹${discountAmount.toFixed(2)})` : ''}${deliveryOption === 'delivery' ? '\nDelivery: Delivery' : '\nDelivery: Self Pickup'}${mode === 'CREDIT SALE' ? `\nAmount Paid: ₹${amountPaid.toFixed(2)}\nBalance Due: ₹${balanceDue.toFixed(2)}` : ''}${posEmployeeName ? `\nPOS Operator: ${posEmployeeName}` : ''}`,
         terms_and_conditions: null,
         items: cart.map(item => ({
           item_id: item.item_id,
@@ -701,6 +774,7 @@ const PosCreate: React.FC = () => {
         setShowBillSuccess(true);
         setReferenceNumber('');
         setPaidAmount(0);
+        resetInactivityTimer();
 
         // Update session sales
         if (activeSession) {
@@ -790,7 +864,7 @@ const PosCreate: React.FC = () => {
         payment_status: paymentStatus,
         subject: 'POS',  // Mark this as a POS transaction
         pos_session_id: activeSession?.id || null,
-        customer_notes: `SPLIT PAYMENT (${payments.length} payments)\n${paymentDetails}${discountValue > 0 ? `\nDiscount: ${discountType === 'percentage' ? `${discountValue}%` : `₹${discountValue}`} (-₹${discountAmount.toFixed(2)})` : ''}${deliveryOption === 'delivery' ? '\nDelivery: Delivery' : '\nDelivery: Self Pickup'}${balanceDue > 0 ? `\n\nAmount Received: ₹${actualPaid.toFixed(2)}${creditAmount > 0 ? `\nCredit Sale: ₹${creditAmount.toFixed(2)}` : ''}\nBalance Due: ₹${balanceDue.toFixed(2)}` : ''}`,
+        customer_notes: `SPLIT PAYMENT (${payments.length} payments)\n${paymentDetails}${discountValue > 0 ? `\nDiscount: ${discountType === 'percentage' ? `${discountValue}%` : `₹${discountValue}`} (-₹${discountAmount.toFixed(2)})` : ''}${deliveryOption === 'delivery' ? '\nDelivery: Delivery' : '\nDelivery: Self Pickup'}${balanceDue > 0 ? `\n\nAmount Received: ₹${actualPaid.toFixed(2)}${creditAmount > 0 ? `\nCredit Sale: ₹${creditAmount.toFixed(2)}` : ''}\nBalance Due: ₹${balanceDue.toFixed(2)}` : ''}${posEmployeeName ? `\nPOS Operator: ${posEmployeeName}` : ''}`,
         terms_and_conditions: null,
         items: cart.map(item => ({
           item_id: item.item_id,
@@ -864,6 +938,7 @@ const PosCreate: React.FC = () => {
         });
         setShowSplitPaymentModal(false);
         setShowBillSuccess(true);
+        resetInactivityTimer();
 
         // Update session sales
         if (activeSession) {
@@ -1087,6 +1162,46 @@ const PosCreate: React.FC = () => {
             <div style={{ textAlign: 'center', paddingTop: '20px', borderTop: '1px solid #e5e7eb', fontSize: '11px', color: '#666' }}>
               <p style={{ margin: '5px 0' }}>Thank you for your business!</p>
               <p style={{ margin: '5px 0' }}>Powered by 2XG Business Suite</p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* POS Lock Overlay */}
+      {posLocked && (
+        <div className="fixed inset-0 bg-gray-900 bg-opacity-80 flex items-center justify-center z-[100]">
+          <div className="bg-white rounded-2xl shadow-2xl p-8 w-full max-w-sm mx-4">
+            <div className="flex flex-col items-center mb-6">
+              <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mb-4">
+                <Lock size={32} className="text-blue-600" />
+              </div>
+              <h2 className="text-xl font-bold text-gray-800">POS Locked</h2>
+              <p className="text-sm text-gray-500 mt-1">Enter your employee code to continue</p>
+              {posEmployeeName && (
+                <p className="text-xs text-gray-400 mt-1">Last operator: {posEmployeeName}</p>
+              )}
+            </div>
+            <div className="space-y-4">
+              <input
+                type="password"
+                value={posCodeInput}
+                onChange={(e) => { setPosCodeInput(e.target.value); setPosCodeError(''); }}
+                onKeyDown={(e) => { if (e.key === 'Enter') handlePosCodeVerify(); }}
+                placeholder="Enter code"
+                autoFocus
+                className="w-full px-4 py-3 text-center text-2xl tracking-widest border-2 border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                maxLength={10}
+              />
+              {posCodeError && (
+                <p className="text-red-500 text-sm text-center">{posCodeError}</p>
+              )}
+              <button
+                onClick={handlePosCodeVerify}
+                disabled={posCodeLoading}
+                className="w-full py-3 bg-blue-600 text-white font-semibold rounded-xl hover:bg-blue-700 transition disabled:opacity-50"
+              >
+                {posCodeLoading ? 'Verifying...' : 'Unlock POS'}
+              </button>
             </div>
           </div>
         </div>
@@ -1581,6 +1696,22 @@ const PosCreate: React.FC = () => {
         {/* Right Sidebar */}
         <div className="w-[420px] flex flex-col bg-white border-l border-gray-200 overflow-hidden">
           <div className="p-5 space-y-5 overflow-y-auto flex-shrink">
+            {/* Current POS Operator */}
+            {posEmployeeName && (
+              <div className="flex items-center justify-between px-3 py-2 bg-purple-50 border border-purple-200 rounded-lg">
+                <div className="flex items-center gap-2">
+                  <Lock size={14} className="text-purple-600" />
+                  <span className="text-xs text-purple-700 font-medium">Operator: {posEmployeeName}</span>
+                </div>
+                <button
+                  onClick={() => { setPosLocked(true); setPosCodeInput(''); }}
+                  className="text-xs text-purple-600 hover:text-purple-800 font-medium"
+                >
+                  Switch
+                </button>
+              </div>
+            )}
+
             {selectedCustomer ? (
               <div className="flex justify-between items-start p-4 bg-blue-50 border border-blue-200 rounded-lg">
                 <div className="flex gap-3">

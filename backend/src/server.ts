@@ -49,6 +49,9 @@ import exchangesRoutes from './routes/exchanges.routes';
 import assemblyRoutes from './routes/assembly.routes';
 import itemSizesRoutes from './routes/itemSizes.routes';
 import itemColorsRoutes from './routes/itemColors.routes';
+import posCodesRoutes from './routes/posCodes.routes';
+import gstSettingsRoutes from './routes/gstSettings.routes';
+import gstReportsRoutes from './routes/gstReports.routes';
 import { readOnlyGuard } from './middleware/readOnly.middleware';
 import { authMiddleware } from './middleware/auth.middleware';
 
@@ -182,6 +185,9 @@ app.use('/api/exchanges', exchangesRoutes);
 app.use('/api/assembly', assemblyRoutes);
 app.use('/api/item-sizes', itemSizesRoutes);
 app.use('/api/item-colors', itemColorsRoutes);
+app.use('/api/pos-codes', posCodesRoutes);
+app.use('/api/gst-settings', gstSettingsRoutes);
+app.use('/api/gst-reports', gstReportsRoutes);
 
 // Health check endpoint for deployment platforms
 app.get('/health', (_req: Request, res: Response) => {

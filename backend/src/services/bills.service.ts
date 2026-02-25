@@ -39,6 +39,21 @@ export interface CreateBillData {
   status?: string;
   subtotal: number;
   tax_amount: number;
+  cgst_rate?: number;
+  cgst_amount?: number;
+  sgst_rate?: number;
+  sgst_amount?: number;
+  igst_rate?: number;
+  igst_amount?: number;
+  cess_amount?: number;
+  place_of_supply?: string;
+  supply_type?: string;
+  reverse_charge?: boolean;
+  vendor_gstin?: string;
+  tds_tcs_type?: string;
+  tds_tcs_rate?: number;
+  tds_tcs_amount?: number;
+  itc_eligible?: boolean;
   discount_amount?: number;
   adjustment?: number;
   total_amount: number;
@@ -113,6 +128,21 @@ export class BillsService {
           payment_status: 'unpaid',
           subtotal: data.subtotal,
           tax_amount: data.tax_amount,
+          cgst_rate: Number(data.cgst_rate) || 0,
+          cgst_amount: Number(data.cgst_amount) || 0,
+          sgst_rate: Number(data.sgst_rate) || 0,
+          sgst_amount: Number(data.sgst_amount) || 0,
+          igst_rate: Number(data.igst_rate) || 0,
+          igst_amount: Number(data.igst_amount) || 0,
+          cess_amount: Number(data.cess_amount) || 0,
+          place_of_supply: data.place_of_supply || null,
+          supply_type: data.supply_type || 'intra_state',
+          reverse_charge: data.reverse_charge || false,
+          vendor_gstin: data.vendor_gstin || null,
+          tds_tcs_type: data.tds_tcs_type || null,
+          tds_tcs_rate: Number(data.tds_tcs_rate) || 0,
+          tds_tcs_amount: Number(data.tds_tcs_amount) || 0,
+          itc_eligible: data.itc_eligible !== false,
           discount_amount: data.discount_amount || 0,
           adjustment: data.adjustment || 0,
           total_amount: data.total_amount,
@@ -147,6 +177,13 @@ export class BillsService {
           total: item.total,
           account: item.account || null,
           serial_numbers: item.serial_numbers || [],
+          hsn_code: (item as any).hsn_code || null,
+          cgst_rate: Number((item as any).cgst_rate) || 0,
+          cgst_amount: Number((item as any).cgst_amount) || 0,
+          sgst_rate: Number((item as any).sgst_rate) || 0,
+          sgst_amount: Number((item as any).sgst_amount) || 0,
+          igst_rate: Number((item as any).igst_rate) || 0,
+          igst_amount: Number((item as any).igst_amount) || 0,
         }));
 
         const { data: insertedItems, error: itemsError } = await supabase
@@ -451,6 +488,21 @@ export class BillsService {
       if (data.status !== undefined) updateData.status = data.status;
       if (data.subtotal !== undefined) updateData.subtotal = data.subtotal;
       if (data.tax_amount !== undefined) updateData.tax_amount = data.tax_amount;
+      if (data.cgst_rate !== undefined) updateData.cgst_rate = data.cgst_rate;
+      if (data.cgst_amount !== undefined) updateData.cgst_amount = data.cgst_amount;
+      if (data.sgst_rate !== undefined) updateData.sgst_rate = data.sgst_rate;
+      if (data.sgst_amount !== undefined) updateData.sgst_amount = data.sgst_amount;
+      if (data.igst_rate !== undefined) updateData.igst_rate = data.igst_rate;
+      if (data.igst_amount !== undefined) updateData.igst_amount = data.igst_amount;
+      if (data.cess_amount !== undefined) updateData.cess_amount = data.cess_amount;
+      if (data.place_of_supply !== undefined) updateData.place_of_supply = data.place_of_supply;
+      if (data.supply_type !== undefined) updateData.supply_type = data.supply_type;
+      if (data.reverse_charge !== undefined) updateData.reverse_charge = data.reverse_charge;
+      if (data.vendor_gstin !== undefined) updateData.vendor_gstin = data.vendor_gstin;
+      if (data.tds_tcs_type !== undefined) updateData.tds_tcs_type = data.tds_tcs_type;
+      if (data.tds_tcs_rate !== undefined) updateData.tds_tcs_rate = data.tds_tcs_rate;
+      if (data.tds_tcs_amount !== undefined) updateData.tds_tcs_amount = data.tds_tcs_amount;
+      if (data.itc_eligible !== undefined) updateData.itc_eligible = data.itc_eligible;
       if (data.discount_amount !== undefined) updateData.discount_amount = data.discount_amount;
       if (data.adjustment !== undefined) updateData.adjustment = data.adjustment;
       if (data.total_amount !== undefined) {

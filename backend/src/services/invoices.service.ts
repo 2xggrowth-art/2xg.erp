@@ -41,6 +41,17 @@ export interface CreateInvoiceData {
   discount_value?: number;
   discount_amount?: number;
   tax_amount?: number;
+  cgst_rate?: number;
+  cgst_amount?: number;
+  sgst_rate?: number;
+  sgst_amount?: number;
+  igst_rate?: number;
+  igst_amount?: number;
+  cess_amount?: number;
+  place_of_supply?: string;
+  supply_type?: string;
+  reverse_charge?: boolean;
+  customer_gstin?: string;
   tds_tcs_type?: 'TDS' | 'TCS';
   tds_tcs_rate?: number;
   tds_tcs_amount?: number;
@@ -158,6 +169,17 @@ export class InvoicesService {
         discount_value: Number(invoiceData.discount_value) || 0,
         discount_amount: Number(invoiceData.discount_amount) || 0,
         tax_amount: Number(invoiceData.tax_amount) || 0,
+        cgst_rate: Number(invoiceData.cgst_rate) || 0,
+        cgst_amount: Number(invoiceData.cgst_amount) || 0,
+        sgst_rate: Number(invoiceData.sgst_rate) || 0,
+        sgst_amount: Number(invoiceData.sgst_amount) || 0,
+        igst_rate: Number(invoiceData.igst_rate) || 0,
+        igst_amount: Number(invoiceData.igst_amount) || 0,
+        cess_amount: Number(invoiceData.cess_amount) || 0,
+        place_of_supply: invoiceData.place_of_supply || null,
+        supply_type: invoiceData.supply_type || 'intra_state',
+        reverse_charge: invoiceData.reverse_charge || false,
+        customer_gstin: invoiceData.customer_gstin || null,
         tds_tcs_type: invoiceData.tds_tcs_type || null,
         tds_tcs_rate: invoiceData.tds_tcs_rate || null,
         tds_tcs_amount: Number(invoiceData.tds_tcs_amount) || 0,
@@ -202,7 +224,15 @@ export class InvoicesService {
             quantity: Number(item.quantity) || 0,
             unit_of_measurement: item.unit_of_measurement || 'pcs',
             rate: Number(item.rate) || 0,
-            amount: Number(item.amount) || 0
+            amount: Number(item.amount) || 0,
+            hsn_code: (item as any).hsn_code || null,
+            tax_rate: Number((item as any).tax_rate) || 0,
+            cgst_rate: Number((item as any).cgst_rate) || 0,
+            cgst_amount: Number((item as any).cgst_amount) || 0,
+            sgst_rate: Number((item as any).sgst_rate) || 0,
+            sgst_amount: Number((item as any).sgst_amount) || 0,
+            igst_rate: Number((item as any).igst_rate) || 0,
+            igst_amount: Number((item as any).igst_amount) || 0,
           };
         });
 

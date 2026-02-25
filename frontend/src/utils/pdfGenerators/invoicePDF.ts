@@ -26,6 +26,15 @@ export interface InvoicePDFData {
   billing_address?: string;
   shipping_address?: string;
   place_of_supply?: string;
+  supply_type?: string;
+  reverse_charge?: boolean;
+  cgst_rate?: number;
+  cgst_amount?: number;
+  sgst_rate?: number;
+  sgst_amount?: number;
+  igst_rate?: number;
+  igst_amount?: number;
+  cess_amount?: number;
   invoice_date: string;
   due_date?: string;
   payment_terms?: string;
@@ -170,10 +179,16 @@ export const generateInvoicePDF = (invoice: InvoicePDFData): jsPDF => {
   ty += 3.5;
   doc.text(company.website, compX, ty);
 
-  // "TAX INVOICE" on the right
+  // "TAX INVOICE" or "BILL OF SUPPLY" on the right
   doc.setFontSize(16);
   doc.setFont('helvetica', 'bold');
-  doc.text('TAX INVOICE', RE - 4, headerTop + 20, { align: 'right' });
+  const invoiceTitle = invoice.reverse_charge ? 'TAX INVOICE (RCM)' : 'TAX INVOICE';
+  doc.text(invoiceTitle, RE - 4, headerTop + 20, { align: 'right' });
+  if (invoice.supply_type) {
+    doc.setFontSize(7);
+    doc.setFont('helvetica', 'normal');
+    doc.text(invoice.supply_type === 'inter_state' ? 'Inter-State Supply' : 'Intra-State Supply', RE - 4, headerTop + 26, { align: 'right' });
+  }
 
   const headerBottom = Math.max(ty + 5, logoY + logoH + 6);
 
@@ -302,17 +317,21 @@ export const generateInvoicePDF = (invoice: InvoicePDFData): jsPDF => {
   // SECTION 4: ITEMS TABLE (grid theme with matching borders)
   // ====================================================================
   // Calculate effective GST rate from invoice-level tax if per-item rates are missing
+  // Default to 12% GST (6% CGST + 6% SGST) - tax inclusive pricing
+  const DEFAULT_GST_RATE = 12;
   const hasItemTaxRates = invoice.line_items.some(item => (item.tax_rate || 0) > 0);
-  const effectiveTaxRate = !hasItemTaxRates && (invoice.tax_amount || 0) > 0 && invoice.subtotal > 0
-    ? ((invoice.tax_amount || 0) / invoice.subtotal) * 100
-    : 0;
+  const effectiveTaxRate = hasItemTaxRates
+    ? 0
+    : (invoice.tax_amount || 0) > 0 && invoice.subtotal > 0
+      ? ((invoice.tax_amount || 0) / invoice.subtotal) * 100
+      : DEFAULT_GST_RATE;
 
   const tableBody = invoice.line_items.map((item, index) => {
     const taxRate = item.tax_rate || effectiveTaxRate;
     const halfRate = taxRate / 2;
-    const taxableAmount = item.total; // item amount is before tax
-    const cgstAmount = (taxableAmount * halfRate) / 100;
-    const sgstAmount = (taxableAmount * halfRate) / 100;
+    // Tax inclusive: extract tax from the total amount
+    const cgstAmount = (item.total * halfRate) / (100 + taxRate);
+    const sgstAmount = (item.total * halfRate) / (100 + taxRate);
 
     return [
       (index + 1).toString(),
@@ -376,20 +395,49 @@ export const generateInvoicePDF = (invoice: InvoicePDFData): jsPDF => {
   currentY = (doc as any).lastAutoTable.finalY;
 
   // ====================================================================
-  // SECTION 5: TOTALS + TOTAL IN WORDS (bordered box with vertical divider)
+  // SECTION 5: COMBINED — Left: Total In Words + Notes + Bank + Terms
+  //                        Right: Totals + Authorized Signature
   // ====================================================================
-  const totalsTop = currentY;
-  const totDivX = ML + CW * 0.52; // vertical divider position (~52% from left)
+  const comboTop = currentY;
+  const comboDivX = ML + CW * 0.52; // vertical divider
+  const leftW = comboDivX - ML - pad * 2;
 
-  // Calculate tax breakdown
-  const totalTax = invoice.tax_amount || 0;
-  const cgstTotal = totalTax / 2;
-  const sgstTotal = totalTax / 2;
+  // Use stored GST breakdown if available, otherwise fallback to 50/50 split
+  const hasStoredGst = (invoice.cgst_amount || 0) > 0 || (invoice.sgst_amount || 0) > 0 || (invoice.igst_amount || 0) > 0;
 
-  // -- RIGHT SIDE: Totals breakdown --
-  const tLabelX = totDivX + pad;
+  let cgstTotal: number;
+  let sgstTotal: number;
+  let igstTotal: number;
+  let displayCgstRate: number;
+  let displaySgstRate: number;
+  let displayIgstRate: number;
+
+  if (hasStoredGst) {
+    cgstTotal = invoice.cgst_amount || 0;
+    sgstTotal = invoice.sgst_amount || 0;
+    igstTotal = invoice.igst_amount || 0;
+    displayCgstRate = invoice.cgst_rate || 0;
+    displaySgstRate = invoice.sgst_rate || 0;
+    displayIgstRate = invoice.igst_rate || 0;
+  } else {
+    const fallbackTaxRate = hasItemTaxRates
+      ? (invoice.line_items.reduce((sum, item) => sum + (item.tax_rate || 0), 0) / invoice.line_items.length)
+      : effectiveTaxRate;
+    const totalTax = (invoice.tax_amount || 0) > 0
+      ? invoice.tax_amount!
+      : (invoice.subtotal * fallbackTaxRate) / (100 + fallbackTaxRate);
+    cgstTotal = totalTax / 2;
+    sgstTotal = totalTax / 2;
+    igstTotal = 0;
+    displayCgstRate = fallbackTaxRate / 2;
+    displaySgstRate = fallbackTaxRate / 2;
+    displayIgstRate = 0;
+  }
+
+  // ---- RIGHT SIDE: Totals breakdown ----
+  const tLabelX = comboDivX + pad;
   const tValX = RE - pad;
-  let tY = totalsTop + pad + 3;
+  let tY = comboTop + pad + 3;
 
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(9);
@@ -404,21 +452,38 @@ export const generateInvoicePDF = (invoice: InvoicePDFData): jsPDF => {
   doc.setTextColor(0, 0, 0);
   tY += 5;
 
-  // CGST
   doc.setFontSize(9);
-  const displayTaxRate = hasItemTaxRates
-    ? (invoice.line_items.reduce((sum, item) => sum + (item.tax_rate || 0), 0) / invoice.line_items.length / 2)
-    : (effectiveTaxRate / 2);
-  const cgstLabel = displayTaxRate > 0 ? `CGST (${parseFloat(displayTaxRate.toFixed(2))}%)` : 'CGST';
-  doc.text(cgstLabel, tLabelX, tY);
-  doc.text(formatCurrency(cgstTotal), tValX, tY, { align: 'right' });
-  tY += 5;
 
-  // SGST
-  const sgstLabel = displayTaxRate > 0 ? `SGST (${parseFloat(displayTaxRate.toFixed(2))}%)` : 'SGST';
-  doc.text(sgstLabel, tLabelX, tY);
-  doc.text(formatCurrency(sgstTotal), tValX, tY, { align: 'right' });
-  tY += 5;
+  if (igstTotal > 0) {
+    // Inter-state: show IGST
+    const igstStr = displayIgstRate % 1 === 0 ? String(Math.round(displayIgstRate)) : parseFloat(displayIgstRate.toFixed(2)).toString();
+    const igstLabel = displayIgstRate > 0 ? `IGST (${igstStr}%)` : 'IGST';
+    doc.text(igstLabel, tLabelX, tY);
+    doc.text(formatCurrency(igstTotal), tValX, tY, { align: 'right' });
+    tY += 5;
+  } else {
+    // Intra-state: show CGST + SGST
+    const cgstStr = displayCgstRate % 1 === 0 ? String(Math.round(displayCgstRate)) : parseFloat(displayCgstRate.toFixed(2)).toString();
+    const cgstLabel = displayCgstRate > 0 ? `CGST (${cgstStr}%)` : 'CGST';
+    doc.text(cgstLabel, tLabelX, tY);
+    doc.text(formatCurrency(cgstTotal), tValX, tY, { align: 'right' });
+    tY += 5;
+
+    const sgstStr = displaySgstRate % 1 === 0 ? String(Math.round(displaySgstRate)) : parseFloat(displaySgstRate.toFixed(2)).toString();
+    const sgstLabel = displaySgstRate > 0 ? `SGST (${sgstStr}%)` : 'SGST';
+    doc.text(sgstLabel, tLabelX, tY);
+    doc.text(formatCurrency(sgstTotal), tValX, tY, { align: 'right' });
+    tY += 5;
+  }
+
+  // Reverse charge note
+  if (invoice.reverse_charge) {
+    doc.setFontSize(7);
+    doc.setTextColor(200, 0, 0);
+    doc.text('Tax payable under Reverse Charge', tLabelX, tY);
+    doc.setTextColor(0, 0, 0);
+    tY += 5;
+  }
 
   // Discount
   if (invoice.discount_amount && invoice.discount_amount > 0) {
@@ -433,11 +498,6 @@ export const generateInvoicePDF = (invoice: InvoicePDFData): jsPDF => {
     doc.text(formatCurrency(invoice.shipping_charges), tValX, tY, { align: 'right' });
     tY += 5;
   }
-
-  // Separator line before total
-  setBorder();
-  doc.line(totDivX, tY - 1, RE, tY - 1);
-  tY += 4;
 
   // Grand Total
   doc.setFont('helvetica', 'bold');
@@ -454,11 +514,6 @@ export const generateInvoicePDF = (invoice: InvoicePDFData): jsPDF => {
   doc.text(`(-) ${formatCurrency(amountPaid)}`, tValX, tY, { align: 'right' });
   tY += 5;
 
-  // Separator before balance due
-  setBorder();
-  doc.line(totDivX, tY - 1, RE, tY - 1);
-  tY += 4;
-
   // Balance Due
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(10);
@@ -466,38 +521,22 @@ export const generateInvoicePDF = (invoice: InvoicePDFData): jsPDF => {
   doc.text('Balance Due', tLabelX, tY);
   doc.text(`Rs.${formatCurrency(balanceDue)}`, tValX, tY, { align: 'right' });
 
-  const totalsRightBottom = tY + pad;
+  const balanceDueEndY = tY + pad;
 
-  // -- LEFT SIDE: Total in Words --
-  let wY = totalsTop + pad + 3;
+  // ---- LEFT SIDE: Total In Words + Notes + Bank + Terms ----
+  let ly = comboTop + pad + 3;
+
+  // Total In Words
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(9);
-  doc.text('Total In Words', lLabelX, wY);
-  wY += 5;
+  doc.text('Total In Words', lLabelX, ly);
+  ly += 5;
   doc.setFont('helvetica', 'italic');
   doc.setFontSize(8);
   const totalWords = `Indian Rupee ${numberToWordsIndian(invoice.total_amount).replace(' Rupees ', ' ').replace(' Rupees', '').replace(' Only', '')} Only`;
-  const wordsLines = doc.splitTextToSize(totalWords, totDivX - ML - pad * 2);
-  doc.text(wordsLines, lLabelX, wY);
-
-  const totalsBottom = Math.max(totalsRightBottom, wY + wordsLines.length * 4 + pad);
-
-  // Draw totals bordered box + vertical divider
-  setBorder();
-  doc.rect(ML, totalsTop, CW, totalsBottom - totalsTop);
-  doc.line(totDivX, totalsTop, totDivX, totalsBottom);
-
-  currentY = totalsBottom;
-
-  // ====================================================================
-  // SECTION 6: NOTES + BANK DETAILS + TERMS (left) + SIGNATURE (right)
-  // ====================================================================
-  const bottomTop = currentY;
-  const bottomDivX = midX;
-  const leftW = bottomDivX - ML - pad * 2;
-
-  // -- LEFT SIDE: Notes, Bank Details, Terms --
-  let ly = bottomTop + pad + 3;
+  const wordsLines = doc.splitTextToSize(totalWords, leftW);
+  doc.text(wordsLines, lLabelX, ly);
+  ly += wordsLines.length * 4 + 3;
 
   // Notes
   const notesText = invoice.notes || 'PLEASE CHECKOUT BHARATHCYCLEHUB.COM FOR MORE DETAILS.';
@@ -511,7 +550,7 @@ export const generateInvoicePDF = (invoice: InvoicePDFData): jsPDF => {
   doc.text(noteLines, lLabelX, ly);
   ly += noteLines.length * 4 + 4;
 
-  // Bank Details (no header box, just listed)
+  // Bank Details
   doc.text(`Account Holder: ${company.accountHolder}`, lLabelX, ly);
   ly += 4;
   doc.text('Account Number: ', lLabelX, ly);
@@ -541,25 +580,33 @@ export const generateInvoicePDF = (invoice: InvoicePDFData): jsPDF => {
   doc.text(termLines, lLabelX, ly);
   ly += termLines.length * 3.5;
 
-  // -- RIGHT SIDE: Authorized Signature --
-  const sigLabelX = bottomDivX + pad;
-
-  // Signature line near bottom of left content
-  const sigLineY = ly - 6;
+  // Right side: horizontal line after Balance Due (right side only)
   setBorder();
-  doc.line(sigLabelX + 10, sigLineY, RE - pad, sigLineY);
+  doc.line(comboDivX, balanceDueEndY, RE, balanceDueEndY);
+
+  // Authorized Signature on right side, right after Balance Due
+  const sigLineY = balanceDueEndY + 18;
+  doc.line(comboDivX + pad + 10, sigLineY, RE - pad, sigLineY);
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(8);
   doc.text('Authorized Signature', RE - pad, sigLineY + 5, { align: 'right' });
 
-  const bottomBottom = Math.max(ly + pad, sigLineY + 12);
+  const rightEndY = sigLineY + 10;
 
-  // Draw bordered box + vertical divider
+  // Box height = whichever side is taller
+  const comboBottom = Math.max(ly + pad, rightEndY);
+
+  // Draw outer border
   setBorder();
-  doc.rect(ML, bottomTop, CW, bottomBottom - bottomTop);
-  doc.line(bottomDivX, bottomTop, bottomDivX, bottomBottom);
+  doc.rect(ML, comboTop, CW, comboBottom - comboTop);
 
-  currentY = bottomBottom;
+  // Vertical divider runs from top to signature section bottom
+  doc.line(comboDivX, comboTop, comboDivX, rightEndY);
+
+  // Horizontal line at bottom of signature section (right side only)
+  doc.line(comboDivX, rightEndY, RE, rightEndY);
+
+  currentY = comboBottom;
 
   // ====================================================================
   // FOOTER

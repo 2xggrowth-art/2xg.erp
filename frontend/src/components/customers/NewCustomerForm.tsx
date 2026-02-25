@@ -18,6 +18,8 @@ const NewCustomerForm = () => {
     workPhone: '',
     mobile: '',
     pan: '',
+    gstin: '',
+    gstTreatment: 'consumer',
     isMsmeRegistered: false,
     currency: 'INR- Indian Rupee',
     paymentTerms: 'Due on Receipt',
@@ -65,6 +67,8 @@ const NewCustomerForm = () => {
         work_phone: formData.workPhone || undefined,
         mobile: formData.mobile || undefined,
         pan: formData.pan || undefined,
+        gstin: formData.gstin || undefined,
+        gst_treatment: formData.gstTreatment || 'consumer',
         is_msme_registered: formData.isMsmeRegistered,
         currency: formData.currency,
         payment_terms: formData.paymentTerms,
@@ -350,6 +354,46 @@ const NewCustomerForm = () => {
             <div className="mt-6 space-y-4">
               {activeTab === 'other-details' && (
                 <>
+                  {/* GSTIN */}
+                  <div className="grid grid-cols-12 gap-4 items-center">
+                    <label className="col-span-3 text-sm font-medium text-gray-700">
+                      GSTIN
+                    </label>
+                    <div className="col-span-9">
+                      <input
+                        type="text"
+                        name="gstin"
+                        value={formData.gstin}
+                        onChange={handleInputChange}
+                        maxLength={15}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        placeholder="e.g. 29AAAAA0000A1Z5"
+                      />
+                    </div>
+                  </div>
+
+                  {/* GST Treatment */}
+                  <div className="grid grid-cols-12 gap-4 items-center">
+                    <label className="col-span-3 text-sm font-medium text-gray-700">
+                      GST Treatment
+                    </label>
+                    <div className="col-span-9">
+                      <select
+                        name="gstTreatment"
+                        value={formData.gstTreatment}
+                        onChange={handleInputChange}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      >
+                        <option value="consumer">Consumer</option>
+                        <option value="registered">Registered Business - Regular</option>
+                        <option value="composition">Registered Business - Composition</option>
+                        <option value="unregistered">Unregistered Business</option>
+                        <option value="overseas">Overseas</option>
+                        <option value="sez">SEZ</option>
+                      </select>
+                    </div>
+                  </div>
+
                   {/* PAN */}
                   <div className="grid grid-cols-12 gap-4 items-center">
                     <label className="col-span-3 text-sm font-medium text-gray-700">

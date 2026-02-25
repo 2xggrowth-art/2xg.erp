@@ -105,17 +105,8 @@ export class VendorsService {
       contactPerson = contactPerson ? `${contactPerson} (${vendorData.company_name})` : vendorData.company_name;
     }
 
-    // Store additional info in notes field since columns don't exist
+    // Store additional info in notes field for fields without dedicated columns
     let notesText = vendorData.notes || '';
-    if (vendorData.gst_treatment) {
-      notesText += `\nGST Treatment: ${vendorData.gst_treatment}`;
-    }
-    if (vendorData.source_of_supply) {
-      notesText += `\nSource of Supply: ${vendorData.source_of_supply}`;
-    }
-    if (vendorData.pan) {
-      notesText += `\nPAN: ${vendorData.pan}`;
-    }
     if (vendorData.is_msme_registered) {
       notesText += `\nMSME Registered: Yes`;
     }
@@ -132,7 +123,7 @@ export class VendorsService {
       throw new Error('Invalid PAN format. Expected: ABCDE1234F (10 characters)');
     }
 
-    // Only use columns that exist in the original schema
+    // Use columns that exist in the schema (including GST columns from migration 037)
     const newVendor = {
       organization_id: org?.id,
       supplier_name: supplierName,
@@ -145,6 +136,9 @@ export class VendorsService {
       country: vendorData.country || null,
       postal_code: vendorData.postal_code || null,
       tax_id: vendorData.pan || null,
+      gstin: vendorData.gstin || null,
+      gst_treatment: vendorData.gst_treatment || 'registered',
+      reverse_charge_applicable: vendorData.reverse_charge_applicable || false,
       payment_terms: vendorData.payment_terms || 'Due on Receipt',
       credit_limit: vendorData.credit_limit ? parseFloat(vendorData.credit_limit) : null,
       current_balance: 0,
@@ -184,6 +178,9 @@ export class VendorsService {
     if (vendorData.country !== undefined) updateData.country = vendorData.country;
     if (vendorData.postal_code !== undefined) updateData.postal_code = vendorData.postal_code;
     if (vendorData.pan !== undefined) updateData.tax_id = vendorData.pan;
+    if (vendorData.gstin !== undefined) updateData.gstin = vendorData.gstin;
+    if (vendorData.gst_treatment !== undefined) updateData.gst_treatment = vendorData.gst_treatment;
+    if (vendorData.reverse_charge_applicable !== undefined) updateData.reverse_charge_applicable = vendorData.reverse_charge_applicable;
     if (vendorData.payment_terms !== undefined) updateData.payment_terms = vendorData.payment_terms;
     if (vendorData.notes !== undefined) updateData.notes = vendorData.notes;
 

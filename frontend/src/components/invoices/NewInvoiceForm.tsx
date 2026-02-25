@@ -112,6 +112,12 @@ const NewInvoiceForm = () => {
     subject: '',
     discount_type: 'percentage' as 'percentage' | 'amount',
     discount_value: 0,
+    cgst_rate: 0,
+    sgst_rate: 0,
+    igst_rate: 0,
+    place_of_supply: '',
+    reverse_charge: false,
+    customer_gstin: '',
     tds_tcs_type: '',
     tds_tcs_rate: 0,
     adjustment: 0,
@@ -176,6 +182,12 @@ const NewInvoiceForm = () => {
           subject: invoice.subject || '',
           discount_type: invoice.discount_type || 'percentage',
           discount_value: invoice.discount_value || 0,
+          cgst_rate: invoice.cgst_rate || 0,
+          sgst_rate: invoice.sgst_rate || 0,
+          igst_rate: invoice.igst_rate || 0,
+          place_of_supply: invoice.place_of_supply || '',
+          reverse_charge: invoice.reverse_charge || false,
+          customer_gstin: invoice.customer_gstin || '',
           tds_tcs_type: invoice.tds_tcs_type || '',
           tds_tcs_rate: invoice.tds_tcs_rate || 0,
           adjustment: invoice.adjustment || 0,
@@ -310,7 +322,9 @@ const NewInvoiceForm = () => {
           customer_id: selectedCustomer.id,
           customer_name: selectedCustomer.customer_name,
           customer_email: selectedCustomer.email || '',
-          payment_terms: selectedCustomer.payment_terms || 'due_on_receipt'
+          payment_terms: selectedCustomer.payment_terms || 'due_on_receipt',
+          customer_gstin: (selectedCustomer as any).gstin || '',
+          place_of_supply: (selectedCustomer as any).gstin ? `${(selectedCustomer as any).gstin.substring(0, 2)}` : prev.place_of_supply
         }));
       }
     } else {
@@ -320,7 +334,9 @@ const NewInvoiceForm = () => {
         customer_id: '',
         customer_name: '',
         customer_email: '',
-        payment_terms: 'due_on_receipt'
+        payment_terms: 'due_on_receipt',
+        customer_gstin: '',
+        place_of_supply: ''
       }));
     }
   };
@@ -451,6 +467,14 @@ const NewInvoiceForm = () => {
     return formData.discount_value;
   };
 
+  const calculateGst = () => {
+    const afterDiscount = calculateSubtotal() - calculateDiscount();
+    const cgst = (afterDiscount * (formData.cgst_rate || 0)) / 100;
+    const sgst = (afterDiscount * (formData.sgst_rate || 0)) / 100;
+    const igst = (afterDiscount * (formData.igst_rate || 0)) / 100;
+    return cgst + sgst + igst;
+  };
+
   const calculateTax = () => {
     const afterDiscount = calculateSubtotal() - calculateDiscount();
     if (formData.tds_tcs_type && formData.tds_tcs_rate) {
@@ -462,8 +486,9 @@ const NewInvoiceForm = () => {
   const calculateTotal = () => {
     const subtotal = calculateSubtotal();
     const discount = calculateDiscount();
-    const tax = calculateTax();
-    return subtotal - discount + tax + formData.adjustment;
+    const gst = calculateGst();
+    const tdsTcs = calculateTax();
+    return subtotal - discount + gst + tdsTcs + formData.adjustment;
   };
 
   const checkStockAvailability = () => {
@@ -518,8 +543,10 @@ const NewInvoiceForm = () => {
     try {
       const subtotal = calculateSubtotal();
       const discount = calculateDiscount();
-      const tax = calculateTax();
+      const gst = calculateGst();
+      const tdsTcs = calculateTax();
       const total = calculateTotal();
+      const afterDiscount = subtotal - discount;
 
       // Build invoice data with correct field mapping
       const invoiceData: any = {
@@ -539,9 +566,20 @@ const NewInvoiceForm = () => {
         discount_type: formData.discount_type,
         discount_value: Number(formData.discount_value),
         discount_amount: Number(discount.toFixed(2)),
+        tax_amount: Number(gst.toFixed(2)),
+        cgst_rate: formData.cgst_rate || 0,
+        cgst_amount: Number(((afterDiscount * (formData.cgst_rate || 0)) / 100).toFixed(2)),
+        sgst_rate: formData.sgst_rate || 0,
+        sgst_amount: Number(((afterDiscount * (formData.sgst_rate || 0)) / 100).toFixed(2)),
+        igst_rate: formData.igst_rate || 0,
+        igst_amount: Number(((afterDiscount * (formData.igst_rate || 0)) / 100).toFixed(2)),
+        place_of_supply: formData.place_of_supply || null,
+        supply_type: formData.igst_rate > 0 ? 'inter_state' : 'intra_state',
+        reverse_charge: formData.reverse_charge || false,
+        customer_gstin: formData.customer_gstin || null,
         tds_tcs_type: formData.tds_tcs_type || null,
         tds_tcs_rate: formData.tds_tcs_rate || null,
-        tds_tcs_amount: Number(tax.toFixed(2)),
+        tds_tcs_amount: Number(tdsTcs.toFixed(2)),
         adjustment: Number(formData.adjustment),
         total_amount: Number(total.toFixed(2)),
         customer_notes: formData.notes || null,
@@ -999,6 +1037,80 @@ const NewInvoiceForm = () => {
             </div>
           </div>
 
+          {/* GST Details */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-2">
+                Place of Supply
+              </label>
+              <select
+                name="place_of_supply"
+                value={formData.place_of_supply}
+                onChange={handleInputChange}
+                className="w-full px-4 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              >
+                <option value="">Select State</option>
+                <option value="01-Jammu & Kashmir">01-Jammu & Kashmir</option>
+                <option value="02-Himachal Pradesh">02-Himachal Pradesh</option>
+                <option value="03-Punjab">03-Punjab</option>
+                <option value="04-Chandigarh">04-Chandigarh</option>
+                <option value="05-Uttarakhand">05-Uttarakhand</option>
+                <option value="06-Haryana">06-Haryana</option>
+                <option value="07-Delhi">07-Delhi</option>
+                <option value="08-Rajasthan">08-Rajasthan</option>
+                <option value="09-Uttar Pradesh">09-Uttar Pradesh</option>
+                <option value="10-Bihar">10-Bihar</option>
+                <option value="11-Sikkim">11-Sikkim</option>
+                <option value="12-Arunachal Pradesh">12-Arunachal Pradesh</option>
+                <option value="13-Nagaland">13-Nagaland</option>
+                <option value="14-Manipur">14-Manipur</option>
+                <option value="15-Mizoram">15-Mizoram</option>
+                <option value="16-Tripura">16-Tripura</option>
+                <option value="17-Meghalaya">17-Meghalaya</option>
+                <option value="18-Assam">18-Assam</option>
+                <option value="19-West Bengal">19-West Bengal</option>
+                <option value="20-Jharkhand">20-Jharkhand</option>
+                <option value="21-Odisha">21-Odisha</option>
+                <option value="22-Chhattisgarh">22-Chhattisgarh</option>
+                <option value="23-Madhya Pradesh">23-Madhya Pradesh</option>
+                <option value="24-Gujarat">24-Gujarat</option>
+                <option value="27-Maharashtra">27-Maharashtra</option>
+                <option value="29-Karnataka">29-Karnataka</option>
+                <option value="30-Goa">30-Goa</option>
+                <option value="32-Kerala">32-Kerala</option>
+                <option value="33-Tamil Nadu">33-Tamil Nadu</option>
+                <option value="36-Telangana">36-Telangana</option>
+                <option value="37-Andhra Pradesh">37-Andhra Pradesh</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-2">
+                Customer GSTIN
+              </label>
+              <input
+                type="text"
+                name="customer_gstin"
+                value={formData.customer_gstin}
+                onChange={handleInputChange}
+                placeholder="e.g. 29ABCDE1234F1Z5"
+                maxLength={15}
+                className="w-full px-4 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent uppercase"
+              />
+            </div>
+            <div className="flex items-end pb-1">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  name="reverse_charge"
+                  checked={formData.reverse_charge}
+                  onChange={handleInputChange}
+                  className="w-4 h-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500"
+                />
+                <span className="text-sm font-medium text-slate-700">Reverse Charge Applicable</span>
+              </label>
+            </div>
+          </div>
+
           {/* Items Table */}
           <div>
             <h3 className="text-lg font-semibold text-slate-800 mb-4">Item Table</h3>
@@ -1168,6 +1280,71 @@ const NewInvoiceForm = () => {
                   </select>
                 </div>
                 <span className="font-medium text-slate-900">{calculateDiscount().toFixed(2)}</span>
+              </div>
+
+              {/* GST Tax Split - CGST/SGST or IGST */}
+              <div className="flex justify-between items-center py-2">
+                <div className="flex items-center gap-2">
+                  <span className={`text-sm w-12 ${formData.igst_rate > 0 ? 'text-gray-400' : 'text-gray-700'}`}>CGST</span>
+                  <select
+                    value={formData.cgst_rate}
+                    onChange={(e) => setFormData({ ...formData, cgst_rate: parseFloat(e.target.value) || 0, igst_rate: 0 })}
+                    disabled={formData.igst_rate > 0}
+                    className={`px-2 py-1 border border-gray-300 rounded text-sm bg-white w-20 ${formData.igst_rate > 0 ? 'opacity-50 cursor-not-allowed' : ''}`}
+                  >
+                    <option value={0}>0%</option>
+                    <option value={1.5}>1.5%</option>
+                    <option value={2.5}>2.5%</option>
+                    <option value={6}>6%</option>
+                    <option value={9}>9%</option>
+                    <option value={14}>14%</option>
+                  </select>
+                </div>
+                <span className="font-medium text-gray-900">
+                  {((calculateSubtotal() - calculateDiscount()) * (formData.cgst_rate || 0) / 100).toFixed(2)}
+                </span>
+              </div>
+              <div className="flex justify-between items-center py-2">
+                <div className="flex items-center gap-2">
+                  <span className={`text-sm w-12 ${formData.igst_rate > 0 ? 'text-gray-400' : 'text-gray-700'}`}>SGST</span>
+                  <select
+                    value={formData.sgst_rate}
+                    onChange={(e) => setFormData({ ...formData, sgst_rate: parseFloat(e.target.value) || 0, igst_rate: 0 })}
+                    disabled={formData.igst_rate > 0}
+                    className={`px-2 py-1 border border-gray-300 rounded text-sm bg-white w-20 ${formData.igst_rate > 0 ? 'opacity-50 cursor-not-allowed' : ''}`}
+                  >
+                    <option value={0}>0%</option>
+                    <option value={1.5}>1.5%</option>
+                    <option value={2.5}>2.5%</option>
+                    <option value={6}>6%</option>
+                    <option value={9}>9%</option>
+                    <option value={14}>14%</option>
+                  </select>
+                </div>
+                <span className="font-medium text-gray-900">
+                  {((calculateSubtotal() - calculateDiscount()) * (formData.sgst_rate || 0) / 100).toFixed(2)}
+                </span>
+              </div>
+              <div className="flex justify-between items-center py-2">
+                <div className="flex items-center gap-2">
+                  <span className={`text-sm w-12 ${(formData.cgst_rate > 0 || formData.sgst_rate > 0) ? 'text-gray-400' : 'text-gray-700'}`}>IGST</span>
+                  <select
+                    value={formData.igst_rate}
+                    onChange={(e) => setFormData({ ...formData, igst_rate: parseFloat(e.target.value) || 0, cgst_rate: 0, sgst_rate: 0 })}
+                    disabled={formData.cgst_rate > 0 || formData.sgst_rate > 0}
+                    className={`px-2 py-1 border border-gray-300 rounded text-sm bg-white w-20 ${(formData.cgst_rate > 0 || formData.sgst_rate > 0) ? 'opacity-50 cursor-not-allowed' : ''}`}
+                  >
+                    <option value={0}>0%</option>
+                    <option value={3}>3%</option>
+                    <option value={5}>5%</option>
+                    <option value={12}>12%</option>
+                    <option value={18}>18%</option>
+                    <option value={28}>28%</option>
+                  </select>
+                </div>
+                <span className="font-medium text-gray-900">
+                  {((calculateSubtotal() - calculateDiscount()) * (formData.igst_rate || 0) / 100).toFixed(2)}
+                </span>
               </div>
 
               <div className="flex justify-between items-center py-2">

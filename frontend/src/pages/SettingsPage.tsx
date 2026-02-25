@@ -1,9 +1,12 @@
 import { useState, useEffect, useRef } from 'react';
-import { Settings, Users, Plus, Trash2, Edit2, Save, X, Shield, CheckSquare, Square, MapPin, Smartphone } from 'lucide-react';
+import { Settings, Users, Plus, Trash2, Edit2, Save, X, Shield, CheckSquare, Square, MapPin, Smartphone, Monitor, FileText, BarChart3, Download } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { authService, User } from '../services/auth.service';
 import { locationsService, Location } from '../services/locations.service';
 import { mobileUsersService, MobileUser } from '../services/mobileUsers.service';
+import { posCodesService, PosCode } from '../services/posCodes.service';
+import { gstSettingsService } from '../services/gstSettings.service';
+import { gstReportsService } from '../services/gstReports.service';
 
 interface Permission {
   module: string;
@@ -30,6 +33,40 @@ const SettingsPage = () => {
   const [showAddRoleModal, setShowAddRoleModal] = useState(false);
   const [editingUserId, setEditingUserId] = useState<string | null>(null);
   const [editingRoleId, setEditingRoleId] = useState<string | null>(null);
+
+  // POS Codes state
+  const [posCodes, setPosCodes] = useState<PosCode[]>([]);
+  const [showAddPosCodeForm, setShowAddPosCodeForm] = useState(false);
+  const [newPosCode, setNewPosCode] = useState({ code: '', employee_name: '' });
+  const [editingPosCodeId, setEditingPosCodeId] = useState<string | null>(null);
+  const [editPosCode, setEditPosCode] = useState({ code: '', employee_name: '' });
+
+  // GST Settings state
+  const [gstSettings, setGstSettings] = useState({
+    company_gstin: '',
+    registered_state: 'Karnataka',
+    state_code: '29',
+    gst_registration_type: 'regular',
+    financial_year_start: 4,
+    e_invoice_enabled: false,
+    e_invoice_username: '',
+    e_invoice_password: '',
+    eway_bill_enabled: false,
+    composition_rate: 0,
+    company_name: '',
+    company_address: '',
+    company_phone: '',
+    company_email: ''
+  });
+  const [gstLoading, setGstLoading] = useState(false);
+  const [gstSaving, setGstSaving] = useState(false);
+
+  // GST Reports state
+  const [reportType, setReportType] = useState<'gstr1' | 'gstr3b' | 'itc'>('gstr1');
+  const [reportStartDate, setReportStartDate] = useState(new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0]);
+  const [reportEndDate, setReportEndDate] = useState(new Date().toISOString().split('T')[0]);
+  const [reportData, setReportData] = useState<any>(null);
+  const [reportLoading, setReportLoading] = useState(false);
 
   // Track if initial load is complete to prevent overwriting localStorage
   const isRolesInitialized = useRef(false);
@@ -180,6 +217,123 @@ const SettingsPage = () => {
       loadUsers();
     }
   }, [isAdmin]);
+
+  // Load POS codes from API
+  useEffect(() => {
+    if (activeTab === 'pos') {
+      fetchPosCodes();
+    }
+    if (activeTab === 'gst-settings') {
+      fetchGstSettings();
+    }
+  }, [activeTab]);
+
+  const fetchPosCodes = async () => {
+    try {
+      const res = await posCodesService.getAllPosCodes();
+      setPosCodes(res.data.data);
+    } catch (error) {
+      console.error('Error loading POS codes:', error);
+    }
+  };
+
+  const handleAddPosCode = async () => {
+    if (!newPosCode.code || !newPosCode.employee_name) {
+      alert('Please fill in both code and employee name');
+      return;
+    }
+    try {
+      await posCodesService.createPosCode(newPosCode);
+      setNewPosCode({ code: '', employee_name: '' });
+      setShowAddPosCodeForm(false);
+      fetchPosCodes();
+    } catch (error: any) {
+      alert(error.response?.data?.error || 'Failed to create POS code');
+    }
+  };
+
+  const handleUpdatePosCode = async (id: string) => {
+    try {
+      await posCodesService.updatePosCode(id, editPosCode);
+      setEditingPosCodeId(null);
+      fetchPosCodes();
+    } catch (error: any) {
+      alert(error.response?.data?.error || 'Failed to update POS code');
+    }
+  };
+
+  const handleDeletePosCode = async (id: string) => {
+    if (!confirm('Are you sure you want to delete this POS code?')) return;
+    try {
+      await posCodesService.deletePosCode(id);
+      fetchPosCodes();
+    } catch (error: any) {
+      alert(error.response?.data?.error || 'Failed to delete POS code');
+    }
+  };
+
+  const handleTogglePosCodeActive = async (posCode: PosCode) => {
+    try {
+      await posCodesService.updatePosCode(posCode.id, { is_active: !posCode.is_active });
+      fetchPosCodes();
+    } catch (error: any) {
+      alert(error.response?.data?.error || 'Failed to update POS code');
+    }
+  };
+
+  // GST Settings handlers
+  const fetchGstSettings = async () => {
+    try {
+      setGstLoading(true);
+      const res = await gstSettingsService.getSettings();
+      if (res.data?.success && res.data?.data) {
+        setGstSettings(prev => ({ ...prev, ...res.data.data }));
+      }
+    } catch (error) {
+      console.error('Error loading GST settings:', error);
+    } finally {
+      setGstLoading(false);
+    }
+  };
+
+  const handleSaveGstSettings = async () => {
+    if (!gstSettings.company_gstin) {
+      alert('Company GSTIN is required');
+      return;
+    }
+    try {
+      setGstSaving(true);
+      await gstSettingsService.updateSettings(gstSettings);
+      alert('GST settings saved successfully!');
+    } catch (error: any) {
+      alert(error.response?.data?.error || 'Failed to save GST settings');
+    } finally {
+      setGstSaving(false);
+    }
+  };
+
+  // GST Reports handlers
+  const fetchGstReport = async () => {
+    try {
+      setReportLoading(true);
+      let res;
+      if (reportType === 'gstr1') {
+        res = await gstReportsService.getGSTR1(reportStartDate, reportEndDate);
+      } else if (reportType === 'gstr3b') {
+        res = await gstReportsService.getGSTR3B(reportStartDate, reportEndDate);
+      } else {
+        res = await gstReportsService.getITCReport(reportStartDate, reportEndDate);
+      }
+      if (res.data?.success) {
+        setReportData(res.data.data);
+      }
+    } catch (error) {
+      console.error('Error fetching GST report:', error);
+      alert('Failed to fetch report');
+    } finally {
+      setReportLoading(false);
+    }
+  };
 
   const handleAddUser = async () => {
     if (!newUser.name || !newUser.email || !newUser.password) {
@@ -560,6 +714,42 @@ const SettingsPage = () => {
             <div className="flex items-center gap-2">
               <Smartphone size={18} />
               Mobile Users
+            </div>
+          </button>
+          <button
+            onClick={() => setActiveTab('pos')}
+            className={`py-3 px-1 font-medium text-sm border-b-2 transition ${activeTab === 'pos'
+                ? 'border-blue-600 text-blue-600'
+                : 'border-transparent text-gray-500 hover:text-gray-700'
+              }`}
+          >
+            <div className="flex items-center gap-2">
+              <Monitor size={18} />
+              POS
+            </div>
+          </button>
+          <button
+            onClick={() => setActiveTab('gst-settings')}
+            className={`py-3 px-1 font-medium text-sm border-b-2 transition ${activeTab === 'gst-settings'
+                ? 'border-blue-600 text-blue-600'
+                : 'border-transparent text-gray-500 hover:text-gray-700'
+              }`}
+          >
+            <div className="flex items-center gap-2">
+              <FileText size={18} />
+              GST Settings
+            </div>
+          </button>
+          <button
+            onClick={() => setActiveTab('gst-reports')}
+            className={`py-3 px-1 font-medium text-sm border-b-2 transition ${activeTab === 'gst-reports'
+                ? 'border-blue-600 text-blue-600'
+                : 'border-transparent text-gray-500 hover:text-gray-700'
+              }`}
+          >
+            <div className="flex items-center gap-2">
+              <BarChart3 size={18} />
+              GST Reports
             </div>
           </button>
         </div>
@@ -1131,6 +1321,334 @@ const SettingsPage = () => {
                     ))}
                   </tbody>
                 </table>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* POS Codes Tab */}
+        {activeTab === 'pos' && (
+          <div className="bg-white rounded-lg shadow-sm border border-gray-200">
+            <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
+              <div>
+                <h2 className="text-lg font-semibold text-gray-800">POS Codes</h2>
+                <p className="text-sm text-gray-500">Manage employee codes for POS access. POS locks after 10 min of inactivity.</p>
+              </div>
+              {isAdmin && (
+                <button
+                  onClick={() => setShowAddPosCodeForm(true)}
+                  className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
+                >
+                  <Plus size={18} />
+                  Add POS Code
+                </button>
+              )}
+            </div>
+
+            {/* Add POS Code Form */}
+            {showAddPosCodeForm && (
+              <div className="px-6 py-4 border-b border-gray-200 bg-blue-50">
+                <div className="flex items-end gap-4">
+                  <div className="flex-1">
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Employee Code</label>
+                    <input
+                      type="text"
+                      value={newPosCode.code}
+                      onChange={(e) => setNewPosCode({ ...newPosCode, code: e.target.value })}
+                      placeholder="e.g. 1234"
+                      maxLength={10}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    />
+                  </div>
+                  <div className="flex-1">
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Employee Name</label>
+                    <input
+                      type="text"
+                      value={newPosCode.employee_name}
+                      onChange={(e) => setNewPosCode({ ...newPosCode, employee_name: e.target.value })}
+                      placeholder="e.g. Rahul Kumar"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    />
+                  </div>
+                  <button
+                    onClick={handleAddPosCode}
+                    className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition"
+                  >
+                    <Save size={18} />
+                  </button>
+                  <button
+                    onClick={() => { setShowAddPosCodeForm(false); setNewPosCode({ code: '', employee_name: '' }); }}
+                    className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition"
+                  >
+                    <X size={18} />
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* POS Codes Table */}
+            <div className="overflow-x-auto">
+              {posCodes.length === 0 ? (
+                <div className="p-8 text-center text-gray-500">
+                  <Monitor size={48} className="mx-auto mb-3 text-gray-300" />
+                  <p>No POS codes created yet.</p>
+                  <p className="text-sm">Click "Add POS Code" to create one.</p>
+                </div>
+              ) : (
+                <table className="w-full">
+                  <thead className="bg-gray-50 border-b border-gray-200">
+                    <tr>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Code</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Employee Name</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
+                      <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-200">
+                    {posCodes.map((pc) => (
+                      <tr key={pc.id} className="hover:bg-gray-50">
+                        {editingPosCodeId === pc.id ? (
+                          <>
+                            <td className="px-6 py-4">
+                              <input
+                                type="text"
+                                value={editPosCode.code}
+                                onChange={(e) => setEditPosCode({ ...editPosCode, code: e.target.value })}
+                                className="w-full px-2 py-1 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500"
+                                maxLength={10}
+                              />
+                            </td>
+                            <td className="px-6 py-4">
+                              <input
+                                type="text"
+                                value={editPosCode.employee_name}
+                                onChange={(e) => setEditPosCode({ ...editPosCode, employee_name: e.target.value })}
+                                className="w-full px-2 py-1 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500"
+                              />
+                            </td>
+                            <td className="px-6 py-4">
+                              <span className={`px-2 py-1 rounded-full text-xs font-medium ${pc.is_active ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                                {pc.is_active ? 'Active' : 'Inactive'}
+                              </span>
+                            </td>
+                            <td className="px-6 py-4 text-right space-x-2">
+                              <button onClick={() => handleUpdatePosCode(pc.id)} className="text-green-600 hover:text-green-800">
+                                <Save size={16} />
+                              </button>
+                              <button onClick={() => setEditingPosCodeId(null)} className="text-gray-500 hover:text-gray-700">
+                                <X size={16} />
+                              </button>
+                            </td>
+                          </>
+                        ) : (
+                          <>
+                            <td className="px-6 py-4 font-mono font-bold text-gray-800">{pc.code}</td>
+                            <td className="px-6 py-4 text-gray-700">{pc.employee_name}</td>
+                            <td className="px-6 py-4">
+                              <button
+                                onClick={() => handleTogglePosCodeActive(pc)}
+                                className={`px-2 py-1 rounded-full text-xs font-medium cursor-pointer ${pc.is_active ? 'bg-green-100 text-green-700 hover:bg-green-200' : 'bg-red-100 text-red-700 hover:bg-red-200'}`}
+                              >
+                                {pc.is_active ? 'Active' : 'Inactive'}
+                              </button>
+                            </td>
+                            <td className="px-6 py-4 text-right space-x-2">
+                              <button
+                                onClick={() => { setEditingPosCodeId(pc.id); setEditPosCode({ code: pc.code, employee_name: pc.employee_name }); }}
+                                className="text-blue-600 hover:text-blue-800"
+                              >
+                                <Edit2 size={16} />
+                              </button>
+                              <button onClick={() => handleDeletePosCode(pc.id)} className="text-red-600 hover:text-red-800">
+                                <Trash2 size={16} />
+                              </button>
+                            </td>
+                          </>
+                        )}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* GST Settings Tab */}
+        {activeTab === 'gst-settings' && (
+          <div className="bg-white rounded-lg shadow-sm border border-gray-200">
+            <div className="px-6 py-4 border-b border-gray-200">
+              <h2 className="text-lg font-semibold text-gray-800">GST Settings</h2>
+              <p className="text-sm text-gray-500">Configure your company's GST details for invoices and compliance</p>
+            </div>
+            {gstLoading ? (
+              <div className="p-8 text-center text-gray-500">Loading...</div>
+            ) : (
+              <div className="p-6 space-y-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Company GSTIN <span className="text-red-500">*</span></label>
+                    <input type="text" value={gstSettings.company_gstin} onChange={(e) => setGstSettings({ ...gstSettings, company_gstin: e.target.value.toUpperCase() })} maxLength={15} placeholder="e.g. 29AMVPI3949R1ZQ" className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500" />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Company Name</label>
+                    <input type="text" value={gstSettings.company_name} onChange={(e) => setGstSettings({ ...gstSettings, company_name: e.target.value })} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500" />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Registered State</label>
+                    <input type="text" value={gstSettings.registered_state} onChange={(e) => setGstSettings({ ...gstSettings, registered_state: e.target.value })} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500" />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">State Code</label>
+                    <input type="text" value={gstSettings.state_code} onChange={(e) => setGstSettings({ ...gstSettings, state_code: e.target.value })} maxLength={2} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500" />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">GST Registration Type</label>
+                    <select value={gstSettings.gst_registration_type} onChange={(e) => setGstSettings({ ...gstSettings, gst_registration_type: e.target.value })} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                      <option value="regular">Regular</option>
+                      <option value="composition">Composition</option>
+                      <option value="exempt">Exempt</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Financial Year Start</label>
+                    <select value={gstSettings.financial_year_start} onChange={(e) => setGstSettings({ ...gstSettings, financial_year_start: parseInt(e.target.value) })} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                      <option value={1}>January</option>
+                      <option value={4}>April</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Company Phone</label>
+                    <input type="text" value={gstSettings.company_phone} onChange={(e) => setGstSettings({ ...gstSettings, company_phone: e.target.value })} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500" />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Company Email</label>
+                    <input type="email" value={gstSettings.company_email} onChange={(e) => setGstSettings({ ...gstSettings, company_email: e.target.value })} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500" />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Company Address</label>
+                  <textarea value={gstSettings.company_address} onChange={(e) => setGstSettings({ ...gstSettings, company_address: e.target.value })} rows={2} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500" />
+                </div>
+                <div className="border-t pt-4 space-y-3">
+                  <h3 className="font-medium text-gray-800">E-Invoice & E-Way Bill</h3>
+                  <div className="flex items-center gap-6">
+                    <label className="flex items-center gap-2">
+                      <input type="checkbox" checked={gstSettings.e_invoice_enabled} onChange={(e) => setGstSettings({ ...gstSettings, e_invoice_enabled: e.target.checked })} className="w-4 h-4 text-blue-600 rounded" />
+                      <span className="text-sm text-gray-700">E-Invoice Enabled</span>
+                    </label>
+                    <label className="flex items-center gap-2">
+                      <input type="checkbox" checked={gstSettings.eway_bill_enabled} onChange={(e) => setGstSettings({ ...gstSettings, eway_bill_enabled: e.target.checked })} className="w-4 h-4 text-blue-600 rounded" />
+                      <span className="text-sm text-gray-700">E-Way Bill Enabled</span>
+                    </label>
+                  </div>
+                  {gstSettings.e_invoice_enabled && (
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">E-Invoice Username</label>
+                        <input type="text" value={gstSettings.e_invoice_username} onChange={(e) => setGstSettings({ ...gstSettings, e_invoice_username: e.target.value })} className="w-full px-3 py-2 border border-gray-300 rounded-lg" />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">E-Invoice Password</label>
+                        <input type="password" value={gstSettings.e_invoice_password} onChange={(e) => setGstSettings({ ...gstSettings, e_invoice_password: e.target.value })} className="w-full px-3 py-2 border border-gray-300 rounded-lg" />
+                      </div>
+                    </div>
+                  )}
+                </div>
+                <div className="flex justify-end">
+                  <button onClick={handleSaveGstSettings} disabled={gstSaving} className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition disabled:opacity-50">
+                    {gstSaving ? 'Saving...' : 'Save GST Settings'}
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* GST Reports Tab */}
+        {activeTab === 'gst-reports' && (
+          <div className="bg-white rounded-lg shadow-sm border border-gray-200">
+            <div className="px-6 py-4 border-b border-gray-200">
+              <h2 className="text-lg font-semibold text-gray-800">GST Reports</h2>
+              <p className="text-sm text-gray-500">Generate GSTR-1, GSTR-3B, and ITC reports for filing</p>
+            </div>
+            <div className="p-6 space-y-6">
+              <div className="flex flex-wrap items-end gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Report Type</label>
+                  <select value={reportType} onChange={(e) => { setReportType(e.target.value); setReportData(null); }} className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                    <option value="gstr1">GSTR-1 (Outward Supplies)</option>
+                    <option value="gstr3b">GSTR-3B (Summary Return)</option>
+                    <option value="itc">ITC Report (Input Tax Credit)</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Start Date</label>
+                  <input type="date" value={reportStartDate} onChange={(e) => setReportStartDate(e.target.value)} className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">End Date</label>
+                  <input type="date" value={reportEndDate} onChange={(e) => setReportEndDate(e.target.value)} className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500" />
+                </div>
+                <button onClick={fetchGstReport} disabled={reportLoading} className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition disabled:opacity-50 flex items-center gap-2">
+                  <BarChart3 size={16} />
+                  {reportLoading ? 'Loading...' : 'Generate Report'}
+                </button>
+              </div>
+
+              {reportData && (
+                <div className="border-t pt-4">
+                  {reportType === 'gstr1' && (
+                    <div className="space-y-4">
+                      <h3 className="font-semibold text-gray-800">GSTR-1 Summary</h3>
+                      <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+                        <div className="bg-blue-50 p-3 rounded-lg"><p className="text-xs text-gray-500">Total Invoices</p><p className="text-lg font-bold text-blue-700">{reportData.totals?.total_invoices || 0}</p></div>
+                        <div className="bg-green-50 p-3 rounded-lg"><p className="text-xs text-gray-500">Taxable Value</p><p className="text-lg font-bold text-green-700">{(reportData.totals?.total_taxable || 0).toFixed(2)}</p></div>
+                        <div className="bg-orange-50 p-3 rounded-lg"><p className="text-xs text-gray-500">CGST</p><p className="text-lg font-bold text-orange-700">{(reportData.totals?.total_cgst || 0).toFixed(2)}</p></div>
+                        <div className="bg-orange-50 p-3 rounded-lg"><p className="text-xs text-gray-500">SGST</p><p className="text-lg font-bold text-orange-700">{(reportData.totals?.total_sgst || 0).toFixed(2)}</p></div>
+                        <div className="bg-purple-50 p-3 rounded-lg"><p className="text-xs text-gray-500">IGST</p><p className="text-lg font-bold text-purple-700">{(reportData.totals?.total_igst || 0).toFixed(2)}</p></div>
+                      </div>
+                      <div className="grid grid-cols-3 gap-4 text-sm">
+                        <div className="bg-gray-50 p-3 rounded"><p className="font-medium">B2B Invoices</p><p className="text-gray-600">{reportData.b2b?.length || 0}</p></div>
+                        <div className="bg-gray-50 p-3 rounded"><p className="font-medium">B2C Large</p><p className="text-gray-600">{reportData.b2c_large?.length || 0}</p></div>
+                        <div className="bg-gray-50 p-3 rounded"><p className="font-medium">B2C Small</p><p className="text-gray-600">{reportData.b2c_small?.length || 0}</p></div>
+                      </div>
+                    </div>
+                  )}
+                  {reportType === 'gstr3b' && (
+                    <div className="space-y-4">
+                      <h3 className="font-semibold text-gray-800">GSTR-3B Summary</h3>
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div className="bg-red-50 p-4 rounded-lg border border-red-100">
+                          <p className="text-sm font-medium text-red-800">Tax Collected (Outward)</p>
+                          <p className="text-2xl font-bold text-red-700 mt-1">{(reportData.summary?.total_tax_collected || 0).toFixed(2)}</p>
+                        </div>
+                        <div className="bg-green-50 p-4 rounded-lg border border-green-100">
+                          <p className="text-sm font-medium text-green-800">ITC Available (Inward)</p>
+                          <p className="text-2xl font-bold text-green-700 mt-1">{(reportData.summary?.total_itc || 0).toFixed(2)}</p>
+                        </div>
+                        <div className="bg-blue-50 p-4 rounded-lg border border-blue-100">
+                          <p className="text-sm font-medium text-blue-800">Net Tax Payable</p>
+                          <p className="text-2xl font-bold text-blue-700 mt-1">{(reportData.summary?.net_payable || 0).toFixed(2)}</p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                  {reportType === 'itc' && (
+                    <div className="space-y-4">
+                      <h3 className="font-semibold text-gray-800">Input Tax Credit Report</h3>
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div className="bg-green-50 p-4 rounded-lg"><p className="text-sm text-gray-600">Eligible ITC (CGST)</p><p className="text-xl font-bold text-green-700">{(reportData.eligible_itc?.total_cgst || 0).toFixed(2)}</p></div>
+                        <div className="bg-green-50 p-4 rounded-lg"><p className="text-sm text-gray-600">Eligible ITC (SGST)</p><p className="text-xl font-bold text-green-700">{(reportData.eligible_itc?.total_sgst || 0).toFixed(2)}</p></div>
+                        <div className="bg-green-50 p-4 rounded-lg"><p className="text-sm text-gray-600">Eligible ITC (IGST)</p><p className="text-xl font-bold text-green-700">{(reportData.eligible_itc?.total_igst || 0).toFixed(2)}</p></div>
+                      </div>
+                      <div className="grid grid-cols-2 gap-4 text-sm">
+                        <div className="bg-gray-50 p-3 rounded"><p className="font-medium">Total Bills</p><p className="text-gray-600">{reportData.summary?.total_bills || 0}</p></div>
+                        <div className="bg-red-50 p-3 rounded"><p className="font-medium">Blocked ITC Bills</p><p className="text-gray-600">{reportData.summary?.blocked_count || 0}</p></div>
+                      </div>
+                    </div>
+                  )}
+                </div>
               )}
             </div>
           </div>

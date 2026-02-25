@@ -106,7 +106,13 @@ export class CustomersService {
         .join(', ');
     }
 
-    // Create customer object with only columns that exist in DB
+    // Extract state code from GSTIN (first 2 digits)
+    let stateCode = customerData.state_code || null;
+    if (!stateCode && customerData.gstin && customerData.gstin.length >= 2) {
+      stateCode = customerData.gstin.substring(0, 2);
+    }
+
+    // Create customer object with columns that exist in DB (including GST columns from migration 037)
     const newCustomer: any = {
       customer_name: customerName,
       company_name: customerData.company_name || null,
@@ -117,6 +123,8 @@ export class CustomersService {
       shipping_address: customerData.shipping_address || null,
       gstin: customerData.gstin || null,
       pan: customerData.pan || null,
+      gst_treatment: customerData.gst_treatment || 'consumer',
+      state_code: stateCode,
       payment_terms: customerData.payment_terms || 'Net 30',
       opening_balance: customerData.opening_balance ? parseFloat(customerData.opening_balance) : 0,
     };
@@ -160,6 +168,8 @@ export class CustomersService {
     if (customerData.shipping_address !== undefined) updateData.shipping_address = customerData.shipping_address;
     if (customerData.gstin !== undefined) updateData.gstin = customerData.gstin;
     if (customerData.pan !== undefined) updateData.pan = customerData.pan;
+    if (customerData.gst_treatment !== undefined) updateData.gst_treatment = customerData.gst_treatment;
+    if (customerData.state_code !== undefined) updateData.state_code = customerData.state_code;
     if (customerData.payment_terms !== undefined) updateData.payment_terms = customerData.payment_terms;
     if (customerData.opening_balance !== undefined) updateData.opening_balance = parseFloat(customerData.opening_balance);
 
