@@ -413,7 +413,7 @@ const NewItemForm = () => {
           costPrice: item.cost_price ? item.cost_price.toString() : '',
           purchaseAccount: 'Cost of Goods Sold',
           purchaseDescription: '', // Not in item interface shown
-          preferredVendor: item.supplier_id || '',
+          preferredVendor: item.preferred_vendor_id || item.supplier_id || '',
 
           // Inventory Tracking
           trackInventory: true,
