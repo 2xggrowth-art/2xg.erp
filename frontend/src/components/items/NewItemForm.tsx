@@ -9,6 +9,8 @@ import { useAuth } from '../../contexts/AuthContext';
 import CreatableSelect from '../shared/CreatableSelect';
 import CategoryPicker from '../shared/CategoryPicker';
 import BrandManufacturerUploadModal from './BrandManufacturerUploadModal';
+import { itemSizesService, ItemSize } from '../../services/itemSizes.service';
+import { itemColorsService, ItemColor } from '../../services/itemColors.service';
 
 const NewItemForm = () => {
   const navigate = useNavigate();
@@ -27,6 +29,8 @@ const NewItemForm = () => {
   const [allSubcategories, setAllSubcategories] = useState<ProductSubcategory[]>([]);
   const [brands, setBrands] = useState<Brand[]>([]);
   const [manufacturers, setManufacturers] = useState<Manufacturer[]>([]);
+  const [itemSizes, setItemSizes] = useState<ItemSize[]>([]);
+  const [itemColors, setItemColors] = useState<ItemColor[]>([]);
   const [formData, setFormData] = useState({
     type: ['goods'] as string[],
     name: '',
@@ -79,6 +83,8 @@ const NewItemForm = () => {
     fetchAllSubcategories();
     fetchBrands();
     fetchManufacturers();
+    fetchItemSizes();
+    fetchItemColors();
     if (isEditMode && id) {
       fetchItemDetails(id);
     } else {
@@ -171,6 +177,82 @@ const NewItemForm = () => {
       }
     } catch (error) {
       console.error('Error fetching manufacturers:', error);
+    }
+  };
+
+  const fetchItemSizes = async () => {
+    try {
+      const response = await itemSizesService.getAllItemSizes();
+      if (response.data.success) {
+        setItemSizes(response.data.data);
+      }
+    } catch (error) {
+      console.error('Error fetching item sizes:', error);
+    }
+  };
+
+  const fetchItemColors = async () => {
+    try {
+      const response = await itemColorsService.getAllItemColors();
+      if (response.data.success) {
+        setItemColors(response.data.data);
+      }
+    } catch (error) {
+      console.error('Error fetching item colors:', error);
+    }
+  };
+
+  const handleCreateSize = async (name: string) => {
+    try {
+      const response = await itemSizesService.createItemSize({ name });
+      if (response.data.success) {
+        setItemSizes(prev => [...prev, response.data.data]);
+        setFormData(prev => ({ ...prev, size: name }));
+      }
+    } catch (error) {
+      console.error('Error creating size:', error);
+      alert('Failed to create size');
+    }
+  };
+
+  const handleDeleteSize = async (id: string) => {
+    try {
+      await itemSizesService.deleteItemSize(id);
+      const deleted = itemSizes.find(s => s.id === id);
+      setItemSizes(prev => prev.filter(s => s.id !== id));
+      if (deleted && deleted.name === formData.size) {
+        setFormData(prev => ({ ...prev, size: '' }));
+      }
+    } catch (error) {
+      console.error('Error deleting size:', error);
+      alert('Failed to delete size');
+    }
+  };
+
+  const handleCreateColor = async (name: string) => {
+    try {
+      const response = await itemColorsService.createItemColor({ name });
+      if (response.data.success) {
+        setItemColors(prev => [...prev, response.data.data]);
+        setFormData(prev => ({ ...prev, color: name }));
+      }
+    } catch (error) {
+      console.error('Error creating color:', error);
+      alert('Failed to create color');
+    }
+  };
+
+  const handleDeleteColor = async (id: string) => {
+    try {
+      await itemColorsService.deleteItemColor(id);
+      const deleted = itemColors.find(c => c.id === id);
+      setItemColors(prev => prev.filter(c => c.id !== id));
+      if (deleted && deleted.name === formData.color) {
+        setFormData(prev => ({ ...prev, color: '' }));
+      }
+    } catch (error) {
+      console.error('Error deleting color:', error);
+      alert('Failed to delete color');
     }
   };
 
@@ -526,7 +608,7 @@ const NewItemForm = () => {
       <div className="max-w-5xl mx-auto p-6">
         <form onSubmit={handleSubmit} className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 space-y-6">
 
-          {/* Type Selection - Checklist */}
+          {/* Type Selection - Radio */}
           <div className="grid grid-cols-4 gap-4 items-center">
             <label className="text-sm font-medium text-gray-700 flex items-center gap-1">
               Type
@@ -536,17 +618,16 @@ const NewItemForm = () => {
               {['goods', 'service', 'free_accessories', 'offers'].map((t) => (
                 <label key={t} className="flex items-center gap-2 cursor-pointer">
                   <input
-                    type="checkbox"
-                    checked={formData.type.includes(t)}
-                    onChange={(e) => {
+                    type="radio"
+                    name="itemType"
+                    checked={formData.type[0] === t}
+                    onChange={() => {
                       setFormData(prev => ({
                         ...prev,
-                        type: e.target.checked
-                          ? [...prev.type, t]
-                          : prev.type.filter(v => v !== t)
+                        type: [t]
                       }));
                     }}
-                    className="w-4 h-4 text-blue-600 rounded"
+                    className="w-4 h-4 text-blue-600"
                   />
                   <span className="text-sm text-gray-700">
                     {t === 'goods' ? 'Goods' : t === 'service' ? 'Service' : t === 'free_accessories' ? 'Free Accessories' : 'Offers'}
@@ -578,35 +659,39 @@ const NewItemForm = () => {
           <div className="grid grid-cols-4 gap-4 items-center">
             <label className="text-sm font-medium text-gray-700">Size</label>
             <div className="col-span-3 grid grid-cols-3 gap-4">
-              <input
-                type="text"
-                name="size"
+              <CreatableSelect
+                options={itemSizes.map(s => ({ id: s.id, name: s.name }))}
                 value={formData.size}
-                onChange={handleInputChange}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                placeholder="e.g. S, M, L, XL"
+                onChange={(val) => setFormData(prev => ({ ...prev, size: val }))}
+                onCreateOption={handleCreateSize}
+                onDeleteOption={handleDeleteSize}
+                placeholder="Select or add size"
+                label="size"
               />
               <div>
                 <label className="text-sm font-medium text-gray-700 block mb-1">Color</label>
-                <input
-                  type="text"
-                  name="color"
+                <CreatableSelect
+                  options={itemColors.map(c => ({ id: c.id, name: c.name }))}
                   value={formData.color}
-                  onChange={handleInputChange}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  placeholder="e.g. Red, Blue"
+                  onChange={(val) => setFormData(prev => ({ ...prev, color: val }))}
+                  onCreateOption={handleCreateColor}
+                  onDeleteOption={handleDeleteColor}
+                  placeholder="Select or add color"
+                  label="color"
                 />
               </div>
               <div>
                 <label className="text-sm font-medium text-gray-700 block mb-1">Variant</label>
-                <input
-                  type="text"
+                <select
                   name="variant"
                   value={formData.variant}
                   onChange={handleInputChange}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  placeholder="e.g. 128GB, Cotton"
-                />
+                >
+                  <option value="">Select variant</option>
+                  <option value="MS">MS</option>
+                  <option value="SS">SS</option>
+                </select>
               </div>
             </div>
           </div>

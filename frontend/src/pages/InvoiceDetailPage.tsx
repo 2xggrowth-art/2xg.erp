@@ -42,6 +42,7 @@ interface Invoice {
   customer_name: string;
   customer_email?: string;
   customer_phone?: string;
+  customer_gstin?: string;
   billing_address?: string;
   shipping_address?: string;
   invoice_date: string;
@@ -56,6 +57,8 @@ interface Invoice {
   balance_due: number;
   notes?: string;
   terms_conditions?: string;
+  payment_terms?: string;
+  salesperson_name?: string;
   line_items: LineItem[];
   payment_history?: Array<{
     id: string;
@@ -89,10 +92,14 @@ const InvoiceDetailPage: React.FC = () => {
         // Map backend data to frontend Invoice interface
         const mappedInvoice: Invoice = {
           ...backendData,
+          notes: backendData.notes || backendData.customer_notes,
+          terms_conditions: backendData.terms_conditions || backendData.terms_and_conditions,
+          payment_terms: backendData.payment_terms || 'Due on Receipt',
+          salesperson_name: backendData.salesperson_name,
           line_items: (backendData.items || []).map((item: any) => ({
-            id: item.id || item.item_id || Math.random().toString(), // Fallback ID
+            id: item.id || item.item_id || Math.random().toString(),
             item_name: item.item_name,
-            sku: item.sku || '', // Backend might not return SKU in items
+            sku: item.sku || '',
             quantity: item.quantity,
             unit_price: item.rate,
             discount: item.discount || 0,
@@ -168,11 +175,13 @@ const InvoiceDetailPage: React.FC = () => {
     customer_name: inv.customer_name,
     customer_email: inv.customer_email,
     customer_phone: inv.customer_phone,
+    customer_gstin: inv.customer_gstin,
     billing_address: inv.billing_address,
     shipping_address: inv.shipping_address,
     invoice_date: inv.invoice_date,
     due_date: inv.due_date,
-    payment_terms: 'Due on Receipt',
+    payment_terms: inv.payment_terms || 'Due on Receipt',
+    salesperson_name: inv.salesperson_name,
     status: inv.status,
     subtotal: inv.subtotal,
     tax_amount: inv.tax_amount,
@@ -186,7 +195,7 @@ const InvoiceDetailPage: React.FC = () => {
     line_items: inv.line_items.map(item => ({
       item_name: item.item_name,
       sku: item.sku,
-      hsn_code: item.sku, // Use SKU as HSN code placeholder
+      hsn_code: item.sku,
       quantity: item.quantity,
       unit_price: item.unit_price,
       discount: item.discount,

@@ -16,10 +16,16 @@ interface Invoice {
   items?: any[];
 }
 
-const NewDeliveryChallanForm = () => {
+interface NewDeliveryChallanFormProps {
+  isModal?: boolean;
+  onClose?: () => void;
+  onSuccess?: () => void;
+}
+
+const NewDeliveryChallanForm = ({ isModal, onClose, onSuccess }: NewDeliveryChallanFormProps = {}) => {
   const navigate = useNavigate();
   const { id } = useParams<{ id: string }>();
-  const isEditMode = !!id;
+  const isEditMode = !isModal && !!id;
   const [loading, setLoading] = useState(false);
   const [fetching, setFetching] = useState(false);
   const [challanNumber, setChallanNumber] = useState('');
@@ -272,7 +278,9 @@ const NewDeliveryChallanForm = () => {
 
       if (response.success) {
         alert(`Delivery Challan ${challanNumber} ${isEditMode ? 'updated' : (status === 'draft' ? 'saved as draft' : 'confirmed')} successfully!`);
-        if (isEditMode && id) {
+        if (isModal && onSuccess) {
+          onSuccess();
+        } else if (isEditMode && id) {
           navigate(`/logistics/delivery-challan/${id}`);
         } else {
           navigate('/logistics/delivery-challan');
@@ -287,17 +295,25 @@ const NewDeliveryChallanForm = () => {
     }
   };
 
+  const handleCancel = () => {
+    if (isModal && onClose) {
+      onClose();
+    } else {
+      navigate('/logistics/delivery-challan');
+    }
+  };
+
   return (
-    <div className="max-w-7xl mx-auto w-full p-6">
+    <div className={isModal ? 'w-full' : 'max-w-7xl mx-auto w-full p-6'}>
       <div className="space-y-6">
         {/* Header */}
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-3xl font-bold text-slate-800">{isEditMode ? 'Edit Delivery Challan' : 'New Delivery Challan'}</h1>
+            <h1 className={`${isModal ? 'text-xl' : 'text-3xl'} font-bold text-slate-800`}>{isEditMode ? 'Edit Delivery Challan' : 'New Delivery Challan'}</h1>
             <p className="text-slate-600 mt-1">{isEditMode ? 'Update delivery challan details' : 'Create a new delivery challan for goods movement'}</p>
           </div>
           <button
-            onClick={() => navigate('/logistics/delivery-challan')}
+            onClick={handleCancel}
             className="px-4 py-2 text-slate-600 hover:text-slate-800 transition-colors"
           >
             Cancel
@@ -498,7 +514,7 @@ const NewDeliveryChallanForm = () => {
           {/* Actions */}
           <div className="flex items-center justify-between pt-6 border-t border-slate-200">
             <button
-              onClick={() => navigate('/logistics/delivery-challan')}
+              onClick={handleCancel}
               disabled={loading}
               className="px-6 py-2 border border-slate-300 text-slate-700 rounded hover:bg-slate-50 transition-colors disabled:opacity-50 text-sm"
             >

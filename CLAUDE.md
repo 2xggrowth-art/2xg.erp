@@ -9,6 +9,8 @@ Monorepo for the 2XG ERP system. **Active code is at root level** (not inside `2
 ```
 /backend/              → Express + TypeScript + Supabase (DEPLOYED by Coolify)
 /frontend/             → React 18 + Vite + TypeScript + Tailwind CSS (DEPLOYED by Coolify)
+/mobile/               → React Native mobile app (technician/buildline)
+/stockcount-app/       → Node.js Google Sheets stock count sync tool
 /2xg-dashboard/        → LEGACY copy — DO NOT EDIT or deploy from here
 ```
 
@@ -92,9 +94,9 @@ backend/src/
 ├── server.ts              # Express app, CORS, route registration
 ├── config/supabase.ts     # Supabase admin client (service role key)
 ├── middleware/             # Auth middleware
-├── routes/                # 30 route files
-├── controllers/           # 29 controller files
-├── services/              # 31 service files
+├── routes/                # 39 route files
+├── controllers/           # 38 controller files
+├── services/              # 41 service files (incl. scheduleChecker for auto stock counts)
 ├── types/index.ts
 └── utils/
     ├── database-schema.sql
@@ -102,17 +104,17 @@ backend/src/
     └── seedData.ts
 ```
 
-**30 API route prefixes** (registered in `server.ts`):
+**39 API route prefixes** (registered in `server.ts`):
 
 Public:
 `/api/auth`, `/api/mobile-auth`
 
 Protected (require JWT):
-`/api/erp`, `/api/logistics`, `/api/care`, `/api/crm`, `/api/items`, `/api/purchases`, `/api/vendors`, `/api/purchase-orders`, `/api/bills`, `/api/sales`, `/api/expenses`, `/api/tasks`, `/api/reports`, `/api/search`, `/api/ai`, `/api/payments`, `/api/vendor-credits`, `/api/transfer-orders`, `/api/invoices`, `/api/customers`, `/api/sales-orders`, `/api/payments-received`, `/api/delivery-challans`, `/api/bin-locations`, `/api/locations`, `/api/brands`, `/api/manufacturers`, `/api/pos-sessions`
+`/api/erp`, `/api/logistics`, `/api/care`, `/api/crm`, `/api/items`, `/api/purchases`, `/api/vendors`, `/api/purchase-orders`, `/api/bills`, `/api/sales`, `/api/expenses`, `/api/tasks`, `/api/reports`, `/api/search`, `/api/ai`, `/api/payments`, `/api/vendor-credits`, `/api/transfer-orders`, `/api/invoices`, `/api/customers`, `/api/sales-orders`, `/api/payments-received`, `/api/delivery-challans`, `/api/bin-locations`, `/api/locations`, `/api/brands`, `/api/manufacturers`, `/api/pos-sessions`, `/api/batches`, `/api/stock-counts`, `/api/damage-reports`, `/api/placement-tasks`, `/api/transfer-tasks`, `/api/placement-history`, `/api/admin`, `/api/exchanges`, `/api/assembly`
 
 ### Backend Migrations
 
-Located in `backend/migrations/`. Each file exports `up` and `down` SQL strings. Run via Supabase pg-meta endpoint.
+Located in `backend/migrations/`. Each file exports `up` and `down` SQL strings. Run via Supabase pg-meta endpoint. Runner scripts (`run_0XX.js`) execute migrations.
 
 | Migration | Purpose |
 |-----------|---------|
@@ -121,6 +123,23 @@ Located in `backend/migrations/`. Each file exports `up` and `down` SQL strings.
 | `007_add_subcategories.js` | Create `product_subcategories` table, add `subcategory_id` to items |
 | `008_recreate_transfer_orders.js` | Drop/recreate `transfer_orders` + `transfer_order_items` tables |
 | `009_create_transfer_order_allocations.js` | Create `transfer_order_allocations` for stock movement tracking |
+| `010_add_serial_numbers_to_bin_allocations.js` | Serial numbers on bin allocations |
+| `011_add_premium_and_incentive_to_items.js` | Premium/incentive fields on items |
+| `012_add_pos_session_id_to_invoices.js` | Link invoices to POS sessions |
+| `013_create_item_batches.js` | Batch tracking system (`item_batches`, `batch_deductions`) |
+| `014_create_stock_counts.js` | Stock count management tables |
+| `015_create_damage_reports.js` | Damage reporting system |
+| `016_create_putaway_tasks.js` | Putaway/placement task system |
+| `021_add_mobile_user_role.js` | Mobile user role support |
+| `025_create_placement_transfer_schedules.js` | Automated placement/transfer schedules |
+| `027_create_audit_logs.js` | System-wide audit logging |
+| `028_create_exchange_items.js` | Exchange items table |
+| `029_create_buildline_assembly.js` | **Buildline assembly system** (journeys, stages, checklists) |
+| `030_add_auto_generated_to_stock_counts.js` | Auto-generated stock count flag |
+| `031_add_pin_to_users.js` | PIN authentication for mobile users |
+| `032_add_item_details_to_assembly_journeys.js` | item_name, item_color, item_size on assembly journeys |
+| `033_fix_technician_queue_item_details.js` | Fix technician queue RPC for item details |
+| `034_add_item_details_to_kanban_view.js` | Item details in buildline kanban view |
 
 ### Frontend — Components → Services (axios) → Backend API
 
@@ -148,11 +167,12 @@ frontend/src/
 │   ├── pos/                # Point of sale
 │   ├── reports/            # Report components
 │   ├── shared/             # CategoryPicker, CreatableSelect, ItemSelector
+│   ├── buildline/          # Supervisor dashboard, technician dashboard, assembly, kanban
 │   └── modules/            # ERP, Logistics, CARE, CRM
 ├── contexts/               # Auth, DateFilter contexts
 ├── hooks/
-├── pages/                  # 50 page components
-├── services/               # 27 API service files (incl. api.client.ts)
+├── pages/                  # 54 page components
+├── services/               # 31 API service files (incl. api.client.ts)
 ├── types/
 └── utils/
     ├── csvParser.ts
@@ -511,8 +531,14 @@ cd backend && npm run test-connection                                 # Supabase
 | `backend/src/services/transfer-orders.service.ts` | Transfer orders with stock movement processing |
 | `backend/src/services/locations.service.ts` | Location CRUD |
 | `backend/src/services/items.service.ts` | Items, categories, subcategories |
+| `backend/src/services/assembly.service.ts` | Buildline assembly journeys, stages, checklists |
+| `backend/src/services/batches.service.ts` | Batch tracking, FIFO deduction |
+| `backend/src/services/stockCounts.service.ts` | Stock count management |
+| `backend/src/services/damageReports.service.ts` | Damage reporting |
+| `backend/src/services/exchanges.service.ts` | Exchange items |
+| `backend/src/services/scheduleChecker.service.ts` | Auto stock count generation (hourly) |
 | `backend/src/utils/database-schema.sql` | Base DB schema |
-| `backend/migrations/` | SQL migration files (005-009) |
+| `backend/migrations/` | SQL migration files (001-034) |
 | `frontend/.env.production` | API URL (overridden by Coolify env) |
 | `frontend/src/services/api.client.ts` | Axios base config with auth interceptor |
 | `frontend/src/App.tsx` | All frontend routes |

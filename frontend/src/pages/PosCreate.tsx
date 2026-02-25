@@ -10,6 +10,7 @@ import { paymentsReceivedService } from '../services/payments-received.service';
 import { binLocationService } from '../services/binLocation.service';
 import { exchangesService, ExchangeItem } from '../services/exchanges.service';
 import SplitPaymentModal from '../components/pos/SplitPaymentModal';
+import NewDeliveryChallanForm from '../components/delivery-challans/NewDeliveryChallanForm';
 
 // Define the shape of a Cart Item
 interface BinAllocation {
@@ -114,8 +115,9 @@ const PosCreate: React.FC = () => {
   const [discountValue, setDiscountValue] = useState<number>(0);
 
   // Delivery option states
-  const [deliveryOption, setDeliveryOption] = useState<'self_pickup' | 'delivery'>('self_pickup');
+  const [deliveryOption, setDeliveryOption] = useState<'self_pickup' | 'delivery' | null>(null);
   const [showDeliveryDropdown, setShowDeliveryDropdown] = useState(false);
+  const [showDeliveryChallanModal, setShowDeliveryChallanModal] = useState(false);
   const [processingPayment, setProcessingPayment] = useState(false);
   const [showBillSuccess, setShowBillSuccess] = useState(false);
   const [generatedInvoice, setGeneratedInvoice] = useState<any>(null);
@@ -539,6 +541,15 @@ const PosCreate: React.FC = () => {
 
     if (cart.length === 0) {
       alert('Please add items to the cart first');
+      return;
+    }
+
+    const missing: string[] = [];
+    if (!selectedCustomer) missing.push('Customer');
+    if (!selectedSalesperson) missing.push('Salesperson');
+    if (!deliveryOption) missing.push('Delivery Option');
+    if (missing.length > 0) {
+      alert(`Please select: ${missing.join(', ')}`);
       return;
     }
 
@@ -1525,8 +1536,8 @@ const PosCreate: React.FC = () => {
         </div>
 
         {/* Right Sidebar */}
-        <div className="w-[420px] flex flex-col bg-white border-l border-gray-200">
-          <div className="p-5 space-y-5">
+        <div className="w-[420px] flex flex-col bg-white border-l border-gray-200 overflow-hidden">
+          <div className="p-5 space-y-5 overflow-y-auto flex-shrink">
             {selectedCustomer ? (
               <div className="flex justify-between items-start p-4 bg-blue-50 border border-blue-200 rounded-lg">
                 <div className="flex gap-3">
@@ -1594,9 +1605,9 @@ const PosCreate: React.FC = () => {
               <div className="relative">
                 <button
                   onClick={() => setShowDeliveryDropdown(!showDeliveryDropdown)}
-                  className={`w-full text-left px-4 py-2.5 rounded-lg hover:bg-gray-100 transition-colors ${deliveryOption === 'delivery' ? 'bg-blue-50 text-blue-700 border border-blue-200' : ''}`}
+                  className={`w-full text-left px-4 py-2.5 rounded-lg hover:bg-gray-100 transition-colors ${deliveryOption === 'delivery' ? 'bg-blue-50 text-blue-700 border border-blue-200' : deliveryOption === 'self_pickup' ? 'bg-green-50 text-green-700 border border-green-200' : ''}`}
                 >
-                  {deliveryOption === 'delivery' ? 'Delivery: Delivery' : 'Delivery: Self Pickup'} [Alt+Shift+D]
+                  {deliveryOption === 'delivery' ? 'Delivery: Delivery' : deliveryOption === 'self_pickup' ? 'Delivery: Self Pickup' : 'Delivery [Alt+Shift+D]'}
                 </button>
                 {showDeliveryDropdown && (
                   <div className="absolute left-0 right-0 top-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg z-10">
@@ -1607,7 +1618,7 @@ const PosCreate: React.FC = () => {
                       Self Pickup
                     </button>
                     <button
-                      onClick={() => { setDeliveryOption('delivery'); setShowDeliveryDropdown(false); }}
+                      onClick={() => { setDeliveryOption('delivery'); setShowDeliveryDropdown(false); setShowDeliveryChallanModal(true); }}
                       className={`w-full text-left px-4 py-2.5 hover:bg-gray-100 transition-colors text-sm ${deliveryOption === 'delivery' ? 'bg-blue-50 text-blue-700 font-semibold' : ''}`}
                     >
                       Delivery
@@ -1624,7 +1635,7 @@ const PosCreate: React.FC = () => {
             </div>
           </div>
 
-          <div className="mt-auto p-5 bg-gray-50 border-t border-gray-200">
+          <div className="mt-auto p-5 bg-gray-50 border-t border-gray-200 flex-shrink-0">
             <div className="mb-5">
               <div className="flex justify-between items-center text-sm text-gray-500 mb-1">
                 <span>Subtotal ({cart.length} items, {totalQty} qty)</span>
@@ -1686,7 +1697,17 @@ const PosCreate: React.FC = () => {
                 D/B CREDIT CARD / EM
               </button>
               <button
-                onClick={() => setShowSplitPaymentModal(true)}
+                onClick={() => {
+                  const missing: string[] = [];
+                  if (!selectedCustomer) missing.push('Customer');
+                  if (!selectedSalesperson) missing.push('Salesperson');
+                  if (!deliveryOption) missing.push('Delivery Option');
+                  if (missing.length > 0) {
+                    alert(`Please select: ${missing.join(', ')}`);
+                    return;
+                  }
+                  setShowSplitPaymentModal(true);
+                }}
                 disabled={cart.length === 0 || processingPayment}
                 className="py-2.5 bg-white border border-gray-300 hover:bg-gray-100 text-gray-700 rounded-lg text-xs font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
@@ -2327,6 +2348,19 @@ const PosCreate: React.FC = () => {
           customerMobile={selectedCustomer?.mobile}
           onComplete={handleSplitPaymentComplete}
         />
+
+        {/* Delivery Challan Modal */}
+        {showDeliveryChallanModal && (
+          <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+            <div className="bg-white rounded-xl w-[700px] max-h-[90vh] overflow-y-auto shadow-2xl p-6">
+              <NewDeliveryChallanForm
+                isModal
+                onClose={() => setShowDeliveryChallanModal(false)}
+                onSuccess={() => setShowDeliveryChallanModal(false)}
+              />
+            </div>
+          </div>
+        )}
 
         {/* Cash Movement Modal */}
         {showCashMovementModal && activeSession && (

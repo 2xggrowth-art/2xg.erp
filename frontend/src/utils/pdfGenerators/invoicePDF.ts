@@ -30,6 +30,7 @@ export interface InvoicePDFData {
   due_date?: string;
   payment_terms?: string;
   salesperson_name?: string;
+  source?: string;
   status: string;
   subtotal: number;
   tax_amount?: number;
@@ -47,12 +48,14 @@ interface CompanyInfo {
   name: string;
   tagline: string;
   address: string;
+  addressLine2: string;
   city: string;
   state: string;
   postalCode: string;
   country: string;
   phone: string;
   email: string;
+  website: string;
   gstin: string;
   bankName: string;
   accountHolder: string;
@@ -62,27 +65,28 @@ interface CompanyInfo {
   accountType: string;
 }
 
-// Company information (can be made configurable via settings later)
+// Company information
 const getCompanyInfo = (): CompanyInfo => ({
-  name: '2XG BUSINESS SUITE',
-  tagline: 'Business Suite',
-  address: 'Business Address',
-  city: 'City',
-  state: 'State',
-  postalCode: '000000',
+  name: 'BHARAT CYCLE HUB',
+  tagline: 'Defined By Service & Expertise',
+  address: 'Main Road, Chikka Bommasandra, Yelahanka',
+  addressLine2: 'Bengaluru, Karnataka 560065',
+  city: 'bangalore',
+  state: 'Karnataka',
+  postalCode: '560065',
   country: 'India',
-  phone: '+91 98765 43210',
-  email: 'info@2xg.com',
-  gstin: '29XXXXXXXXXXXZX',
-  bankName: 'State Bank of India',
-  accountHolder: '2XG ENTERPRISES',
-  accountNumber: '1234567890',
-  ifscCode: 'SBIN0001234',
-  branchName: 'Main Branch',
+  phone: '9380097119',
+  email: 'inventory.bharathcyclehub@gmail.com',
+  website: 'Bharathcyclehub.com',
+  gstin: '29AMVPI3949R1ZQ',
+  bankName: 'HDFC',
+  accountHolder: 'BHARAT CYCLE HUB',
+  accountNumber: '50200078092592',
+  ifscCode: 'HDFC0000371',
+  branchName: 'YELAHANKA',
   accountType: 'CURRENT'
 });
 
-// Helper functions
 const formatDate = (dateString: string): string => {
   const date = new Date(dateString);
   return date.toLocaleDateString('en-IN', {
@@ -99,374 +103,504 @@ const formatCurrency = (amount: number): string => {
   }).format(amount);
 };
 
-const getStatusColor = (status: string): [number, number, number] => {
-  switch (status.toLowerCase()) {
-    case 'paid':
-      return [39, 174, 96]; // Green
-    case 'sent':
-    case 'viewed':
-      return [41, 128, 185]; // Blue
-    case 'draft':
-      return [149, 165, 166]; // Gray
-    case 'overdue':
-    case 'cancelled':
-      return [231, 76, 60]; // Red
-    case 'partial':
-    case 'partially_paid':
-      return [243, 156, 18]; // Orange
-    default:
-      return [0, 0, 0]; // Black
-  }
-};
+// Shared drawing constants
+const ML = 14;       // margin left
+const MR = 14;       // margin right
+const LW = 0.3;      // line width for borders
 
 /**
- * Generate a professional GST Tax Invoice PDF
+ * Generate a professional GST Tax Invoice PDF with proper bordered sections
  */
 export const generateInvoicePDF = (invoice: InvoicePDFData): jsPDF => {
   const doc = new jsPDF();
   const company = getCompanyInfo();
-  const pageWidth = doc.internal.pageSize.width;
-  let currentY = 15;
+  const PW = doc.internal.pageSize.width;   // page width
+  const CW = PW - ML - MR;                 // content width
+  const RE = PW - MR;                      // right edge
 
-  // ==================== SECTION 1: COMPANY HEADER ====================
-  // Company name (left side)
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(18);
-  doc.setTextColor(0, 0, 0);
-  doc.text(company.name, 14, currentY);
+  // Set consistent border style
+  const setBorder = () => {
+    doc.setDrawColor(0, 0, 0);
+    doc.setLineWidth(LW);
+  };
 
-  // Company tagline
-  doc.setFontSize(9);
+  let currentY = 10;
+
+  // ====================================================================
+  // SECTION 1: COMPANY HEADER (bordered box)
+  // ====================================================================
+  const headerTop = currentY;
+
+  // Logo placeholder (left side)
+  const logoX = ML + 4;
+  const logoY = headerTop + 4;
+  const logoW = 30;
+  const logoH = 30;
+  doc.setDrawColor(180, 180, 180);
+  doc.setLineWidth(0.2);
+  doc.rect(logoX, logoY, logoW, logoH);
   doc.setFont('helvetica', 'normal');
-  doc.text(company.tagline, 14, currentY + 6);
+  doc.setFontSize(7);
+  doc.setTextColor(180, 180, 180);
+  doc.text('LOGO', logoX + logoW / 2, logoY + logoH / 2, { align: 'center' });
+  doc.setTextColor(0, 0, 0);
 
-  // Company details (right side)
-  const rightCol = pageWidth - 14;
+  // Company details (right of logo)
+  const compX = logoX + logoW + 6;
+  let ty = headerTop + 8;
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(14);
+  doc.text(company.name, compX, ty);
+  ty += 4;
+  doc.setFont('helvetica', 'italic');
+  doc.setFontSize(7);
+  doc.text(company.tagline, compX, ty);
+  ty += 4;
+  doc.setFont('helvetica', 'normal');
   doc.setFontSize(8);
-  doc.text(company.address, rightCol, currentY, { align: 'right' });
-  doc.text(`${company.city}, ${company.state} ${company.postalCode}`, rightCol, currentY + 4, { align: 'right' });
-  doc.text(company.country, rightCol, currentY + 8, { align: 'right' });
-  doc.text(`GSTIN: ${company.gstin}`, rightCol, currentY + 12, { align: 'right' });
-  doc.text(company.phone, rightCol, currentY + 16, { align: 'right' });
-  doc.text(company.email, rightCol, currentY + 20, { align: 'right' });
+  doc.text(company.address, compX, ty);
+  ty += 3.5;
+  doc.text(company.addressLine2, compX, ty);
+  ty += 3.5;
+  doc.text(`GSTIN ${company.gstin}`, compX, ty);
+  ty += 3.5;
+  doc.text(company.phone, compX, ty);
+  ty += 3.5;
+  doc.text(company.email, compX, ty);
+  ty += 3.5;
+  doc.text(company.website, compX, ty);
 
-  currentY += 30;
-
-  // ==================== SECTION 2: TAX INVOICE TITLE ====================
-  // Blue line
-  doc.setDrawColor(41, 128, 185);
-  doc.setLineWidth(0.8);
-  doc.line(14, currentY, pageWidth - 14, currentY);
-
-  currentY += 8;
+  // "TAX INVOICE" on the right
   doc.setFontSize(16);
   doc.setFont('helvetica', 'bold');
-  doc.setTextColor(41, 128, 185);
-  doc.text('TAX INVOICE', pageWidth / 2, currentY, { align: 'center' });
-  doc.setTextColor(0, 0, 0);
+  doc.text('TAX INVOICE', RE - 4, headerTop + 20, { align: 'right' });
 
-  currentY += 6;
-  doc.line(14, currentY, pageWidth - 14, currentY);
+  const headerBottom = Math.max(ty + 5, logoY + logoH + 6);
 
-  currentY += 10;
+  // Draw header border
+  setBorder();
+  doc.rect(ML, headerTop, CW, headerBottom - headerTop);
 
-  // ==================== SECTION 3: INVOICE DETAILS BOX ====================
-  // Two column layout
-  const leftColX = 14;
-  const midPoint = pageWidth / 2;
+  currentY = headerBottom;
 
-  // Left side - Invoice Info
+  // ====================================================================
+  // SECTION 2: INVOICE DETAILS (bordered box with vertical divider)
+  // ====================================================================
+  const detTop = currentY;
+  const midX = ML + CW / 2;
+  const pad = 4;
+  const rowH = 5.5;
+  const lLabelX = ML + pad;
+  const lValX = ML + 33;
+  const rLabelX = midX + pad;
+  const rValX = midX + 38;
+
+  let dy = detTop + pad + 3;
   doc.setFontSize(9);
+
+  // Row 1: # | Place Of Supply
   doc.setFont('helvetica', 'bold');
-  doc.text('#', leftColX, currentY);
+  doc.text('#', lLabelX, dy);
   doc.setFont('helvetica', 'normal');
-  doc.text(`: ${invoice.invoice_number}`, leftColX + 30, currentY);
-
-  currentY += 5;
+  doc.text(`: ${invoice.invoice_number}`, lValX, dy);
   doc.setFont('helvetica', 'bold');
-  doc.text('Invoice Date', leftColX, currentY);
+  doc.text('Place Of Supply', rLabelX, dy);
   doc.setFont('helvetica', 'normal');
-  doc.text(`: ${formatDate(invoice.invoice_date)}`, leftColX + 30, currentY);
+  doc.text(`: ${invoice.place_of_supply || 'Karnataka (29)'}`, rValX, dy);
+  dy += rowH;
 
-  if (invoice.payment_terms) {
-    currentY += 5;
-    doc.setFont('helvetica', 'bold');
-    doc.text('Terms', leftColX, currentY);
-    doc.setFont('helvetica', 'normal');
-    doc.text(`: ${invoice.payment_terms}`, leftColX + 30, currentY);
-  }
+  // Row 2: Invoice Date | Sales person
+  doc.setFont('helvetica', 'bold');
+  doc.text('Invoice Date', lLabelX, dy);
+  doc.setFont('helvetica', 'normal');
+  doc.text(`: ${formatDate(invoice.invoice_date)}`, lValX, dy);
+  doc.setFont('helvetica', 'bold');
+  doc.text('Sales person', rLabelX, dy);
+  doc.setFont('helvetica', 'normal');
+  doc.text(`: ${invoice.salesperson_name || '-'}`, rValX, dy);
+  dy += rowH;
 
-  if (invoice.due_date) {
-    currentY += 5;
-    doc.setFont('helvetica', 'bold');
-    doc.text('Due Date', leftColX, currentY);
-    doc.setFont('helvetica', 'normal');
-    doc.text(`: ${formatDate(invoice.due_date)}`, leftColX + 30, currentY);
-  }
+  // Row 3: Terms | source
+  doc.setFont('helvetica', 'bold');
+  doc.text('Terms', lLabelX, dy);
+  doc.setFont('helvetica', 'normal');
+  doc.text(`: ${invoice.payment_terms || 'Due on Receipt'}`, lValX, dy);
+  doc.setFont('helvetica', 'bold');
+  doc.text('source', rLabelX, dy);
+  doc.setFont('helvetica', 'normal');
+  doc.text(`: ${invoice.source || 'walking'}`, rValX, dy);
+  dy += rowH;
 
-  // Right side - Place of Supply & Sales Person
-  let rightY = currentY - (invoice.payment_terms ? 10 : 5);
-  if (invoice.place_of_supply) {
-    doc.setFont('helvetica', 'bold');
-    doc.text('Place Of Supply', midPoint + 10, rightY);
-    doc.setFont('helvetica', 'normal');
-    doc.text(`: ${invoice.place_of_supply}`, midPoint + 45, rightY);
-    rightY += 5;
-  }
+  // Row 4: Due Date | Client No.
+  doc.setFont('helvetica', 'bold');
+  doc.text('Due Date', lLabelX, dy);
+  doc.setFont('helvetica', 'normal');
+  doc.text(`: ${invoice.due_date ? formatDate(invoice.due_date) : formatDate(invoice.invoice_date)}`, lValX, dy);
+  doc.setFont('helvetica', 'bold');
+  doc.text('Client No.', rLabelX, dy);
+  doc.setFont('helvetica', 'normal');
+  doc.text(`: ${invoice.customer_phone || '-'}`, rValX, dy);
 
-  if (invoice.salesperson_name) {
-    doc.setFont('helvetica', 'bold');
-    doc.text('Sales person', midPoint + 10, rightY);
-    doc.setFont('helvetica', 'normal');
-    doc.text(`: ${invoice.salesperson_name}`, midPoint + 45, rightY);
-  }
+  const detBottom = dy + pad;
 
-  currentY += 12;
+  // Draw invoice details bordered box + vertical divider
+  setBorder();
+  doc.rect(ML, detTop, CW, detBottom - detTop);
+  doc.line(midX, detTop, midX, detBottom);
 
-  // ==================== SECTION 4: BILL TO ====================
+  currentY = detBottom;
+
+  // ====================================================================
+  // SECTION 3: BILL TO (bordered box)
+  // ====================================================================
+  const billTop = currentY;
+  let by = billTop + pad + 3;
+
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(10);
-  doc.text('Bill To', leftColX, currentY);
+  doc.text('Bill To', lLabelX, by);
+  by += 6;
 
-  currentY += 6;
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(11);
-  doc.text(invoice.customer_name, leftColX, currentY);
+  doc.text(invoice.customer_name, lLabelX, by);
+  by += 5;
 
-  currentY += 5;
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(9);
 
+  if (invoice.customer_phone) {
+    doc.text(invoice.customer_phone, lLabelX, by);
+    by += 4;
+  }
+
   if (invoice.billing_address) {
-    const addressLines = doc.splitTextToSize(invoice.billing_address, 80);
-    doc.text(addressLines, leftColX, currentY);
-    currentY += addressLines.length * 4;
+    const addrLines = doc.splitTextToSize(invoice.billing_address, 80);
+    doc.text(addrLines, lLabelX, by);
+    by += addrLines.length * 4;
   }
 
   if (invoice.customer_gstin) {
-    doc.text(`GSTIN: ${invoice.customer_gstin}`, leftColX, currentY);
-    currentY += 4;
-  }
-
-  if (invoice.customer_phone) {
-    doc.text(invoice.customer_phone, leftColX, currentY);
-    currentY += 4;
+    doc.text(`GSTIN: ${invoice.customer_gstin}`, lLabelX, by);
+    by += 4;
   }
 
   if (invoice.customer_email) {
-    doc.text(invoice.customer_email, leftColX, currentY);
+    doc.text(invoice.customer_email, lLabelX, by);
+    by += 4;
   }
 
-  currentY += 10;
+  const billBottom = by + pad;
 
-  // ==================== SECTION 5: ITEMS TABLE WITH GST ====================
-  // Prepare table data with CGST/SGST split
+  // Draw bill to bordered box
+  setBorder();
+  doc.rect(ML, billTop, CW, billBottom - billTop);
+
+  currentY = billBottom;
+
+  // ====================================================================
+  // SECTION 4: ITEMS TABLE (grid theme with matching borders)
+  // ====================================================================
+  // Calculate effective GST rate from invoice-level tax if per-item rates are missing
+  const hasItemTaxRates = invoice.line_items.some(item => (item.tax_rate || 0) > 0);
+  const effectiveTaxRate = !hasItemTaxRates && (invoice.tax_amount || 0) > 0 && invoice.subtotal > 0
+    ? ((invoice.tax_amount || 0) / invoice.subtotal) * 100
+    : 0;
+
   const tableBody = invoice.line_items.map((item, index) => {
-    const taxRate = item.tax_rate || 0;
+    const taxRate = item.tax_rate || effectiveTaxRate;
     const halfRate = taxRate / 2;
-    const baseAmount = item.quantity * item.unit_price;
-    const discountAmount = item.discount || 0;
-    const taxableAmount = baseAmount - discountAmount;
+    const taxableAmount = item.total; // item amount is before tax
     const cgstAmount = (taxableAmount * halfRate) / 100;
     const sgstAmount = (taxableAmount * halfRate) / 100;
 
     return [
       (index + 1).toString(),
-      item.sku ? `${item.item_name}\nSKU : ${item.sku}` : item.item_name,
-      item.hsn_code || '-',
+      item.description
+        ? `${item.item_name}\n${item.description}`
+        : item.item_name,
       item.quantity.toFixed(2),
-      formatCurrency(item.unit_price),
-      `${halfRate}%`,
-      formatCurrency(cgstAmount),
-      `${halfRate}%`,
-      formatCurrency(sgstAmount),
+      halfRate > 0 ? `${halfRate}%` : '-',
+      halfRate > 0 ? formatCurrency(cgstAmount) : '-',
+      halfRate > 0 ? `${halfRate}%` : '-',
+      halfRate > 0 ? formatCurrency(sgstAmount) : '-',
       formatCurrency(item.total)
     ];
   });
 
   autoTable(doc, {
     startY: currentY,
-    head: [['#', 'Item & Description', 'HSN\n/SAC', 'Qty', 'Rate', 'CGST\n%', 'CGST\nAmt', 'SGST\n%', 'SGST\nAmt', 'Amount']],
+    head: [[
+      '#',
+      'Item & Description',
+      'Qty',
+      { content: 'CGST\n%', styles: { halign: 'center' as const } },
+      { content: 'Amt', styles: { halign: 'right' as const } },
+      { content: 'SGST\n%', styles: { halign: 'center' as const } },
+      { content: 'Amt', styles: { halign: 'right' as const } },
+      'Amount'
+    ]],
     body: tableBody,
     theme: 'grid',
+    styles: {
+      lineColor: [0, 0, 0],
+      lineWidth: LW,
+    },
     headStyles: {
-      fillColor: [41, 128, 185],
-      textColor: [255, 255, 255],
+      fillColor: [245, 245, 245],
+      textColor: [0, 0, 0],
       fontSize: 8,
       fontStyle: 'bold',
       halign: 'center',
       valign: 'middle',
-      cellPadding: 2
+      cellPadding: 3,
     },
     bodyStyles: {
       fontSize: 8,
-      cellPadding: 2
+      cellPadding: 3,
+      textColor: [0, 0, 0],
     },
     columnStyles: {
-      0: { cellWidth: 8, halign: 'center' },
-      1: { cellWidth: 50 },
-      2: { cellWidth: 18, halign: 'center' },
-      3: { cellWidth: 12, halign: 'center' },
+      0: { cellWidth: 10, halign: 'center' },
+      1: { cellWidth: 60 },
+      2: { cellWidth: 16, halign: 'center' },
+      3: { cellWidth: 14, halign: 'center' },
       4: { cellWidth: 22, halign: 'right' },
-      5: { cellWidth: 12, halign: 'center' },
-      6: { cellWidth: 18, halign: 'right' },
-      7: { cellWidth: 12, halign: 'center' },
-      8: { cellWidth: 18, halign: 'right' },
-      9: { cellWidth: 22, halign: 'right' }
+      5: { cellWidth: 14, halign: 'center' },
+      6: { cellWidth: 22, halign: 'right' },
+      7: { cellWidth: 24, halign: 'right' }
     },
-    margin: { left: 14, right: 14 },
-    didParseCell: (data) => {
-      // Wrap text for item description column
-      if (data.column.index === 1 && data.section === 'body') {
-        data.cell.styles.cellWidth = 50;
-      }
-    }
+    margin: { left: ML, right: MR },
   });
 
-  currentY = (doc as any).lastAutoTable.finalY + 8;
+  currentY = (doc as any).lastAutoTable.finalY;
 
-  // ==================== SECTION 6: TOTALS ====================
+  // ====================================================================
+  // SECTION 5: TOTALS + TOTAL IN WORDS (bordered box with vertical divider)
+  // ====================================================================
+  const totalsTop = currentY;
+  const totDivX = ML + CW * 0.52; // vertical divider position (~52% from left)
+
   // Calculate tax breakdown
   const totalTax = invoice.tax_amount || 0;
   const cgstTotal = totalTax / 2;
   const sgstTotal = totalTax / 2;
-  const taxableAmount = invoice.subtotal - (invoice.discount_amount || 0);
 
-  // Two column layout for totals
-  const totalsLabelX = 130;
-  const totalsValueX = pageWidth - 14;
+  // -- RIGHT SIDE: Totals breakdown --
+  const tLabelX = totDivX + pad;
+  const tValX = RE - pad;
+  let tY = totalsTop + pad + 3;
 
-  // Total in Words (left side)
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(9);
-  doc.text('Total In Words', leftColX, currentY);
-  currentY += 5;
-  doc.setFont('helvetica', 'italic');
-  doc.setFontSize(8);
-  const totalWords = numberToWordsIndian(invoice.total_amount);
-  const wordsLines = doc.splitTextToSize(totalWords, 100);
-  doc.text(wordsLines, leftColX, currentY);
-
-  // Totals (right side)
-  let totalsY = currentY - 5;
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(9);
 
   // Sub Total
-  doc.text('Sub Total', totalsLabelX, totalsY);
-  doc.text(formatCurrency(invoice.subtotal), totalsValueX, totalsY, { align: 'right' });
-  totalsY += 5;
-  doc.setFontSize(8);
-  doc.text('(Tax Inclusive)', totalsLabelX, totalsY);
-  totalsY += 6;
-
-  // Total Taxable Amount
-  doc.setFontSize(9);
-  doc.text('Total Taxable Amount', totalsLabelX, totalsY);
-  doc.text(formatCurrency(taxableAmount), totalsValueX, totalsY, { align: 'right' });
-  totalsY += 6;
+  doc.text('Sub Total', tLabelX, tY);
+  doc.text(formatCurrency(invoice.subtotal), tValX, tY, { align: 'right' });
+  tY += 4;
+  doc.setFontSize(7);
+  doc.setTextColor(100, 100, 100);
+  doc.text('(Tax Inclusive)', tLabelX, tY);
+  doc.setTextColor(0, 0, 0);
+  tY += 5;
 
   // CGST
-  const avgTaxRate = invoice.line_items.length > 0
-    ? invoice.line_items.reduce((sum, item) => sum + (item.tax_rate || 0), 0) / invoice.line_items.length / 2
-    : 9;
-  doc.text(`CGST (${avgTaxRate.toFixed(1)}%)`, totalsLabelX, totalsY);
-  doc.text(formatCurrency(cgstTotal), totalsValueX, totalsY, { align: 'right' });
-  totalsY += 6;
+  doc.setFontSize(9);
+  const displayTaxRate = hasItemTaxRates
+    ? (invoice.line_items.reduce((sum, item) => sum + (item.tax_rate || 0), 0) / invoice.line_items.length / 2)
+    : (effectiveTaxRate / 2);
+  const cgstLabel = displayTaxRate > 0 ? `CGST (${parseFloat(displayTaxRate.toFixed(2))}%)` : 'CGST';
+  doc.text(cgstLabel, tLabelX, tY);
+  doc.text(formatCurrency(cgstTotal), tValX, tY, { align: 'right' });
+  tY += 5;
 
   // SGST
-  doc.text(`SGST (${avgTaxRate.toFixed(1)}%)`, totalsLabelX, totalsY);
-  doc.text(formatCurrency(sgstTotal), totalsValueX, totalsY, { align: 'right' });
-  totalsY += 6;
+  const sgstLabel = displayTaxRate > 0 ? `SGST (${parseFloat(displayTaxRate.toFixed(2))}%)` : 'SGST';
+  doc.text(sgstLabel, tLabelX, tY);
+  doc.text(formatCurrency(sgstTotal), tValX, tY, { align: 'right' });
+  tY += 5;
 
-  // Discount if any
+  // Discount
   if (invoice.discount_amount && invoice.discount_amount > 0) {
-    doc.text('Discount', totalsLabelX, totalsY);
-    doc.text(`-${formatCurrency(invoice.discount_amount)}`, totalsValueX, totalsY, { align: 'right' });
-    totalsY += 6;
+    doc.text('Discount', tLabelX, tY);
+    doc.text(`-${formatCurrency(invoice.discount_amount)}`, tValX, tY, { align: 'right' });
+    tY += 5;
   }
 
-  // Shipping if any
+  // Shipping
   if (invoice.shipping_charges && invoice.shipping_charges > 0) {
-    doc.text('Shipping Charges', totalsLabelX, totalsY);
-    doc.text(formatCurrency(invoice.shipping_charges), totalsValueX, totalsY, { align: 'right' });
-    totalsY += 6;
+    doc.text('Shipping Charges', tLabelX, tY);
+    doc.text(formatCurrency(invoice.shipping_charges), tValX, tY, { align: 'right' });
+    tY += 5;
   }
 
-  // Total line
-  doc.setLineWidth(0.3);
-  doc.setDrawColor(0, 0, 0);
-  doc.line(totalsLabelX, totalsY, totalsValueX, totalsY);
-  totalsY += 6;
+  // Separator line before total
+  setBorder();
+  doc.line(totDivX, tY - 1, RE, tY - 1);
+  tY += 4;
 
   // Grand Total
   doc.setFont('helvetica', 'bold');
-  doc.setFontSize(11);
-  doc.text('Total', totalsLabelX, totalsY);
-  doc.text(`Rs.${formatCurrency(invoice.total_amount)}`, totalsValueX, totalsY, { align: 'right' });
+  doc.setFontSize(10);
+  doc.text('Total', tLabelX, tY);
+  doc.text(`Rs.${formatCurrency(invoice.total_amount)}`, tValX, tY, { align: 'right' });
+  tY += 6;
 
-  currentY = Math.max(currentY + wordsLines.length * 4 + 5, totalsY + 10);
+  // Payment Made
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(9);
+  const amountPaid = invoice.amount_paid || 0;
+  doc.text('Payment Made', tLabelX, tY);
+  doc.text(`(-) ${formatCurrency(amountPaid)}`, tValX, tY, { align: 'right' });
+  tY += 5;
 
-  // ==================== SECTION 7: NOTES ====================
+  // Separator before balance due
+  setBorder();
+  doc.line(totDivX, tY - 1, RE, tY - 1);
+  tY += 4;
+
+  // Balance Due
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(10);
+  const balanceDue = invoice.balance_due ?? (invoice.total_amount - amountPaid);
+  doc.text('Balance Due', tLabelX, tY);
+  doc.text(`Rs.${formatCurrency(balanceDue)}`, tValX, tY, { align: 'right' });
+
+  const totalsRightBottom = tY + pad;
+
+  // -- LEFT SIDE: Total in Words --
+  let wY = totalsTop + pad + 3;
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(9);
+  doc.text('Total In Words', lLabelX, wY);
+  wY += 5;
+  doc.setFont('helvetica', 'italic');
+  doc.setFontSize(8);
+  const totalWords = `Indian Rupee ${numberToWordsIndian(invoice.total_amount).replace(' Rupees ', ' ').replace(' Rupees', '').replace(' Only', '')} Only`;
+  const wordsLines = doc.splitTextToSize(totalWords, totDivX - ML - pad * 2);
+  doc.text(wordsLines, lLabelX, wY);
+
+  const totalsBottom = Math.max(totalsRightBottom, wY + wordsLines.length * 4 + pad);
+
+  // Draw totals bordered box + vertical divider
+  setBorder();
+  doc.rect(ML, totalsTop, CW, totalsBottom - totalsTop);
+  doc.line(totDivX, totalsTop, totDivX, totalsBottom);
+
+  currentY = totalsBottom;
+
+  // ====================================================================
+  // SECTION 6: NOTES (bordered box, if present)
+  // ====================================================================
   if (invoice.notes) {
-    currentY += 5;
+    const notesTop = currentY;
+    let ny = notesTop + pad + 3;
+
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(9);
-    doc.text('Notes', leftColX, currentY);
-    currentY += 5;
+    doc.text('Notes', lLabelX, ny);
+    ny += 5;
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(8);
-    const noteLines = doc.splitTextToSize(invoice.notes, 100);
-    doc.text(noteLines, leftColX, currentY);
-    currentY += noteLines.length * 4 + 5;
+    const noteLines = doc.splitTextToSize(invoice.notes, CW - pad * 2);
+    doc.text(noteLines, lLabelX, ny);
+    ny += noteLines.length * 4;
+
+    const notesBottom = ny + pad;
+    setBorder();
+    doc.rect(ML, notesTop, CW, notesBottom - notesTop);
+    currentY = notesBottom;
   }
 
-  // ==================== SECTION 8: BANK DETAILS ====================
-  currentY += 5;
+  // ====================================================================
+  // SECTION 7: BANK DETAILS + AUTHORIZED SIGNATURE (bordered box with divider)
+  // ====================================================================
+  const bankTop = currentY;
+  const bankDivX = midX;
+
+  // -- LEFT SIDE: Bank Details --
+  let bky = bankTop + pad + 3;
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(9);
-  doc.text('Bank Account Details', leftColX, currentY);
-  currentY += 5;
+  doc.text('Bank Details', lLabelX, bky);
+  bky += 6;
+
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(8);
-  doc.text(`Account Holder: ${company.accountHolder}`, leftColX, currentY);
-  currentY += 4;
-  doc.text(`Account Number: ${company.accountNumber}`, leftColX, currentY);
-  currentY += 4;
-  doc.text(`IFSC: ${company.ifscCode}`, leftColX, currentY);
-  currentY += 4;
-  doc.text(`Branch: ${company.branchName}`, leftColX, currentY);
-  currentY += 4;
-  doc.text(`Account Type: ${company.accountType}`, leftColX, currentY);
+  doc.text(`Bank Name:  ${company.bankName}`, lLabelX, bky);
+  bky += 4;
+  doc.text(`Account Holder:  ${company.accountHolder}`, lLabelX, bky);
+  bky += 4;
+  doc.text('Account Number:  ', lLabelX, bky);
+  doc.setFont('helvetica', 'bold');
+  doc.text(company.accountNumber, lLabelX + 32, bky);
+  doc.setFont('helvetica', 'normal');
+  bky += 4;
+  doc.text('IFSC:  ', lLabelX, bky);
+  doc.setFont('helvetica', 'bold');
+  doc.text(company.ifscCode, lLabelX + 11, bky);
+  doc.setFont('helvetica', 'normal');
+  bky += 4;
+  doc.text(`Branch:  ${company.branchName}`, lLabelX, bky);
+  bky += 4;
+  doc.text(`Account Type:  ${company.accountType}`, lLabelX, bky);
 
-  // ==================== SECTION 9: TERMS & CONDITIONS ====================
-  if (invoice.terms_conditions) {
-    currentY += 8;
+  // -- RIGHT SIDE: For Company + Authorized Signature --
+  const sigLabelX = bankDivX + pad;
+  let sigy = bankTop + pad + 3;
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(9);
+  doc.text(`For ${company.name}`, sigLabelX, sigy);
+
+  // Signature line (right-aligned area)
+  const sigLineY = bky - 2;
+  setBorder();
+  doc.line(sigLabelX + 10, sigLineY, RE - pad, sigLineY);
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(8);
+  doc.text('Authorized Signature', RE - pad, sigLineY + 5, { align: 'right' });
+
+  const bankBottom = Math.max(bky + pad + 2, sigLineY + 10);
+
+  // Draw bank section bordered box + vertical divider
+  setBorder();
+  doc.rect(ML, bankTop, CW, bankBottom - bankTop);
+  doc.line(bankDivX, bankTop, bankDivX, bankBottom);
+
+  currentY = bankBottom;
+
+  // ====================================================================
+  // SECTION 8: TERMS & CONDITIONS (bordered box, always shown)
+  // ====================================================================
+  {
+    const termsTop = currentY;
+    let tcy = termsTop + pad + 3;
+
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(9);
-    doc.text('Terms & Conditions', leftColX, currentY);
-    currentY += 5;
+    doc.text('Terms & Conditions', lLabelX, tcy);
+    tcy += 5;
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(7);
-    const termLines = doc.splitTextToSize(invoice.terms_conditions, 110);
-    doc.text(termLines, leftColX, currentY);
+    const termsText = invoice.terms_conditions || 'Goods once sold will not be taken back or exchanged.\nAll disputes are subject to Bangalore jurisdiction only.';
+    const termLines = doc.splitTextToSize(termsText, CW - pad * 2);
+    doc.text(termLines, lLabelX, tcy);
+    tcy += termLines.length * 3.5;
+
+    const termsBottom = tcy + pad;
+    setBorder();
+    doc.rect(ML, termsTop, CW, termsBottom - termsTop);
+    currentY = termsBottom;
   }
 
-  // ==================== SECTION 10: SIGNATURE ====================
-  const signatureY = Math.max(currentY + 20, 250);
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(9);
-  doc.text(`For ${company.name}`, totalsValueX, signatureY, { align: 'right' });
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(8);
-  doc.text('Authorized Signatory', totalsValueX, signatureY + 20, { align: 'right' });
-
-  // ==================== FOOTER ====================
+  // ====================================================================
+  // FOOTER
+  // ====================================================================
   const pageHeight = doc.internal.pageSize.height;
   doc.setFontSize(7);
   doc.setTextColor(128, 128, 128);
-  doc.text('This is a computer generated invoice.', leftColX, pageHeight - 10);
-  doc.text(`Generated on: ${formatDate(new Date().toISOString())}`, totalsValueX, pageHeight - 10, { align: 'right' });
+  doc.text('This is a computer generated invoice.', ML, pageHeight - 8);
+  doc.setTextColor(0, 0, 0);
 
   return doc;
 };
@@ -488,39 +622,23 @@ export const openInvoicePDFInNewTab = (invoice: InvoicePDFData): void => {
   const pdfBlob = doc.output('blob');
   const pdfUrl = URL.createObjectURL(pdfBlob);
   window.open(pdfUrl, '_blank');
-
-  // Clean up the URL after a delay
-  setTimeout(() => {
-    URL.revokeObjectURL(pdfUrl);
-  }, 100);
+  setTimeout(() => { URL.revokeObjectURL(pdfUrl); }, 60000);
 };
 
 /**
- * Print invoice PDF
+ * Print invoice PDF - opens in new tab for reliable printing
  */
 export const printInvoicePDF = (invoice: InvoicePDFData): void => {
   const doc = generateInvoicePDF(invoice);
   const pdfBlob = doc.output('blob');
   const pdfUrl = URL.createObjectURL(pdfBlob);
+  const printWindow = window.open(pdfUrl, '_blank');
 
-  // Create hidden iframe for printing
-  const iframe = document.createElement('iframe');
-  iframe.style.position = 'fixed';
-  iframe.style.top = '-10000px';
-  iframe.style.left = '-10000px';
-  iframe.style.width = '1px';
-  iframe.style.height = '1px';
-  iframe.src = pdfUrl;
-  document.body.appendChild(iframe);
+  if (!printWindow) {
+    doc.save(`Invoice_${invoice.invoice_number.replace(/[\/\\]/g, '_')}.pdf`);
+    URL.revokeObjectURL(pdfUrl);
+    return;
+  }
 
-  iframe.onload = () => {
-    setTimeout(() => {
-      iframe.contentWindow?.print();
-      // Clean up after printing
-      setTimeout(() => {
-        document.body.removeChild(iframe);
-        URL.revokeObjectURL(pdfUrl);
-      }, 1000);
-    }, 500);
-  };
+  setTimeout(() => { URL.revokeObjectURL(pdfUrl); }, 60000);
 };

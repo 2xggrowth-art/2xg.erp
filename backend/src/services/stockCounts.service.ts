@@ -503,7 +503,8 @@ export class StockCountsService {
   }
 
   /**
-   * Get available (unclaimed) auto-generated counts for today
+   * Get all auto-generated counts for today (claimed + unclaimed) with progress info.
+   * Counters use this to see the full picture: which bins are available, in progress, or done.
    */
   async getAvailableToday() {
     // Use IST date
@@ -516,14 +517,42 @@ export class StockCountsService {
       .from('stock_counts')
       .select('*')
       .eq('due_date', todayStr)
-      .is('assigned_to', null)
-      .eq('status', 'pending')
       .eq('auto_generated', true)
       .order('location_name')
       .order('bin_code');
 
     if (error) throw error;
-    return data || [];
+    if (!data || data.length === 0) return [];
+
+    // For in-progress counts, get item-level progress
+    const inProgressIds = data
+      .filter((c: any) => ['in_progress', 'recount'].includes(c.status))
+      .map((c: any) => c.id);
+
+    let progressMap: Record<string, { counted: number; total: number }> = {};
+    if (inProgressIds.length > 0) {
+      const { data: items } = await supabase
+        .from('stock_count_items')
+        .select('stock_count_id, counted_quantity')
+        .in('stock_count_id', inProgressIds);
+
+      if (items) {
+        for (const item of items) {
+          if (!progressMap[item.stock_count_id]) {
+            progressMap[item.stock_count_id] = { counted: 0, total: 0 };
+          }
+          progressMap[item.stock_count_id].total++;
+          if (item.counted_quantity !== null) {
+            progressMap[item.stock_count_id].counted++;
+          }
+        }
+      }
+    }
+
+    return data.map((c: any) => ({
+      ...c,
+      progress: progressMap[c.id] || null,
+    }));
   }
 
   /**

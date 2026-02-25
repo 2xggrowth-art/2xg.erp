@@ -3,6 +3,7 @@ import { FileText, Send, Eye, CreditCard, CheckCircle, Plus, Filter, Download, M
 import { useNavigate } from 'react-router-dom';
 import ProcessFlow from '../components/common/ProcessFlow';
 import { invoicesService } from '../services/invoices.service';
+import { printInvoicePDF, InvoicePDFData } from '../utils/pdfGenerators/invoicePDF';
 import BulkActionBar, { createBulkDeleteAction, createBulkExportAction, createBulkPrintAction, createBulkEmailAction } from '../components/common/BulkActionBar';
 
 interface Invoice {
@@ -316,6 +317,56 @@ const InvoicesPage = () => {
         console.error('Error deleting invoice:', error);
         alert('Failed to delete invoice');
       }
+    }
+  };
+
+  const handlePrintInvoice = async (invoiceId: string) => {
+    try {
+      const response = await invoicesService.getInvoiceById(invoiceId);
+      if (response.success && response.data) {
+        const inv = response.data;
+        const pdfData: InvoicePDFData = {
+          id: inv.id,
+          invoice_number: inv.invoice_number,
+          sales_order_number: inv.sales_order_number || inv.order_number,
+          customer_name: inv.customer_name || 'Walk-in Customer',
+          customer_email: inv.customer_email,
+          customer_phone: inv.customer_phone,
+          customer_gstin: inv.customer_gstin,
+          billing_address: inv.billing_address,
+          shipping_address: inv.shipping_address,
+          place_of_supply: inv.place_of_supply,
+          invoice_date: inv.invoice_date,
+          due_date: inv.due_date,
+          payment_terms: inv.payment_terms || 'Due on Receipt',
+          salesperson_name: inv.salesperson_name,
+          source: inv.source,
+          status: inv.status,
+          subtotal: inv.sub_total || inv.subtotal || inv.total_amount,
+          tax_amount: inv.tax_amount || 0,
+          discount_amount: inv.discount_amount || 0,
+          shipping_charges: inv.shipping_charges || 0,
+          total_amount: inv.total_amount,
+          amount_paid: inv.amount_paid || (inv.total_amount - (inv.balance_due || 0)),
+          balance_due: inv.balance_due || 0,
+          notes: inv.notes || inv.customer_notes,
+          terms_conditions: inv.terms_conditions || inv.terms_and_conditions,
+          line_items: (inv.items || inv.invoice_items || []).map((item: any) => ({
+            item_name: item.item_name || item.name || 'Item',
+            description: item.description,
+            sku: item.sku,
+            quantity: item.quantity || 0,
+            unit_price: item.rate || item.unit_price || 0,
+            discount: item.discount || 0,
+            tax_rate: item.tax_rate || item.tax_percentage || 0,
+            total: item.amount || item.total || 0,
+          })),
+        };
+        printInvoicePDF(pdfData);
+      }
+    } catch (error) {
+      console.error('Error printing invoice:', error);
+      alert('Failed to generate invoice PDF');
     }
   };
 
@@ -646,12 +697,21 @@ const InvoicesPage = () => {
                       {formatCurrency(invoice.balance_due)}
                     </td>
                     <td className="px-4 py-4 relative" onClick={(e) => e.stopPropagation()}>
-                      <button
-                        onClick={() => setShowActionMenu(showActionMenu === invoice.id ? null : invoice.id)}
-                        className="p-1 text-slate-600 hover:bg-slate-100 rounded transition-colors"
-                      >
-                        <MoreVertical size={16} />
-                      </button>
+                      <div className="flex items-center gap-1">
+                        <button
+                          onClick={() => handlePrintInvoice(invoice.id)}
+                          className="p-1 text-slate-500 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors"
+                          title="Print Invoice"
+                        >
+                          <Printer size={16} />
+                        </button>
+                        <button
+                          onClick={() => setShowActionMenu(showActionMenu === invoice.id ? null : invoice.id)}
+                          className="p-1 text-slate-600 hover:bg-slate-100 rounded transition-colors"
+                        >
+                          <MoreVertical size={16} />
+                        </button>
+                      </div>
 
                       {showActionMenu === invoice.id && (
                         <>
@@ -679,6 +739,16 @@ const InvoicesPage = () => {
                             >
                               <Edit size={16} />
                               Edit
+                            </button>
+                            <button
+                              onClick={() => {
+                                handlePrintInvoice(invoice.id);
+                                setShowActionMenu(null);
+                              }}
+                              className="w-full px-4 py-2 text-left text-sm text-slate-700 hover:bg-slate-50 flex items-center gap-2"
+                            >
+                              <Printer size={16} />
+                              Print
                             </button>
                             <button
                               onClick={() => {
