@@ -1027,10 +1027,141 @@ const PosCreate: React.FC = () => {
   };
 
   const handlePrintBill = () => {
-    // Small delay to ensure the print section is fully rendered
-    setTimeout(() => {
-      window.print();
-    }, 100);
+    if (!generatedInvoice) return;
+
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) return;
+
+    const inv = generatedInvoice;
+    const itemsCount = inv.items.reduce((sum: number, i: any) => sum + i.quantity, 0);
+    const discountLine = inv.discount_value > 0
+      ? `<div class="total-row"><span class="total-label">Discount${inv.discount_type === 'percentage' ? ` (${inv.discount_value}%)` : ''}</span><span class="total-value">-₹${(inv.discount_type === 'percentage' ? (inv.sub_total * inv.discount_value / 100) : inv.discount_value).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span></div>`
+      : '';
+    const cgstLine = inv.cgst_amount > 0 ? `<div class="total-row"><span class="total-label">CGST (${inv.cgst_rate}%)</span><span class="total-value">₹${inv.cgst_amount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span></div>` : '';
+    const sgstLine = inv.sgst_amount > 0 ? `<div class="total-row"><span class="total-label">SGST (${inv.sgst_rate}%)</span><span class="total-value">₹${inv.sgst_amount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span></div>` : '';
+
+    const itemRows = inv.items.map((item: any, idx: number) => `
+      <tr>
+        <td>${idx + 1}</td>
+        <td><div class="item-name">${item.item_name}</div>${item.description ? `<div class="item-sku">${item.description}</div>` : ''}</td>
+        <td class="center">${item.quantity}</td>
+        <td class="right">₹${item.rate.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+        <td class="right" style="font-weight:600">₹${item.amount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+      </tr>
+    `).join('');
+
+    const paymentInfo = inv.paymentMode === 'CREDIT SALE' && inv.balanceDue > 0
+      ? `<div class="payment-box">
+          <div class="payment-row"><span>Payment Mode</span><span class="payment-mode">${inv.paymentMode}</span></div>
+          ${inv.referenceNumber ? `<div class="payment-row"><span>Reference No</span><span style="font-weight:600">${inv.referenceNumber}</span></div>` : ''}
+          <div class="payment-row"><span>Amount Paid</span><span style="font-weight:600">₹${inv.amountPaid.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span></div>
+          <div class="payment-row"><span>Balance Due</span><span style="font-weight:600;color:#f97316">₹${inv.balanceDue.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span></div>
+        </div>
+        <div class="paid-badge" style="color:#f97316">--- CREDIT SALE - PENDING ---</div>`
+      : `<div class="payment-box">
+          <div class="payment-row"><span>Payment Mode</span><span class="payment-mode">${inv.paymentMode}</span></div>
+          ${inv.referenceNumber ? `<div class="payment-row"><span>Reference No</span><span style="font-weight:600">${inv.referenceNumber}</span></div>` : ''}
+          <div class="payment-row"><span>Amount Paid</span><span style="font-weight:600">₹${inv.total_amount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span></div>
+        </div>
+        <div class="paid-badge">--- PAID ---</div>`;
+
+    const printContent = `<!DOCTYPE html>
+<html><head><title>Bill - ${inv.invoice_number}</title>
+<style>
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{font-family:Arial,Helvetica,sans-serif;padding:20px;max-width:400px;margin:0 auto;font-size:13px;line-height:1.5;color:#111}
+  .header{text-align:center;border-bottom:2px solid #000;padding-bottom:10px;margin-bottom:10px}
+  .company-name{font-size:20px;font-weight:bold;letter-spacing:1px}
+  .company-sub{font-size:11px;color:#555;margin-top:2px}
+  .bill-title{font-size:14px;font-weight:bold;margin-top:6px;letter-spacing:2px}
+  .info-section{margin:10px 0}
+  .info-row{display:flex;padding:2px 0}
+  .info-label{width:120px;flex-shrink:0;color:#555}
+  .info-value{flex:1;font-weight:600}
+  .separator{border-top:1px dashed #999;margin:8px 0}
+  .separator-bold{border-top:2px solid #000;margin:8px 0}
+  .items-table{width:100%;border-collapse:collapse;margin:8px 0}
+  .items-table thead th{text-align:left;font-size:11px;font-weight:bold;text-transform:uppercase;padding:6px 4px;border-bottom:1px solid #000;color:#333}
+  .items-table thead th.right{text-align:right}
+  .items-table thead th.center{text-align:center}
+  .items-table tbody td{padding:5px 4px;font-size:12px;border-bottom:1px dashed #ddd;vertical-align:top}
+  .items-table tbody td.right{text-align:right}
+  .items-table tbody td.center{text-align:center}
+  .item-name{font-weight:600;font-size:12px}
+  .item-sku{font-size:10px;color:#777}
+  .totals-section{margin:8px 0}
+  .total-row{display:flex;justify-content:space-between;padding:3px 0}
+  .total-label{color:#555;font-size:12px}
+  .total-value{font-weight:600;font-size:12px}
+  .grand-total{display:flex;justify-content:space-between;padding:8px 0;border-top:2px solid #000;border-bottom:2px solid #000;margin:6px 0}
+  .grand-total-label{font-size:16px;font-weight:bold}
+  .grand-total-value{font-size:16px;font-weight:bold}
+  .payment-box{background:#f5f5f5;padding:8px 10px;border-radius:4px;margin:8px 0}
+  .payment-row{display:flex;justify-content:space-between;padding:2px 0;font-size:12px}
+  .payment-mode{font-weight:bold;color:#16a34a}
+  .paid-badge{text-align:center;font-size:11px;font-weight:bold;color:#16a34a;letter-spacing:2px;margin:6px 0}
+  .footer{text-align:center;margin-top:16px;padding-top:10px;border-top:1px dashed #999}
+  .footer p{font-size:11px;color:#777;margin:3px 0}
+  .footer .thank-you{font-size:13px;font-weight:bold;color:#333}
+  @media print{body{padding:10px}}
+</style></head>
+<body>
+  <div class="header">
+    <div class="company-name">BHARATH CYCLE HUB</div>
+    <div class="company-sub">Your Trusted Cycling Partner</div>
+    <div class="bill-title">TAX INVOICE</div>
+  </div>
+
+  <div class="info-section">
+    <div class="info-row"><span class="info-label">Invoice No</span><span class="info-value">: ${inv.invoice_number}</span></div>
+    <div class="info-row"><span class="info-label">Date</span><span class="info-value">: ${inv.createdAt}</span></div>
+    <div class="info-row"><span class="info-label">Customer</span><span class="info-value">: ${inv.customer_name}</span></div>
+    ${selectedCustomer?.phone ? `<div class="info-row"><span class="info-label">Mobile</span><span class="info-value">: ${selectedCustomer.phone}</span></div>` : ''}
+    ${inv.salesperson_name ? `<div class="info-row"><span class="info-label">Salesperson</span><span class="info-value">: ${inv.salesperson_name}</span></div>` : ''}
+  </div>
+
+  <div class="separator-bold"></div>
+
+  <table class="items-table">
+    <thead>
+      <tr>
+        <th style="width:8%">#</th>
+        <th style="width:42%">Item</th>
+        <th class="center" style="width:12%">Qty</th>
+        <th class="right" style="width:18%">Rate</th>
+        <th class="right" style="width:20%">Amount</th>
+      </tr>
+    </thead>
+    <tbody>${itemRows}</tbody>
+  </table>
+
+  <div class="separator"></div>
+
+  <div class="totals-section">
+    <div class="total-row"><span class="total-label">Sub Total (${itemsCount} items)</span><span class="total-value">₹${inv.sub_total.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span></div>
+    ${discountLine}
+    ${cgstLine}
+    ${sgstLine}
+  </div>
+
+  <div class="grand-total">
+    <span class="grand-total-label">TOTAL</span>
+    <span class="grand-total-value">₹${inv.total_amount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+  </div>
+
+  ${paymentInfo}
+
+  <div class="footer">
+    <p class="thank-you">Thank you for your purchase!</p>
+    <p>Visit us again at Bharath Cycle Hub</p>
+    ${activeSession ? `<p>Session: ${activeSession.session_number} | Register: ${activeSession.register}</p>` : ''}
+  </div>
+
+  <script>window.onload=function(){window.print()}</script>
+</body></html>`;
+
+    printWindow.document.write(printContent);
+    printWindow.document.close();
   };
 
   const handleCashMovement = async () => {
@@ -1074,118 +1205,7 @@ const PosCreate: React.FC = () => {
 
   return (
     <>
-      {/* Print Styles */}
-      <style>{`
-        @media print {
-          body * {
-            visibility: hidden;
-          }
-          #print-section, #print-section * {
-            visibility: visible;
-            display: block !important;
-          }
-          #print-section {
-            position: absolute;
-            left: 0;
-            top: 0;
-            width: 100%;
-            padding: 20px;
-            background: white;
-          }
-          #print-section table {
-            display: table !important;
-          }
-          #print-section tr {
-            display: table-row !important;
-          }
-          #print-section td, #print-section th {
-            display: table-cell !important;
-          }
-          @page {
-            size: A4;
-            margin: 1cm;
-          }
-        }
-      `}</style>
-
-      {/* Hidden Print Section */}
-      {generatedInvoice && (
-        <div id="print-section" style={{ display: 'none' }}>
-          <div style={{ fontFamily: 'Arial, sans-serif', maxWidth: '800px', margin: '0 auto' }}>
-            <div style={{ textAlign: 'center', marginBottom: '30px', borderBottom: '2px solid #333', paddingBottom: '20px' }}>
-              <h1 style={{ margin: '0', fontSize: '32px', color: '#333' }}>2XG Business Suite</h1>
-              <p style={{ margin: '5px 0', fontSize: '14px', color: '#666' }}>INVOICE</p>
-              <p style={{ margin: '5px 0', fontSize: '16px', fontWeight: 'bold' }}>#{generatedInvoice.invoice_number}</p>
-              <p style={{ margin: '5px 0', fontSize: '12px', color: '#666' }}>{generatedInvoice.createdAt}</p>
-            </div>
-
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', marginBottom: '30px' }}>
-              <div>
-                <h3 style={{ margin: '0 0 10px 0', fontSize: '14px', fontWeight: 'bold', color: '#333' }}>CUSTOMER DETAILS</h3>
-                <p style={{ margin: '3px 0', fontSize: '16px', fontWeight: 'bold' }}>{generatedInvoice.customer_name}</p>
-                {selectedCustomer?.mobile && <p style={{ margin: '3px 0', fontSize: '12px' }}>Mobile: {selectedCustomer.mobile}</p>}
-                {selectedCustomer?.email && <p style={{ margin: '3px 0', fontSize: '12px' }}>Email: {selectedCustomer.email}</p>}
-              </div>
-              <div style={{ textAlign: 'right' }}>
-                <h3 style={{ margin: '0 0 10px 0', fontSize: '14px', fontWeight: 'bold', color: '#333' }}>PAYMENT DETAILS</h3>
-                <p style={{ margin: '3px 0', fontSize: '14px', fontWeight: 'bold', color: '#22c55e' }}>Mode: {generatedInvoice.paymentMode}</p>
-                {generatedInvoice.referenceNumber && <p style={{ margin: '3px 0', fontSize: '12px' }}>Ref: {generatedInvoice.referenceNumber}</p>}
-                {generatedInvoice.salesperson_name && <p style={{ margin: '3px 0', fontSize: '12px' }}>Salesperson: {generatedInvoice.salesperson_name}</p>}
-              </div>
-            </div>
-
-            <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: '30px' }}>
-              <thead>
-                <tr style={{ backgroundColor: '#f3f4f6', borderBottom: '2px solid #333' }}>
-                  <th style={{ padding: '12px', textAlign: 'left', fontSize: '12px', fontWeight: 'bold' }}>ITEM</th>
-                  <th style={{ padding: '12px', textAlign: 'center', fontSize: '12px', fontWeight: 'bold' }}>QTY</th>
-                  <th style={{ padding: '12px', textAlign: 'right', fontSize: '12px', fontWeight: 'bold' }}>RATE</th>
-                  <th style={{ padding: '12px', textAlign: 'right', fontSize: '12px', fontWeight: 'bold' }}>AMOUNT</th>
-                </tr>
-              </thead>
-              <tbody>
-                {generatedInvoice.items.map((item: any, index: number) => (
-                  <tr key={index} style={{ borderBottom: '1px solid #e5e7eb' }}>
-                    <td style={{ padding: '12px', fontSize: '13px' }}>{item.item_name}</td>
-                    <td style={{ padding: '12px', textAlign: 'center', fontSize: '13px' }}>{item.quantity}</td>
-                    <td style={{ padding: '12px', textAlign: 'right', fontSize: '13px' }}>₹{item.rate.toFixed(2)}</td>
-                    <td style={{ padding: '12px', textAlign: 'right', fontSize: '13px', fontWeight: 'bold' }}>₹{item.amount.toFixed(2)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-
-            <div style={{ textAlign: 'right', marginBottom: '40px' }}>
-              <div style={{ display: 'inline-block', textAlign: 'left', backgroundColor: '#f9fafb', padding: '20px', borderRadius: '8px', minWidth: '250px' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '15px', paddingBottom: '15px', borderBottom: '2px solid #333' }}>
-                  <span style={{ fontSize: '18px', fontWeight: 'bold' }}>TOTAL:</span>
-                  <span style={{ fontSize: '22px', fontWeight: 'bold', color: '#22c55e' }}>₹{generatedInvoice.total_amount.toFixed(2)}</span>
-                </div>
-                {generatedInvoice.paymentMode === 'CREDIT SALE' && generatedInvoice.balanceDue > 0 ? (
-                  <>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
-                      <span style={{ fontSize: '14px', color: '#666' }}>Paid:</span>
-                      <span style={{ fontSize: '16px', fontWeight: 'bold', color: '#22c55e' }}>₹{generatedInvoice.amountPaid.toFixed(2)}</span>
-                    </div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
-                      <span style={{ fontSize: '14px', color: '#666' }}>Balance Due:</span>
-                      <span style={{ fontSize: '16px', fontWeight: 'bold', color: '#f97316' }}>₹{generatedInvoice.balanceDue.toFixed(2)}</span>
-                    </div>
-                    <p style={{ margin: '10px 0 0 0', fontSize: '11px', color: '#f97316', textAlign: 'center', fontWeight: 'bold' }}>CREDIT SALE - PENDING</p>
-                  </>
-                ) : (
-                  <p style={{ margin: '0', fontSize: '11px', color: '#666', textAlign: 'center' }}>PAID</p>
-                )}
-              </div>
-            </div>
-
-            <div style={{ textAlign: 'center', paddingTop: '20px', borderTop: '1px solid #e5e7eb', fontSize: '11px', color: '#666' }}>
-              <p style={{ margin: '5px 0' }}>Thank you for your business!</p>
-              <p style={{ margin: '5px 0' }}>Powered by 2XG Business Suite</p>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Print is handled via window.open() in handlePrintBill */}
 
       {/* POS Lock Overlay */}
       {posLocked && (
