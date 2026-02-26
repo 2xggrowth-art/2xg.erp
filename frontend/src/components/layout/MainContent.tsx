@@ -1,4 +1,5 @@
 import { ReactNode } from 'react';
+import { useAuth } from '../../contexts/AuthContext';
 import DateRangeFilter from '../common/DateRangeFilter';
 
 interface MainContentProps {
@@ -6,11 +7,13 @@ interface MainContentProps {
 }
 
 const MainContent = ({ children }: MainContentProps) => {
+  const { user } = useAuth();
+
   return (
     <div className="max-w-7xl mx-auto w-full">
       {/* Greeting Header */}
       <div className="mb-6">
-        <h1 className="text-3xl font-bold text-gray-800">Hello, Zaheer</h1>
+        <h1 className="text-3xl font-bold text-gray-800">Hello, {user?.name || 'User'}</h1>
         <p className="text-gray-600 mt-1">2XG Dashboard Overview</p>
       </div>
 

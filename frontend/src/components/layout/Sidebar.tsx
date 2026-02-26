@@ -15,7 +15,6 @@ import {
   Brain,
   ChevronDown,
   ChevronRight,
-  FolderPlus,
   Package,
   ArrowRightLeft,
   Repeat,
@@ -150,13 +149,6 @@ const Sidebar = ({ isOpen, onClose }: SidebarProps) => {
                   >
                     <Box size={16} />
                     <span>Items</span>
-                  </Link>
-                  <Link
-                    to="/items/new-category"
-                    className="flex items-center gap-3 px-6 py-2 pl-12 hover:bg-slate-700 transition-colors text-sm text-slate-300 hover:text-white"
-                  >
-                    <FolderPlus size={16} />
-                    <span>New Category</span>
                   </Link>
                   <Link
                     to="/items/stock-count"
