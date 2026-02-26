@@ -70,12 +70,13 @@ export class PosSessionsController {
   async closeSession(req: Request, res: Response) {
     try {
       const { id } = req.params;
-      const { closing_balance, cash_in, cash_out } = req.body;
+      const { closing_balance, cash_in, cash_out, denomination_data } = req.body;
 
       const session = await posSessionsService.closeSession(id, {
         closing_balance: closing_balance || 0,
         cash_in: cash_in || 0,
         cash_out: cash_out || 0,
+        denomination_data: denomination_data || [],
       });
 
       res.json({

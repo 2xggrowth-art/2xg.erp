@@ -13,6 +13,7 @@ export interface PosSession {
   cash_in: number;
   cash_out: number;
   total_sales: number;
+  denomination_data?: { note: number; count: number; total: number }[];
 }
 
 export interface CreateSessionData {
@@ -21,10 +22,17 @@ export interface CreateSessionData {
   opening_balance: number;
 }
 
+export interface DenominationEntry {
+  note: number;
+  count: number;
+  total: number;
+}
+
 export interface CloseSessionData {
   closing_balance: number;
   cash_in: number;
   cash_out: number;
+  denomination_data?: DenominationEntry[];
 }
 
 class PosSessionsService {

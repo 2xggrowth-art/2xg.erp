@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useState, useEffect, useRef } from 'react';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { ArrowLeft, Calendar, Clock, DollarSign, TrendingUp, TrendingDown, Printer, Package, RefreshCw } from 'lucide-react';
 import { invoicesService } from '../services/invoices.service';
 import { posSessionsService } from '../services/pos-sessions.service';
@@ -49,6 +49,7 @@ interface PosSession {
     [key: string]: number;
   };
   cash_transactions: CashTransaction[];
+  denomination_data?: { note: number; count: number; total: number }[];
 }
 
 type TabType = 'overview' | 'cash-activity';
@@ -56,13 +57,25 @@ type TabType = 'overview' | 'cash-activity';
 const SessionDetailPage = () => {
   const { sessionId } = useParams<{ sessionId: string }>();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [activeTab, setActiveTab] = useState<TabType>('overview');
   const [session, setSession] = useState<PosSession | null>(null);
   const [loading, setLoading] = useState(true);
+  const autoPrintDone = useRef(false);
 
   useEffect(() => {
     fetchSessionDetails();
   }, [sessionId]);
+
+  // Auto-print when navigated from close session with ?print=true
+  useEffect(() => {
+    if (session && searchParams.get('print') === 'true' && !autoPrintDone.current) {
+      autoPrintDone.current = true;
+      setSearchParams({}, { replace: true });
+      // Small delay to ensure DOM is ready
+      setTimeout(() => handlePrint(), 300);
+    }
+  }, [session, searchParams]);
 
   const fetchSessionDetails = async () => {
     try {
@@ -149,7 +162,8 @@ const SessionDetailPage = () => {
         cash_sales: cash_total,
         credit_sales: totalSales - cash_total,
         payments_breakdown: payments_breakdown,
-        cash_transactions: sessionTransactions
+        cash_transactions: sessionTransactions,
+        denomination_data: dbSession.denomination_data || [],
       };
 
       setSession(sessionData);
@@ -180,11 +194,30 @@ const SessionDetailPage = () => {
     });
   };
 
+  const calculateDuration = (openedAt: string, closedAt?: string) => {
+    if (!closedAt) return '-';
+    const diff = new Date(closedAt).getTime() - new Date(openedAt).getTime();
+    const hours = Math.floor(diff / 3600000);
+    const minutes = Math.floor((diff % 3600000) / 60000);
+    const seconds = Math.floor((diff % 60000) / 1000);
+    return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+  };
+
   const handlePrint = () => {
     if (!session) return;
 
     const printWindow = window.open('', '_blank');
     if (!printWindow) return;
+
+    const denominationRows = (session.denomination_data || [])
+      .filter(d => d.count > 0)
+      .map(d => `
+        <div class="denom-row">
+          <span class="denom-note">${formatCurrency(d.note)}</span>
+          <span class="denom-count">x ${d.count}</span>
+          <span class="denom-total">: ${formatCurrency(d.total)}</span>
+        </div>
+      `).join('');
 
     const printContent = `
       <!DOCTYPE html>
@@ -198,59 +231,73 @@ const SessionDetailPage = () => {
             box-sizing: border-box;
           }
           body {
-            font-family: 'Courier New', monospace;
+            font-family: Arial, Helvetica, sans-serif;
             padding: 20px;
             max-width: 400px;
             margin: 0 auto;
-            font-size: 12px;
-            line-height: 1.4;
+            font-size: 13px;
+            line-height: 1.6;
+            color: #111;
           }
           .header {
             text-align: center;
-            margin-bottom: 20px;
-            border-bottom: 2px dashed #000;
-            padding-bottom: 10px;
+            margin-bottom: 15px;
           }
           .company-name {
-            font-size: 16px;
+            font-size: 18px;
             font-weight: bold;
-            margin-bottom: 5px;
+            margin-bottom: 2px;
           }
           .report-title {
-            font-size: 14px;
-            margin-bottom: 10px;
+            font-size: 15px;
+            margin-bottom: 8px;
           }
           .section {
-            margin: 15px 0;
+            margin: 12px 0;
           }
           .section-title {
             font-weight: bold;
-            margin-bottom: 8px;
-            font-size: 13px;
+            margin-bottom: 6px;
+            font-size: 14px;
           }
           .row {
             display: flex;
-            justify-content: space-between;
             padding: 3px 0;
           }
           .label {
-            flex: 1;
+            width: 130px;
+            flex-shrink: 0;
           }
           .value {
-            text-align: right;
-            font-weight: bold;
+            flex: 1;
           }
           .separator {
-            border-top: 1px dashed #000;
+            border-top: 1px solid #ccc;
             margin: 10px 0;
           }
           .total-row {
             font-weight: bold;
-            font-size: 13px;
-            padding: 5px 0;
+            font-size: 14px;
+            padding: 6px 0;
             border-top: 2px solid #000;
             border-bottom: 2px solid #000;
             margin: 5px 0;
+          }
+          .denom-row {
+            display: flex;
+            padding: 3px 0;
+          }
+          .denom-note {
+            width: 80px;
+            flex-shrink: 0;
+          }
+          .denom-count {
+            width: 50px;
+            flex-shrink: 0;
+          }
+          .denom-total {
+            flex: 1;
+            text-align: right;
           }
           @media print {
             body {
@@ -301,6 +348,10 @@ const SessionDetailPage = () => {
             })}</span>
           </div>
           <div class="row">
+            <span class="label">Duration</span>
+            <span class="value">: ${calculateDuration(session.opened_at, session.closed_at)}</span>
+          </div>
+          <div class="row">
             <span class="label">Total Sales</span>
             <span class="value">: ${formatCurrency(session.total_sales)}</span>
           </div>
@@ -348,6 +399,15 @@ const SessionDetailPage = () => {
           </div>
         </div>
 
+        ${denominationRows ? `
+        <div class="separator"></div>
+
+        <div class="section">
+          <div class="section-title">Session Denomination Summary</div>
+          ${denominationRows}
+        </div>
+        ` : ''}
+
         <div class="separator"></div>
 
         <div class="section">
@@ -373,8 +433,6 @@ const SessionDetailPage = () => {
         <script>
           window.onload = function() {
             window.print();
-            // Uncomment below to auto-close after printing
-            // window.onafterprint = function() { window.close(); }
           }
         </script>
       </body>
@@ -583,50 +641,65 @@ const SessionDetailPage = () => {
             {/* Sales Summary */}
             <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
               <h3 className="text-lg font-semibold text-gray-800 mb-4">Sales Summary</h3>
-              <div className="space-y-3">
-                {Object.entries(session.payments_breakdown).length > 0 ? (
-                  Object.entries(session.payments_breakdown).map(([paymentMode, amount], index) => {
-                    // Color palette for different payment methods
-                    const colors = [
-                      '#2563eb', // blue
-                      '#16a34a', // green
-                      '#9333ea', // purple
-                      '#ea580c', // orange
-                      '#dc2626', // red
-                      '#4f46e5', // indigo
-                      '#db2777', // pink
-                      '#ca8a04', // yellow
-                    ];
-                    const color = colors[index % colors.length];
-                    const isLast = index === Object.entries(session.payments_breakdown).length - 1;
-
-                    return (
-                      <div
-                        key={paymentMode}
-                        className={`flex justify-between items-center py-3 ${!isLast ? 'border-b border-gray-100' : ''}`}
-                      >
-                        <div className="flex items-center gap-3">
-                          <div className="w-2 h-2 rounded-full" style={{ backgroundColor: color }}></div>
-                          <span className="text-sm font-medium text-gray-700">{paymentMode}</span>
-                        </div>
-                        <span className="text-sm font-bold text-gray-900">{formatCurrency(amount)}</span>
+              {(() => {
+                const entries = Object.entries(session.payments_breakdown);
+                const colors = [
+                  '#2563eb', // blue
+                  '#f59e0b', // amber/yellow
+                  '#dc2626', // red
+                  '#16a34a', // green
+                  '#9333ea', // purple
+                  '#ea580c', // orange
+                  '#4f46e5', // indigo
+                  '#db2777', // pink
+                ];
+                const total = session.total_sales || 1;
+                return (
+                  <>
+                    {entries.length > 0 && (
+                      <div className="flex w-full h-4 rounded-full overflow-hidden mb-6">
+                        {entries.map(([mode, amount], index) => (
+                          <div
+                            key={mode}
+                            style={{
+                              width: `${(amount / total) * 100}%`,
+                              backgroundColor: colors[index % colors.length],
+                            }}
+                          />
+                        ))}
                       </div>
-                    );
-                  })
-                ) : (
-                  <div className="text-center py-8 text-gray-400">
-                    <p className="text-sm">No payment data available</p>
-                  </div>
-                )}
-              </div>
-              {Object.entries(session.payments_breakdown).length > 0 && (
-                <div className="mt-6 pt-4 border-t-2 border-gray-300">
-                  <div className="flex justify-between items-center">
-                    <span className="text-base font-bold text-gray-800">Total</span>
-                    <span className="text-xl font-bold text-gray-900">{formatCurrency(session.total_sales)}</span>
-                  </div>
-                </div>
-              )}
+                    )}
+                    <div className="space-y-3">
+                      {entries.length > 0 ? (
+                        entries.map(([paymentMode, amount], index) => (
+                          <div
+                            key={paymentMode}
+                            className={`flex justify-between items-center py-3 ${index < entries.length - 1 ? 'border-b border-gray-100' : ''}`}
+                          >
+                            <div className="flex items-center gap-3">
+                              <div className="w-3 h-3 rounded-full" style={{ backgroundColor: colors[index % colors.length] }}></div>
+                              <span className="text-sm font-medium text-gray-700">{paymentMode}</span>
+                            </div>
+                            <span className="text-sm font-bold text-gray-900">{formatCurrency(amount)}</span>
+                          </div>
+                        ))
+                      ) : (
+                        <div className="text-center py-8 text-gray-400">
+                          <p className="text-sm">No payment data available</p>
+                        </div>
+                      )}
+                    </div>
+                    {entries.length > 0 && (
+                      <div className="mt-6 pt-4 border-t-2 border-gray-300">
+                        <div className="flex justify-between items-center">
+                          <span className="text-base font-bold text-gray-800">Total</span>
+                          <span className="text-xl font-bold text-gray-900">{formatCurrency(session.total_sales)}</span>
+                        </div>
+                      </div>
+                    )}
+                  </>
+                );
+              })()}
             </div>
           </div>
         ) : (

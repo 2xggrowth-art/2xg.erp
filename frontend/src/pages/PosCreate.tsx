@@ -91,6 +91,17 @@ const PosCreate: React.FC = () => {
     cash_in: 0,
     cash_out: 0,
   });
+  const [denominations, setDenominations] = useState<{ note: number; count: number }[]>([
+    { note: 500, count: 0 },
+    { note: 200, count: 0 },
+    { note: 100, count: 0 },
+    { note: 50, count: 0 },
+    { note: 20, count: 0 },
+    { note: 10, count: 0 },
+    { note: 5, count: 0 },
+    { note: 2, count: 0 },
+    { note: 1, count: 0 },
+  ]);
 
   // Cash movement states
   const [showCashMovementModal, setShowCashMovementModal] = useState(false);
@@ -288,17 +299,26 @@ const PosCreate: React.FC = () => {
 
     try {
       setSessionLoading(true);
+      const denominationTotal = denominations.reduce((sum, d) => sum + d.note * d.count, 0);
+      const denomination_data = denominations
+        .filter(d => d.count > 0)
+        .map(d => ({ note: d.note, count: d.count, total: d.note * d.count }));
+
       const response = await posSessionsService.closeSession(activeSession.id, {
-        closing_balance: closeSessionData.closing_balance,
+        closing_balance: denominationTotal || closeSessionData.closing_balance,
         cash_in: activeSession.cash_in,
         cash_out: activeSession.cash_out,
+        denomination_data,
       });
       if (response.success) {
+        const closedSessionId = response.data.id;
         setActiveSession(null);
         setShowCloseSessionModal(false);
         setCloseSessionData({ closing_balance: 0, cash_in: 0, cash_out: 0 });
+        setDenominations(denominations.map(d => ({ ...d, count: 0 })));
         fetchSessions();
-        alert('Session closed successfully!');
+        // Navigate to session detail page and auto-trigger print
+        navigate(`/pos/sessions/${closedSessionId}?print=true`);
       }
     } catch (error: any) {
       console.error('Error closing session:', error);
@@ -2765,9 +2785,9 @@ const PosCreate: React.FC = () => {
 
         {/* Close Session Modal */}
         {showCloseSessionModal && activeSession && (
-          <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-            <div className="bg-white rounded-xl w-[500px] shadow-2xl">
-              <div className="flex justify-between items-center p-5 border-b border-gray-200">
+          <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 overflow-y-auto py-4">
+            <div className="bg-white rounded-xl w-[550px] shadow-2xl max-h-[90vh] overflow-y-auto">
+              <div className="flex justify-between items-center p-5 border-b border-gray-200 sticky top-0 bg-white z-10">
                 <h2 className="text-xl font-bold text-gray-800">Close Session</h2>
                 <button onClick={() => setShowCloseSessionModal(false)}>
                   <X size={22} className="text-gray-400 hover:text-gray-600 cursor-pointer transition-colors" />
@@ -2816,19 +2836,46 @@ const PosCreate: React.FC = () => {
                   </div>
                 </div>
 
+                {/* Denomination Grid */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Closing Cash Balance
+                  <label className="block text-sm font-bold text-gray-800 mb-3">
+                    Cash Denomination Count
                   </label>
-                  <div className="flex items-center bg-gray-50 rounded-lg border border-gray-300 focus-within:ring-2 focus-within:ring-blue-500 focus-within:border-transparent px-4">
-                    <span className="text-gray-500">₹</span>
-                    <input
-                      type="number"
-                      value={closeSessionData.closing_balance}
-                      onChange={(e) => setCloseSessionData({ ...closeSessionData, closing_balance: parseFloat(e.target.value) || 0 })}
-                      className="w-full bg-transparent border-none px-2 py-2.5 text-sm text-gray-800 focus:outline-none focus:ring-0"
-                      placeholder="0.00"
-                    />
+                  <div className="border border-gray-200 rounded-lg overflow-hidden">
+                    <div className="grid grid-cols-3 bg-gray-100 px-4 py-2 text-xs font-semibold text-gray-600 uppercase">
+                      <span>Note</span>
+                      <span className="text-center">Count</span>
+                      <span className="text-right">Total</span>
+                    </div>
+                    {denominations.map((d, idx) => (
+                      <div key={d.note} className={`grid grid-cols-3 items-center px-4 py-2 ${idx % 2 === 0 ? 'bg-white' : 'bg-gray-50'}`}>
+                        <span className="text-sm font-medium text-gray-700">₹{d.note.toFixed(2)}</span>
+                        <div className="flex justify-center">
+                          <input
+                            type="number"
+                            min="0"
+                            value={d.count || ''}
+                            onChange={(e) => {
+                              const newDenominations = [...denominations];
+                              newDenominations[idx].count = parseInt(e.target.value) || 0;
+                              setDenominations(newDenominations);
+                            }}
+                            className="w-20 text-center border border-gray-300 rounded px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
+                            placeholder="0"
+                          />
+                        </div>
+                        <span className="text-sm font-semibold text-gray-800 text-right">
+                          ₹{(d.note * d.count).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                        </span>
+                      </div>
+                    ))}
+                    <div className="grid grid-cols-3 items-center px-4 py-3 bg-blue-50 border-t-2 border-blue-200">
+                      <span className="text-sm font-bold text-gray-800">Total</span>
+                      <span></span>
+                      <span className="text-sm font-bold text-blue-700 text-right">
+                        ₹{denominations.reduce((sum, d) => sum + d.note * d.count, 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                      </span>
+                    </div>
                   </div>
                 </div>
 

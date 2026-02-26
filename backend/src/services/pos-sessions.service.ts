@@ -6,10 +6,17 @@ export interface CreateSessionData {
   opening_balance: number;
 }
 
+export interface DenominationEntry {
+  note: number;
+  count: number;
+  total: number;
+}
+
 export interface CloseSessionData {
   closing_balance: number;
   cash_in: number;
   cash_out: number;
+  denomination_data?: DenominationEntry[];
 }
 
 export interface PosSession {
@@ -146,13 +153,19 @@ export class PosSessionsService {
       // Only update closing_balance, closed_at, and status.
       // Do NOT overwrite cash_in/cash_out — those are accumulated
       // by recordCashMovement and must be preserved from the DB.
+      const updatePayload: any = {
+        closed_at: new Date().toISOString(),
+        status: 'Closed',
+        closing_balance: data.closing_balance,
+      };
+
+      if (data.denomination_data && data.denomination_data.length > 0) {
+        updatePayload.denomination_data = data.denomination_data;
+      }
+
       const { data: session, error } = await supabase
         .from('pos_sessions')
-        .update({
-          closed_at: new Date().toISOString(),
-          status: 'Closed',
-          closing_balance: data.closing_balance,
-        })
+        .update(updatePayload)
         .eq('id', id)
         .eq('status', 'In-Progress')
         .select()
