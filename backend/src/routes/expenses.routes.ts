@@ -13,6 +13,6 @@ router.post('/categories', requireRole('Admin', 'Manager'), expensesController.c
 router.delete('/categories/:id', requireRole('Admin', 'Manager'), expensesController.deleteExpenseCategory);
 router.get('/:id', expensesController.getExpenseById);
 router.delete('/:id', requireRole('Admin', 'Manager'), expensesController.deleteExpense);
-router.post('/', requireRole('Admin', 'Manager'), ...uploadExpenseVoucher.single('voucher'), expensesController.createExpense);
+router.post('/', ...uploadExpenseVoucher.single('voucher'), expensesController.createExpense);
 
 export default router;
