@@ -6,8 +6,8 @@ const router = Router();
 
 router.get('/', locationsController.getAllLocations);
 router.get('/:id', locationsController.getLocationById);
-router.post('/', locationsController.createLocation);
-router.put('/:id', locationsController.updateLocation);
-router.delete('/:id', locationsController.deleteLocation);
+router.post('/', requireRole('Admin', 'Manager'), locationsController.createLocation);
+router.put('/:id', requireRole('Admin', 'Manager'), locationsController.updateLocation);
+router.delete('/:id', requireRole('Admin', 'Manager'), locationsController.deleteLocation);
 
 export default router;

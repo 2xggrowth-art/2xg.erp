@@ -5,6 +5,6 @@ import { requireRole } from '../middleware/auth.middleware';
 const router = Router();
 
 router.get('/', getGstSettings);
-router.put('/', updateGstSettings);
+router.put('/', requireRole('Admin'), updateGstSettings);
 
 export default router;

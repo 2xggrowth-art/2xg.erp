@@ -17,7 +17,7 @@ router.get('/generate-number', deliveryChallansController.generateChallanNumber)
  * @desc    Create a new delivery challan
  * @access  Public
  */
-router.post('/', deliveryChallansController.createDeliveryChallan);
+router.post('/', requireRole('Admin', 'Manager', 'Salesperson'), deliveryChallansController.createDeliveryChallan);
 
 /**
  * @route   GET /api/delivery-challans
@@ -38,13 +38,13 @@ router.get('/:id', deliveryChallansController.getDeliveryChallanById);
  * @desc    Update a delivery challan
  * @access  Public
  */
-router.put('/:id', deliveryChallansController.updateDeliveryChallan);
+router.put('/:id', requireRole('Admin', 'Manager', 'Salesperson'), deliveryChallansController.updateDeliveryChallan);
 
 /**
  * @route   DELETE /api/delivery-challans/:id
  * @desc    Delete a delivery challan
  * @access  Public
  */
-router.delete('/:id', deliveryChallansController.deleteDeliveryChallan);
+router.delete('/:id', requireRole('Admin', 'Manager'), deliveryChallansController.deleteDeliveryChallan);
 
 export default router;

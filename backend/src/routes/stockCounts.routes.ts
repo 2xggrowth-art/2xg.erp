@@ -17,7 +17,7 @@ router.get('/assigned/:userId', controller.getAssignedStockCounts.bind(controlle
 router.get('/:id', controller.getStockCount.bind(controller));
 
 // Create route (admin)
-router.post('/', controller.createStockCount.bind(controller));
+router.post('/', requireRole('Admin', 'Manager'), controller.createStockCount.bind(controller));
 
 // Counter actions
 router.post('/:id/claim', controller.claimCount.bind(controller));
@@ -28,8 +28,8 @@ router.patch('/:id/status', controller.updateStatus.bind(controller));
 router.post('/:id/submit', controller.submitCount.bind(controller));
 
 // Admin review actions
-router.post('/:id/approve', controller.approveCount.bind(controller));
-router.post('/:id/reject', controller.rejectCount.bind(controller));
-router.post('/:id/recount', controller.requestRecount.bind(controller));
+router.post('/:id/approve', requireRole('Admin', 'Manager'), controller.approveCount.bind(controller));
+router.post('/:id/reject', requireRole('Admin', 'Manager'), controller.rejectCount.bind(controller));
+router.post('/:id/recount', requireRole('Admin', 'Manager'), controller.requestRecount.bind(controller));
 
 export default router;

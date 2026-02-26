@@ -5,7 +5,7 @@ import { requireRole } from '../middleware/auth.middleware';
 const router = Router();
 
 router.get('/', getAllManufacturers);
-router.post('/', createManufacturer);
-router.post('/bulk', bulkCreateManufacturers);
+router.post('/', requireRole('Admin', 'Manager'), createManufacturer);
+router.post('/bulk', requireRole('Admin', 'Manager'), bulkCreateManufacturers);
 
 export default router;

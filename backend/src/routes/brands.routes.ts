@@ -6,7 +6,7 @@ const router = Router();
 
 router.get('/', getAllBrands);
 router.get('/by-manufacturer/:manufacturerId', getBrandsByManufacturer);
-router.post('/', createBrand);
-router.post('/bulk', bulkCreateBrands);
+router.post('/', requireRole('Admin', 'Manager'), createBrand);
+router.post('/bulk', requireRole('Admin', 'Manager'), bulkCreateBrands);
 
 export default router;

@@ -5,7 +5,7 @@ import { requireRole } from '../middleware/auth.middleware';
 const router = Router();
 
 router.get('/', getAllItemSizes);
-router.post('/', createItemSize);
-router.delete('/:id', deleteItemSize);
+router.post('/', requireRole('Admin', 'Manager'), createItemSize);
+router.delete('/:id', requireRole('Admin', 'Manager'), deleteItemSize);
 
 export default router;

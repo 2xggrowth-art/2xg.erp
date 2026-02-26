@@ -20,12 +20,12 @@ router.get('/:id', damageReportsController.getById);
 router.post('/', damageReportsController.create);
 
 // Review (approve/reject) a damage report
-router.put('/:id/review', damageReportsController.review);
+router.put('/:id/review', requireRole('Admin', 'Manager'), damageReportsController.review);
 
 // Clear photo from a damage report (to save storage after review)
-router.put('/:id/clear-photo', damageReportsController.clearPhoto);
+router.put('/:id/clear-photo', requireRole('Admin', 'Manager'), damageReportsController.clearPhoto);
 
 // Delete a damage report
-router.delete('/:id', damageReportsController.delete);
+router.delete('/:id', requireRole('Admin', 'Manager'), damageReportsController.delete);
 
 export default router;

@@ -12,13 +12,13 @@ router.get('/generate-credit-number', vendorCreditsController.generateCreditNumb
 router.get('/summary', vendorCreditsController.getVendorCreditsSummary);
 
 // CRUD operations
-router.post('/', vendorCreditsController.createVendorCredit);
+router.post('/', requireRole('Admin', 'Manager'), vendorCreditsController.createVendorCredit);
 router.get('/', vendorCreditsController.getAllVendorCredits);
 router.get('/:id', vendorCreditsController.getVendorCreditById);
-router.put('/:id', vendorCreditsController.updateVendorCredit);
-router.delete('/:id', vendorCreditsController.deleteVendorCredit);
+router.put('/:id', requireRole('Admin', 'Manager'), vendorCreditsController.updateVendorCredit);
+router.delete('/:id', requireRole('Admin', 'Manager'), vendorCreditsController.deleteVendorCredit);
 
 // Apply credit to bill
-router.post('/:id/apply-to-bill', vendorCreditsController.applyCreditToBill);
+router.post('/:id/apply-to-bill', requireRole('Admin', 'Manager'), vendorCreditsController.applyCreditToBill);
 
 export default router;

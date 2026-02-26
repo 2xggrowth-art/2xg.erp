@@ -5,9 +5,9 @@ import { requireRole } from '../middleware/auth.middleware';
 const router = Router();
 
 router.get('/', getAllPosCodes);
-router.post('/', createPosCode);
+router.post('/', requireRole('Admin'), createPosCode);
 router.post('/verify', verifyPosCode);
-router.put('/:id', updatePosCode);
-router.delete('/:id', deletePosCode);
+router.put('/:id', requireRole('Admin'), updatePosCode);
+router.delete('/:id', requireRole('Admin'), deletePosCode);
 
 export default router;

@@ -11,12 +11,12 @@ router.get('/', placementTasksController.getAll);
 router.get('/:id', placementTasksController.getById);
 
 // Create placement task
-router.post('/', placementTasksController.create);
+router.post('/', requireRole('Admin', 'Manager', 'Salesperson'), placementTasksController.create);
 
 // Create placement tasks from a bill
-router.post('/from-bill', placementTasksController.createFromBill);
+router.post('/from-bill', requireRole('Admin', 'Manager', 'Salesperson'), placementTasksController.createFromBill);
 
 // Update placement task (mark as placed)
-router.patch('/:id', placementTasksController.update);
+router.patch('/:id', requireRole('Admin', 'Manager', 'Salesperson'), placementTasksController.update);
 
 export default router;

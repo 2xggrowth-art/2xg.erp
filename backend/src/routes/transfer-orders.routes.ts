@@ -21,15 +21,15 @@ router.get('/', controller.getAllTransferOrders);
 router.get('/:id', controller.getTransferOrderById);
 
 // Create transfer order
-router.post('/', controller.createTransferOrder);
+router.post('/', requireRole('Admin', 'Manager'), controller.createTransferOrder);
 
 // Update transfer order
-router.put('/:id', controller.updateTransferOrder);
+router.put('/:id', requireRole('Admin', 'Manager'), controller.updateTransferOrder);
 
 // Update transfer order status
-router.patch('/:id/status', controller.updateTransferOrderStatus);
+router.patch('/:id/status', requireRole('Admin', 'Manager'), controller.updateTransferOrderStatus);
 
 // Delete transfer order
-router.delete('/:id', controller.deleteTransferOrder);
+router.delete('/:id', requireRole('Admin', 'Manager'), controller.deleteTransferOrder);
 
 export default router;

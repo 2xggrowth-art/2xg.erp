@@ -18,15 +18,15 @@ router.get('/', posSessionsController.getAllSessions);
 router.get('/:id', posSessionsController.getSessionById);
 
 // Start a new session
-router.post('/start', posSessionsController.startSession);
+router.post('/start', requireRole('Admin', 'Manager', 'Salesperson'), posSessionsController.startSession);
 
 // Close a session
-router.post('/:id/close', posSessionsController.closeSession);
+router.post('/:id/close', requireRole('Admin', 'Manager', 'Salesperson'), posSessionsController.closeSession);
 
 // Update session sales
-router.post('/:id/update-sales', posSessionsController.updateSessionSales);
+router.post('/:id/update-sales', requireRole('Admin', 'Manager', 'Salesperson'), posSessionsController.updateSessionSales);
 
 // Record cash movement
-router.post('/:id/cash-movement', posSessionsController.recordCashMovement);
+router.post('/:id/cash-movement', requireRole('Admin', 'Manager', 'Salesperson'), posSessionsController.recordCashMovement);
 
 export default router;

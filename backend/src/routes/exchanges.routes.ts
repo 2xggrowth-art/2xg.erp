@@ -7,8 +7,8 @@ const router = Router();
 router.get('/stats', exchangesController.getStats);
 router.get('/', exchangesController.getAll);
 router.get('/:id', exchangesController.getById);
-router.post('/', exchangesController.create);
-router.put('/:id/status', exchangesController.updateStatus);
-router.delete('/:id', exchangesController.delete);
+router.post('/', requireRole('Admin', 'Manager', 'Salesperson'), exchangesController.create);
+router.put('/:id/status', requireRole('Admin', 'Manager', 'Salesperson'), exchangesController.updateStatus);
+router.delete('/:id', requireRole('Admin', 'Manager'), exchangesController.delete);
 
 export default router;

@@ -5,7 +5,7 @@ import { requireRole } from '../middleware/auth.middleware';
 const router = Router();
 
 router.get('/', getAllItemColors);
-router.post('/', createItemColor);
-router.delete('/:id', deleteItemColor);
+router.post('/', requireRole('Admin', 'Manager'), createItemColor);
+router.delete('/:id', requireRole('Admin', 'Manager'), deleteItemColor);
 
 export default router;

@@ -11,12 +11,12 @@ router.get('/', transferTasksController.getAll);
 router.get('/:id', transferTasksController.getById);
 
 // Create transfer task
-router.post('/', transferTasksController.create);
+router.post('/', requireRole('Admin', 'Manager', 'Salesperson'), transferTasksController.create);
 
 // Create transfer tasks from a transfer order
-router.post('/from-order', transferTasksController.createFromTransferOrder);
+router.post('/from-order', requireRole('Admin', 'Manager', 'Salesperson'), transferTasksController.createFromTransferOrder);
 
 // Update transfer task (mark step completed)
-router.patch('/:id', transferTasksController.update);
+router.patch('/:id', requireRole('Admin', 'Manager', 'Salesperson'), transferTasksController.update);
 
 export default router;
