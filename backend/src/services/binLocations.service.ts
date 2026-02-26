@@ -145,9 +145,30 @@ export class BinLocationsService {
 
   /**
    * Delete a bin location (hard delete)
+   * Test #76: Block delete if bin has items stored in it
    */
   async deleteBinLocation(id: string) {
-    // Remove allocation records that reference this bin
+    // Test #76: Check if bin has any stock allocations before deleting
+    const { data: billAllocs } = await supabaseAdmin
+      .from('bill_item_bin_allocations')
+      .select('id, quantity')
+      .eq('bin_location_id', id)
+      .limit(1);
+
+    const { data: invoiceAllocs } = await supabaseAdmin
+      .from('invoice_item_bin_allocations')
+      .select('id')
+      .eq('bin_location_id', id)
+      .limit(1);
+
+    const hasBillStock = billAllocs && billAllocs.length > 0;
+    const hasInvoiceAlloc = invoiceAllocs && invoiceAllocs.length > 0;
+
+    if (hasBillStock || hasInvoiceAlloc) {
+      throw new Error('Cannot delete: this bin has items stored in it. Move or remove all items first.');
+    }
+
+    // Remove empty allocation records (safety cleanup)
     const { error: billAllocError } = await supabaseAdmin
       .from('bill_item_bin_allocations')
       .delete()

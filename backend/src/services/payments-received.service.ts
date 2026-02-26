@@ -85,9 +85,52 @@ export class PaymentsReceivedService {
         throw new Error('Amount received must be greater than zero');
       }
 
+      // Test #70: Block negative amounts on any field
+      if (Number(data.amount_used) < 0) {
+        throw new Error('Amount used cannot be negative');
+      }
+
+      // Test #67: Duplicate payment number check
+      if (data.payment_number) {
+        const { data: existingPmt } = await supabase
+          .from('payments_received')
+          .select('id')
+          .eq('payment_number', data.payment_number)
+          .limit(1);
+
+        if (existingPmt && existingPmt.length > 0) {
+          throw new Error(`Payment number "${data.payment_number}" already exists.`);
+        }
+      }
+
+      // Test #21: Overpayment guard — check invoice balance before accepting
+      const invoiceId = this.isValidUUID(data.invoice_id) ? data.invoice_id : null;
+      if (invoiceId) {
+        const { data: invoice } = await supabase
+          .from('invoices')
+          .select('balance_due, total_amount, invoice_number')
+          .eq('id', invoiceId)
+          .single();
+
+        if (invoice) {
+          const balanceDue = Number(invoice.balance_due) || 0;
+          const amountToApply = Number(data.amount_used) > 0 ? Number(data.amount_used) : Number(data.amount_received);
+          if (amountToApply > balanceDue && balanceDue > 0) {
+            throw new Error(`Payment ₹${amountToApply} exceeds invoice balance ₹${balanceDue} on ${invoice.invoice_number || 'invoice'}. Maximum payment is ₹${balanceDue}.`);
+          }
+        }
+      }
+
+      // Test #66: Future date warning (logged, not blocking)
+      const paymentDate = new Date(data.payment_date);
+      const sevenDaysFromNow = new Date();
+      sevenDaysFromNow.setDate(sevenDaysFromNow.getDate() + 7);
+      if (paymentDate > sevenDaysFromNow) {
+        console.warn(`PaymentsReceivedService: Payment ${data.payment_number} has future date: ${data.payment_date}`);
+      }
+
       const defaultOrgId = '00000000-0000-0000-0000-000000000001';
       const customerId = this.isValidUUID(data.customer_id) ? data.customer_id : null;
-      const invoiceId = this.isValidUUID(data.invoice_id) ? data.invoice_id : null;
 
       const cleanPaymentData: any = {
         organization_id: defaultOrgId,
@@ -141,8 +184,8 @@ export class PaymentsReceivedService {
             const currentPaid = Number(invoice.start_amount_paid) || 0;
             const totalAmount = Number(invoice.start_total_amount) || 0;
 
-            const newPaid = currentPaid + amountToApply;
-            const newBalance = Math.max(0, totalAmount - newPaid);
+            const newPaid = Math.round((currentPaid + amountToApply) * 100) / 100;
+            const newBalance = Math.round(Math.max(0, totalAmount - newPaid) * 100) / 100;
 
             let newStatus = 'partial';
             if (newBalance <= 0) {
@@ -277,9 +320,18 @@ export class PaymentsReceivedService {
 
   /**
    * Delete a payment
+   * Test #65: Revert invoice status when payment is deleted
    */
   async deletePaymentReceived(id: string) {
     try {
+      // Test #65: Before deleting, get payment details to revert invoice
+      const { data: payment } = await supabase
+        .from('payments_received')
+        .select('invoice_id, amount_received, amount_used')
+        .eq('id', id)
+        .single();
+
+      // Delete the payment
       const { error } = await supabase
         .from('payments_received')
         .delete()
@@ -287,6 +339,44 @@ export class PaymentsReceivedService {
 
       if (error) {
         throw error;
+      }
+
+      // Test #65: Revert invoice status after payment deletion
+      if (payment && payment.invoice_id) {
+        try {
+          const { data: invoice } = await supabase
+            .from('invoices')
+            .select('total_amount, amount_paid')
+            .eq('id', payment.invoice_id)
+            .single();
+
+          if (invoice) {
+            const amountToReverse = Number(payment.amount_used) > 0 ? Number(payment.amount_used) : Number(payment.amount_received);
+            const newPaid = Math.round(Math.max(0, (Number(invoice.amount_paid) || 0) - amountToReverse) * 100) / 100;
+            const totalAmount = Number(invoice.total_amount) || 0;
+            const newBalance = Math.round(Math.max(0, totalAmount - newPaid) * 100) / 100;
+
+            let newStatus = 'unpaid';
+            if (newPaid >= totalAmount && totalAmount > 0) {
+              newStatus = 'paid';
+            } else if (newPaid > 0) {
+              newStatus = 'partial';
+            }
+
+            await supabase
+              .from('invoices')
+              .update({
+                amount_paid: newPaid,
+                balance_due: newBalance,
+                status: newStatus
+              })
+              .eq('id', payment.invoice_id);
+
+            console.log(`PaymentsReceivedService: Reverted invoice ${payment.invoice_id} — Paid: ₹${newPaid}, Balance: ₹${newBalance}, Status: ${newStatus}`);
+          }
+        } catch (revertErr) {
+          console.error('PaymentsReceivedService: Error reverting invoice status:', revertErr);
+        }
       }
 
       return { success: true };

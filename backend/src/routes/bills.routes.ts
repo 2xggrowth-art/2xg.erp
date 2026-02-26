@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { BillsController } from '../controllers/bills.controller';
 import { uploadBillFiles } from '../middleware/upload.middleware';
+import { requireRole } from '../middleware/auth.middleware';
 
 const router = Router();
 const billsController = new BillsController();
@@ -15,13 +16,13 @@ router.get('/summary', billsController.getBillsSummary);
 router.get('/last-serial/:itemId', billsController.getLastSerialNumber);
 
 // File upload for bills (up to 5 files)
-router.post('/upload', ...uploadBillFiles.array('files', 5), billsController.uploadFiles);
+router.post('/upload', requireRole('Admin', 'Manager'), ...uploadBillFiles.array('files', 5), billsController.uploadFiles);
 
 // CRUD operations
-router.post('/', billsController.createBill);
+router.post('/', requireRole('Admin', 'Manager'), billsController.createBill);
 router.get('/', billsController.getAllBills);
 router.get('/:id', billsController.getBillById);
-router.put('/:id', billsController.updateBill);
-router.delete('/:id', billsController.deleteBill);
+router.put('/:id', requireRole('Admin', 'Manager'), billsController.updateBill);
+router.delete('/:id', requireRole('Admin', 'Manager'), billsController.deleteBill);
 
 export default router;

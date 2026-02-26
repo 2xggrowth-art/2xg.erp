@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import transferTasksController from '../controllers/transferTasks.controller';
+import { requireRole } from '../middleware/auth.middleware';
 
 const router = Router();
 

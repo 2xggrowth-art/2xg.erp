@@ -197,8 +197,25 @@ export class VendorsService {
 
   /**
    * Delete a vendor (soft delete by marking as inactive)
+   * Test #57: Block delete if vendor has bills or payments
    */
   async deleteVendor(id: string) {
+    // Test #57: Check for linked bills
+    const { data: bills } = await supabaseAdmin
+      .from('bills')
+      .select('id, payment_status')
+      .eq('vendor_id', id)
+      .limit(1);
+
+    if (bills && bills.length > 0) {
+      const { count } = await supabaseAdmin
+        .from('bills')
+        .select('id', { count: 'exact', head: true })
+        .eq('vendor_id', id);
+
+      throw new Error(`Cannot delete: vendor has ${count || 'some'} bill(s). Deactivate the vendor instead.`);
+    }
+
     const { data, error } = await supabaseAdmin
       .from('suppliers')
       .update({ is_active: false })

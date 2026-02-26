@@ -180,21 +180,6 @@ const LoginPage = () => {
             </button>
           </form>
 
-          {/* Demo Credentials */}
-          <div className="mt-6 pt-6 border-t border-gray-200">
-            <p className="text-xs text-center text-gray-500 mb-3">Demo Credentials</p>
-            <div className="bg-gray-50 rounded-lg p-3 space-y-2 text-xs">
-              <div className="flex justify-between">
-                <span className="text-gray-600">Admin:</span>
-                <span className="font-mono text-gray-800">mohd.zaheer@gmail.com</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-gray-600">Manager:</span>
-                <span className="font-mono text-gray-800">rahul@gmail.com</span>
-              </div>
-              <p className="text-gray-500 text-center pt-2">Default password: admin@1234</p>
-            </div>
-          </div>
         </div>
 
         {/* Footer */}

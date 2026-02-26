@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { VendorCreditsController } from '../controllers/vendor-credits.controller';
+import { requireRole } from '../middleware/auth.middleware';
 
 const router = Router();
 const vendorCreditsController = new VendorCreditsController();

@@ -358,9 +358,29 @@ export class SalesOrdersService {
 
   /**
    * Delete a sales order
+   * Test #27: Block delete if SO has been converted to invoice
    */
   async deleteSalesOrder(id: string) {
     try {
+      // Test #27: Get the SO number first to check for linked invoices
+      const { data: so } = await supabase
+        .from('sales_orders')
+        .select('so_number')
+        .eq('id', id)
+        .single();
+
+      if (so && so.so_number) {
+        const { data: linkedInvoices } = await supabase
+          .from('invoices')
+          .select('id, invoice_number')
+          .eq('order_number', so.so_number)
+          .limit(1);
+
+        if (linkedInvoices && linkedInvoices.length > 0) {
+          throw new Error(`Cannot delete: sales order has been converted to invoice "${linkedInvoices[0].invoice_number}".`);
+        }
+      }
+
       await supabase.from('sales_order_items').delete().eq('sales_order_id', id);
 
       const { error } = await supabase

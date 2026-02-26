@@ -153,6 +153,18 @@ export class CustomersService {
       throw new Error('Invalid PAN format. Expected: ABCDE1234F (10 characters)');
     }
 
+    // Test #25: Warn if state changes on customer with existing invoices
+    if (customerData.state_code) {
+      const { count } = await supabaseAdmin
+        .from('invoices')
+        .select('id', { count: 'exact', head: true })
+        .eq('customer_id', id);
+
+      if (count && count > 0) {
+        console.warn(`CustomersService: Customer ${id} state changed to "${customerData.state_code}" — has ${count} existing invoices with potentially different tax type (IGST vs CGST/SGST)`);
+      }
+    }
+
     const updateData: any = {};
 
     // Map display_name to customer_name
@@ -190,8 +202,36 @@ export class CustomersService {
 
   /**
    * Delete a customer (hard delete since there's no is_active column)
+   * Test #57: Block delete if customer has invoices or payments
    */
   async deleteCustomer(id: string) {
+    // Test #57: Check for linked invoices
+    const { data: invoices } = await supabaseAdmin
+      .from('invoices')
+      .select('id')
+      .eq('customer_id', id)
+      .limit(1);
+
+    if (invoices && invoices.length > 0) {
+      const { count } = await supabaseAdmin
+        .from('invoices')
+        .select('id', { count: 'exact', head: true })
+        .eq('customer_id', id);
+
+      throw new Error(`Cannot delete: customer has ${count || 'some'} invoice(s). Deactivate the customer instead.`);
+    }
+
+    // Check for linked payments
+    const { data: payments } = await supabaseAdmin
+      .from('payments_received')
+      .select('id')
+      .eq('customer_id', id)
+      .limit(1);
+
+    if (payments && payments.length > 0) {
+      throw new Error('Cannot delete: customer has payment records. Deactivate the customer instead.');
+    }
+
     const { data, error } = await supabaseAdmin
       .from('customers')
       .delete()

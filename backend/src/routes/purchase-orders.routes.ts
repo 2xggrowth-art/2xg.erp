@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import * as poController from '../controllers/purchase-orders.controller';
+import { requireRole } from '../middleware/auth.middleware';
 
 const router = Router();
 
@@ -10,12 +11,12 @@ router.get('/generate-po-number', poController.generatePONumber);
 router.get('/:id', poController.getPurchaseOrderById);
 
 // POST routes
-router.post('/', poController.createPurchaseOrder);
+router.post('/', requireRole('Admin', 'Manager'), poController.createPurchaseOrder);
 
 // PUT routes
-router.put('/:id', poController.updatePurchaseOrder);
+router.put('/:id', requireRole('Admin', 'Manager'), poController.updatePurchaseOrder);
 
 // DELETE routes
-router.delete('/:id', poController.deletePurchaseOrder);
+router.delete('/:id', requireRole('Admin', 'Manager'), poController.deletePurchaseOrder);
 
 export default router;

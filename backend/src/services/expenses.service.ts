@@ -158,8 +158,57 @@ export class ExpensesService {
 
   /**
    * Create a new expense
+   * Tests #85, #87, #88: Zero amount block, default category, duplicate detection
    */
   async createExpense(expenseData: any) {
+    // Test #85: Block zero or negative amount
+    const amount = parseFloat(expenseData.amount);
+    if (!amount || amount <= 0) {
+      throw new Error('Expense amount must be greater than zero');
+    }
+
+    // Test #87: Default category — auto-set 'General' if none selected
+    if (!expenseData.category_id) {
+      const { data: defaultCat } = await supabaseAdmin
+        .from('expense_categories')
+        .select('id')
+        .eq('category_name', 'General')
+        .limit(1)
+        .maybeSingle();
+
+      if (defaultCat) {
+        expenseData.category_id = defaultCat.id;
+        console.warn('ExpensesService: No category selected — auto-assigned "General"');
+      } else {
+        // Create the 'General' category if it doesn't exist
+        const { data: newCat } = await supabaseAdmin
+          .from('expense_categories')
+          .insert({ category_name: 'General', description: 'Default expense category' })
+          .select('id')
+          .single();
+
+        if (newCat) {
+          expenseData.category_id = newCat.id;
+          console.warn('ExpensesService: Created and assigned default "General" category');
+        }
+      }
+    }
+
+    // Test #88: Duplicate detection (same paid_by + amount + date)
+    if (expenseData.paid_by_name && expenseData.expense_date) {
+      const { data: similar } = await supabaseAdmin
+        .from('expenses')
+        .select('id, expense_number')
+        .eq('amount', amount)
+        .eq('expense_date', expenseData.expense_date)
+        .eq('paid_by_name', expenseData.paid_by_name)
+        .limit(1);
+
+      if (similar && similar.length > 0) {
+        console.warn(`ExpensesService: Possible duplicate — similar expense ${similar[0].expense_number} exists with same amount, date, and payee`);
+      }
+    }
+
     // Generate expense number - use ORDER BY DESC + LIMIT 1 instead of fetching all rows
     const { data: latestExpense } = await supabaseAdmin
       .from('expenses')
@@ -187,7 +236,6 @@ export class ExpensesService {
       .single();
 
     // Check if expense qualifies for auto-approval
-    const amount = parseFloat(expenseData.amount);
     const isAutoApproved = amount < AUTO_APPROVAL_THRESHOLD;
 
     // Prepare expense data with defaults - mapped to actual DB columns
@@ -375,6 +423,46 @@ export class ExpensesService {
     await this.logApprovalAction(id, 'rejected', approverName, reason);
 
     return data;
+  }
+
+  /**
+   * Import expenses from CSV data with error reporting (Test #89)
+   */
+  async importExpenses(rows: any[]): Promise<{ successful: number; failed: { row: number; reason: string }[] }> {
+    const results = { successful: 0, failed: [] as { row: number; reason: string }[] };
+
+    for (let i = 0; i < rows.length; i++) {
+      const row = rows[i];
+      try {
+        const amount = parseFloat(row.amount);
+        if (!amount || amount <= 0) {
+          results.failed.push({ row: i + 1, reason: 'Amount must be greater than zero' });
+          continue;
+        }
+        if (!row.expense_date) {
+          results.failed.push({ row: i + 1, reason: 'Expense date is required' });
+          continue;
+        }
+
+        await this.createExpense({
+          amount: row.amount,
+          total_amount: row.total_amount || row.amount,
+          expense_date: row.expense_date,
+          expense_item: row.expense_item || row.description || '',
+          category_id: row.category_id || null,
+          payment_mode: row.payment_mode || 'Cash',
+          paid_by_id: row.paid_by_id || null,
+          paid_by_name: row.paid_by_name || '',
+          notes: row.notes || null,
+          branch: row.branch || null,
+        });
+        results.successful++;
+      } catch (error: any) {
+        results.failed.push({ row: i + 1, reason: error.message });
+      }
+    }
+
+    return results;
   }
 
   /**

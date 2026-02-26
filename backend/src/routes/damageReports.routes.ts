@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import damageReportsController from '../controllers/damageReports.controller';
-import { authMiddleware } from '../middleware/auth.middleware';
+import { authMiddleware, requireRole } from '../middleware/auth.middleware';
 
 const router = Router();
 

@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { PaymentsReceivedController } from '../controllers/payments-received.controller';
+import { requireRole } from '../middleware/auth.middleware';
 
 const router = Router();
 const paymentsReceivedController = new PaymentsReceivedController();
@@ -16,7 +17,7 @@ router.get('/generate-number', paymentsReceivedController.generatePaymentNumber)
  * @desc    Create a new payment received
  * @access  Public
  */
-router.post('/', paymentsReceivedController.createPaymentReceived);
+router.post('/', requireRole('Admin', 'Manager', 'Salesperson'), paymentsReceivedController.createPaymentReceived);
 
 /**
  * @route   GET /api/payments-received
@@ -37,13 +38,13 @@ router.get('/:id', paymentsReceivedController.getPaymentReceivedById);
  * @desc    Update a payment
  * @access  Public
  */
-router.put('/:id', paymentsReceivedController.updatePaymentReceived);
+router.put('/:id', requireRole('Admin', 'Manager', 'Salesperson'), paymentsReceivedController.updatePaymentReceived);
 
 /**
  * @route   DELETE /api/payments-received/:id
  * @desc    Delete a payment
  * @access  Public
  */
-router.delete('/:id', paymentsReceivedController.deletePaymentReceived);
+router.delete('/:id', requireRole('Admin', 'Manager'), paymentsReceivedController.deletePaymentReceived);
 
 export default router;

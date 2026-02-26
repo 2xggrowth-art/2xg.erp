@@ -1,5 +1,6 @@
 import express from 'express';
 import { TransferOrdersController } from '../controllers/transfer-orders.controller';
+import { requireRole } from '../middleware/auth.middleware';
 
 const router = express.Router();
 const controller = new TransferOrdersController();

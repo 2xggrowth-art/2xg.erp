@@ -567,9 +567,4 @@ INSERT INTO expense_categories (name, description) VALUES
   ('Other', 'Miscellaneous expenses')
 ON CONFLICT (name) DO NOTHING;
 
--- Default admin users (password: admin123)
--- Password hash is bcrypt hash of "admin123"
-INSERT INTO users (name, email, password_hash, role, status) VALUES
-  ('Zaheer', 'mohd.zaheer@gmail.com', '$2b$10$K7LWJzVvFqFYqvLw5Ng5vOxGQXD3LZmPKqyXQHxYqvLw5Ng5vOxGQ', 'Admin', 'Active'),
-  ('Rahul Kumar', 'rahul@gmail.com', '$2b$10$K7LWJzVvFqFYqvLw5Ng5vOxGQXD3LZmPKqyXQHxYqvLw5Ng5vOxGQ', 'Manager', 'Active')
-ON CONFLICT (email) DO NOTHING;
+-- Default users should be created via the admin panel after deployment

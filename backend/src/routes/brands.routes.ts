@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { getAllBrands, getBrandsByManufacturer, createBrand, bulkCreateBrands } from '../controllers/brands.controller';
+import { requireRole } from '../middleware/auth.middleware';
 
 const router = Router();
 

@@ -40,26 +40,7 @@ async function diagnose() {
     }
   }
 
-  // Test 2: Check for specific user
-  console.log('\n4. Looking for mohd.zaheer@gmail.com...');
-  const { data: zaheer, error: zaheerError } = await supabase
-    .from('users')
-    .select('*')
-    .eq('email', 'mohd.zaheer@gmail.com')
-    .single();
-
-  if (zaheerError) {
-    console.log('   User NOT found:', zaheerError.message);
-  } else {
-    console.log('   User found!');
-    console.log('   - ID:', zaheer.id);
-    console.log('   - Name:', zaheer.name);
-    console.log('   - Role:', zaheer.role);
-    console.log('   - Status:', zaheer.status);
-    console.log('   - Has password_hash:', zaheer.password_hash ? 'YES (length: ' + zaheer.password_hash.length + ')' : 'NO');
-  }
-
-  // Test 3: Check organizations
+  // Test 2: Check organizations
   console.log('\n5. Checking organizations table...');
   const { data: orgs, error: orgsError } = await supabase
     .from('organizations')

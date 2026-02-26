@@ -137,6 +137,124 @@ export class InvoicesService {
         throw new Error('At least one invoice item is required');
       }
 
+      // === NEW VALIDATION GUARDS ===
+
+      // Test #18: Duplicate invoice number check
+      const { data: existingInv } = await supabase
+        .from('invoices')
+        .select('id')
+        .eq('invoice_number', data.invoice_number)
+        .limit(1);
+
+      if (existingInv && existingInv.length > 0) {
+        throw new Error(`Invoice number "${data.invoice_number}" already exists. Please use a different number.`);
+      }
+
+      // Test #29: Validate item rates and quantities are positive
+      for (const item of data.items) {
+        if (Number(item.rate) < 0) {
+          throw new Error(`Item "${item.item_name}" has negative rate (₹${item.rate}). Rate must be zero or positive.`);
+        }
+        if (Number(item.quantity) <= 0) {
+          throw new Error(`Item "${item.item_name}" has invalid quantity (${item.quantity}). Quantity must be greater than zero.`);
+        }
+      }
+
+      // Test #40: Discount cannot exceed 100%
+      if (data.discount_type === 'percentage' && Number(data.discount_value) > 100) {
+        throw new Error('Discount percentage cannot exceed 100%');
+      }
+
+      // Test #17: Full discount warning (discount >= subtotal)
+      if (Number(data.discount_amount) > 0 && Number(data.discount_amount) >= Number(data.subtotal)) {
+        console.warn(`InvoicesService: Full discount applied on ${data.invoice_number} — total is ₹0`);
+      }
+
+      // Test #22: Future date warning (logged, not blocking)
+      const invoiceDate = new Date(data.invoice_date);
+      const sevenDaysFromNow = new Date();
+      sevenDaysFromNow.setDate(sevenDaysFromNow.getDate() + 7);
+      if (invoiceDate > sevenDaysFromNow) {
+        console.warn(`InvoicesService: Invoice ${data.invoice_number} has future date: ${data.invoice_date}`);
+      }
+
+      // Test #35: Verify all item_ids still exist in the database
+      for (const item of data.items) {
+        if (item.item_id && this.isValidUUID(item.item_id)) {
+          const { data: exists } = await supabase
+            .from('items')
+            .select('id')
+            .eq('id', item.item_id)
+            .limit(1);
+
+          if (!exists || exists.length === 0) {
+            throw new Error(`Item "${item.item_name}" no longer exists in the system. It may have been deleted.`);
+          }
+        }
+      }
+
+      // Test #20: Large invoice warning (50+ items)
+      if (data.items.length > 40) {
+        console.warn(`InvoicesService: Large invoice ${data.invoice_number} has ${data.items.length} items — PDF may need multiple pages`);
+      }
+
+      // Test #28: Decimal quantity warning for physical items
+      for (const item of data.items) {
+        if (Number(item.quantity) !== Math.floor(Number(item.quantity))) {
+          console.warn(`InvoicesService: Item "${item.item_name}" has decimal quantity (${item.quantity}) — is this correct?`);
+        }
+      }
+
+      // Test #34: Validate amount_paid does not exceed total_amount
+      if (data.amount_paid !== undefined && Number(data.amount_paid) > Number(data.total_amount)) {
+        throw new Error(`Amount paid (₹${data.amount_paid}) cannot exceed invoice total (₹${data.total_amount}).`);
+      }
+
+      // Test #50: Filter out ₹0 split payment entries and recalculate
+      if (data.amount_paid !== undefined) {
+        const amountPaid = Math.round(Number(data.amount_paid) * 100) / 100;
+        const totalAmount = Math.round(Number(data.total_amount) * 100) / 100;
+        data.amount_paid = amountPaid;
+        data.balance_due = Math.round((totalAmount - amountPaid) * 100) / 100;
+        if (amountPaid >= totalAmount && totalAmount > 0) {
+          data.payment_status = 'paid';
+        } else if (amountPaid > 0) {
+          data.payment_status = 'partial';
+        }
+      }
+
+      // Test #38/#41: Credit sale requires customer name
+      if (data.status === 'credit' || (data as any).payment_mode === 'Credit') {
+        if (!data.customer_name || data.customer_name.trim() === '' || data.customer_name.trim() === 'Walk-in Customer') {
+          throw new Error('Customer name is required for credit sales. Cash sales can use "Walk-in Customer".');
+        }
+      }
+
+      // Test #39: POS session validation — verify session is active
+      if (data.pos_session_id) {
+        const { data: session } = await supabase
+          .from('pos_sessions')
+          .select('id, status')
+          .eq('id', data.pos_session_id)
+          .single();
+
+        if (!session) {
+          throw new Error('POS session not found. Please start a new session.');
+        }
+        if (session.status !== 'In-Progress') {
+          throw new Error(`POS session is "${session.status}". Only active sessions can create sales.`);
+        }
+      }
+
+      // Test #93: Missing HSN warning when GST is applied
+      if (Number(data.tax_amount) > 0 || Number(data.cgst_amount) > 0 || Number(data.sgst_amount) > 0) {
+        for (const item of data.items) {
+          if (!(item as any).hsn_code) {
+            console.warn(`InvoicesService: Item "${item.item_name}" has no HSN code but GST is applied — GSTR-1 may be incomplete`);
+          }
+        }
+      }
+
       // Extract items from the data
       const { items, ...invoiceData } = data;
 
@@ -463,10 +581,42 @@ export class InvoicesService {
 
   /**
    * Update an existing invoice
+   * Test #16: Recalculate payment_status after total_amount changes
    */
   async updateInvoice(id: string, data: Partial<CreateInvoiceData>) {
     try {
       const { items, ...invoiceData } = data;
+
+      // Test #16: If total_amount is being changed, recalculate payment status
+      if (invoiceData.total_amount !== undefined) {
+        const { data: currentInvoice } = await supabase
+          .from('invoices')
+          .select('amount_paid, total_amount')
+          .eq('id', id)
+          .single();
+
+        if (currentInvoice) {
+          const amountPaid = Number(currentInvoice.amount_paid) || 0;
+          const newTotal = Number(invoiceData.total_amount) || 0;
+          const newBalance = newTotal - amountPaid;
+
+          // Test #72: Warn if already paid more than new total
+          if (amountPaid > newTotal && newTotal > 0) {
+            console.warn(`InvoicesService: Invoice ${id} — already paid ₹${amountPaid} exceeds new total ₹${newTotal}. Refund of ₹${amountPaid - newTotal} may be needed.`);
+          }
+
+          // Recalculate payment status
+          let paymentStatus = 'unpaid';
+          if (amountPaid >= newTotal && newTotal > 0) {
+            paymentStatus = 'paid';
+          } else if (amountPaid > 0) {
+            paymentStatus = 'partial';
+          }
+
+          (invoiceData as any).payment_status = paymentStatus;
+          (invoiceData as any).balance_due = Math.max(0, newBalance);
+        }
+      }
 
       // Update the invoice
       const { data: invoice, error: invoiceError } = await supabase
@@ -512,9 +662,32 @@ export class InvoicesService {
 
   /**
    * Delete an invoice
+   * Test #19: Block delete if payments are linked
    */
   async deleteInvoice(id: string) {
     try {
+      // Test #19: Check for linked payments before deleting
+      const { data: linkedPayments } = await supabase
+        .from('payments_received')
+        .select('id, payment_number, amount_received')
+        .eq('invoice_id', id);
+
+      if (linkedPayments && linkedPayments.length > 0) {
+        const totalPaid = linkedPayments.reduce((sum: number, p: any) => sum + (Number(p.amount_received) || 0), 0);
+        throw new Error(`Cannot delete: ${linkedPayments.length} payment(s) totalling ₹${totalPaid} are linked to this invoice. Delete the payments first.`);
+      }
+
+      // Also check payment_invoice_allocations
+      const { data: allocations } = await supabase
+        .from('payment_invoice_allocations')
+        .select('id')
+        .eq('invoice_id', id)
+        .limit(1);
+
+      if (allocations && allocations.length > 0) {
+        throw new Error('Cannot delete: this invoice has payment allocations. Remove them first.');
+      }
+
       // Delete invoice items first (due to foreign key constraint)
       await supabase.from('invoice_items').delete().eq('invoice_id', id);
 
@@ -578,6 +751,52 @@ export class InvoicesService {
       console.error('Error fetching invoice summary:', error);
       throw error;
     }
+  }
+
+  /**
+   * Bulk delete invoices (Test #24)
+   * Only deletes invoices with no linked payments
+   */
+  async bulkDeleteInvoices(ids: string[]) {
+    const results = {
+      deleted: [] as string[],
+      failed: [] as { id: string; reason: string }[],
+    };
+
+    for (const id of ids) {
+      try {
+        // Check for linked payments
+        const { data: linkedPayments } = await supabase
+          .from('payments_received')
+          .select('id')
+          .eq('invoice_id', id)
+          .limit(1);
+
+        if (linkedPayments && linkedPayments.length > 0) {
+          results.failed.push({ id, reason: 'Invoice has linked payments' });
+          continue;
+        }
+
+        const { data: allocations } = await supabase
+          .from('payment_invoice_allocations')
+          .select('id')
+          .eq('invoice_id', id)
+          .limit(1);
+
+        if (allocations && allocations.length > 0) {
+          results.failed.push({ id, reason: 'Invoice has payment allocations' });
+          continue;
+        }
+
+        await supabase.from('invoice_items').delete().eq('invoice_id', id);
+        await supabase.from('invoices').delete().eq('id', id);
+        results.deleted.push(id);
+      } catch (error: any) {
+        results.failed.push({ id, reason: error.message });
+      }
+    }
+
+    return results;
   }
 
   /**

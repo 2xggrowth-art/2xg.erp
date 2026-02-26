@@ -61,9 +61,54 @@ export class PaymentsService {
 
   /**
    * Create a new payment
+   * Test #62: Block paying fully-paid bill
+   * Test #64: Warn if payment is not linked to any bill
    */
   async createPayment(data: CreatePaymentData) {
     try {
+      // Test #64: Warn if payment is not linked to any bill
+      if (!data.bill_id && (!data.allocations || data.allocations.length === 0)) {
+        console.warn(`PaymentsService: Payment to "${data.vendor_name}" (₹${data.amount}) is not linked to any bill — may be an advance payment`);
+      }
+
+      // Test #62: Block paying a fully-paid bill
+      if (data.bill_id) {
+        const { data: bill } = await supabase
+          .from('bills')
+          .select('bill_number, payment_status, balance_due, total_amount')
+          .eq('id', data.bill_id)
+          .single();
+
+        if (bill) {
+          if (bill.payment_status === 'paid' || Number(bill.balance_due) <= 0) {
+            throw new Error(`Bill "${bill.bill_number}" is already fully paid (₹${bill.total_amount}). No further payment needed.`);
+          }
+          if (Number(data.amount) > Number(bill.balance_due)) {
+            throw new Error(`Payment amount (₹${data.amount}) exceeds bill balance due (₹${bill.balance_due}) for "${bill.bill_number}".`);
+          }
+        }
+      }
+
+      // Validate allocations against bill balances
+      if (data.allocations && data.allocations.length > 0) {
+        for (const alloc of data.allocations) {
+          if (alloc.bill_id && Number(alloc.amount_allocated) > 0) {
+            const { data: bill } = await supabase
+              .from('bills')
+              .select('bill_number, payment_status, balance_due')
+              .eq('id', alloc.bill_id)
+              .single();
+
+            if (bill && bill.payment_status === 'paid') {
+              throw new Error(`Bill "${bill.bill_number}" is already fully paid. Remove it from allocations.`);
+            }
+            if (bill && Number(alloc.amount_allocated) > Number(bill.balance_due)) {
+              throw new Error(`Allocation (₹${alloc.amount_allocated}) exceeds balance due (₹${bill.balance_due}) for bill "${bill.bill_number}".`);
+            }
+          }
+        }
+      }
+
       const paymentNumber = await this.generatePaymentNumber();
 
       const { data: payment, error: paymentError } = await supabase
@@ -250,6 +295,29 @@ export class PaymentsService {
       return data;
     } catch (error) {
       console.error('Error deleting payment:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Reassign payment to a different vendor (Test #58)
+   */
+  async reassignPaymentVendor(paymentId: string, newVendorId: string, newVendorName: string) {
+    try {
+      const { data: payment, error } = await supabase
+        .from('payments_made')
+        .update({
+          vendor_id: newVendorId,
+          vendor_name: newVendorName,
+        })
+        .eq('id', paymentId)
+        .select()
+        .single();
+
+      if (error) throw error;
+      return payment;
+    } catch (error) {
+      console.error('Error reassigning payment vendor:', error);
       throw error;
     }
   }

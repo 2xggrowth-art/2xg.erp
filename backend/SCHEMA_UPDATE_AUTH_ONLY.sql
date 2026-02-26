@@ -55,16 +55,7 @@ CREATE INDEX IF NOT EXISTS idx_users_role ON users(role);
 -- INSERT DEFAULT USERS
 -- =====================================================
 
--- Default admin users (password: admin123)
--- Password hashes are bcrypt hashes of "admin123" (10 salt rounds)
-INSERT INTO users (name, email, password_hash, role, status) VALUES
-  ('Zaheer', 'mohd.zaheer@gmail.com', '$2b$10$8qAw59mSDPlL93iBxrQCleMpsFQhXdqRQcbSYKkCR3B9Rey5KmYGS', 'Admin', 'Active'),
-  ('Rahul Kumar', 'rahul@gmail.com', '$2b$10$e3kUYa4W6qZIrOg1gSQJgeWIe8GEBUbbfmBlWWyppUphXV9kSOj3W', 'Manager', 'Active')
-ON CONFLICT (email) DO UPDATE
-  SET password_hash = EXCLUDED.password_hash,
-      role = EXCLUDED.role,
-      status = EXCLUDED.status,
-      updated_at = NOW();
+-- Default users should be created via the admin panel after deployment
 
 -- =====================================================
 -- VERIFICATION

@@ -25,7 +25,25 @@ interface UpdateDamageReportInput {
 
 export const damageReportsService = {
   // Create a new damage report
+  // Test #77: Validate damage qty does not exceed available stock
   async create(data: CreateDamageReportInput) {
+    // Test #77: Check available stock before creating damage report
+    if (data.item_id && (data.quantity || 1) > 0) {
+      const { data: item } = await supabase
+        .from('items')
+        .select('current_stock, item_name')
+        .eq('id', data.item_id)
+        .single();
+
+      if (item) {
+        const availableStock = Number(item.current_stock) || 0;
+        const damageQty = Number(data.quantity) || 1;
+        if (damageQty > availableStock) {
+          throw new Error(`Cannot report ${damageQty} damaged — only ${availableStock} in stock for "${item.item_name || data.item_name}".`);
+        }
+      }
+    }
+
     const { data: report, error } = await supabase
       .from('item_damage_reports')
       .insert({

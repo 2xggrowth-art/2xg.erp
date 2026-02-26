@@ -7,11 +7,7 @@ export interface Salesperson {
 const STORAGE_KEY = 'salespersons';
 
 class SalespersonService {
-  private salespersons: Salesperson[] = [
-    { id: '1', name: 'Zaheer', email: 'mohd.zaheer@gmail.com' },
-    { id: '2', name: 'Rahul Kumar', email: 'rahul@gmail.com' },
-    { id: '3', name: 'Priya Sharma', email: 'priya@gmail.com' }
-  ];
+  private salespersons: Salesperson[] = [];
 
   constructor() {
     // Load from localStorage on initialization

@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { getAllItemColors, createItemColor, deleteItemColor } from '../controllers/itemColors.controller';
+import { requireRole } from '../middleware/auth.middleware';
 
 const router = Router();
 

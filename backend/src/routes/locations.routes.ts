@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import * as locationsController from '../controllers/locations.controller';
+import { requireRole } from '../middleware/auth.middleware';
 
 const router = Router();
 

@@ -197,6 +197,24 @@ export class TransferOrdersService {
       const total_items = items?.length || 0;
       const total_quantity = items?.reduce((sum, item) => sum + item.transfer_quantity, 0) || 0;
 
+      // Test #73: Check stock availability at source before transfer
+      for (const item of items) {
+        if (item.item_id) {
+          const { data: stockData } = await supabaseAdmin
+            .from('items')
+            .select('current_stock, item_name')
+            .eq('id', item.item_id)
+            .single();
+
+          if (stockData) {
+            const available = Number(stockData.current_stock) || 0;
+            if (item.transfer_quantity > available) {
+              throw new Error(`Cannot transfer ${item.transfer_quantity} of "${stockData.item_name || item.item_name}" — only ${available} available in stock.`);
+            }
+          }
+        }
+      }
+
       // Insert main transfer order record
       const { data: order, error: orderError } = await supabaseAdmin
         .from('transfer_orders')

@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import * as customersController from '../controllers/customers.controller';
+import { requireRole } from '../middleware/auth.middleware';
 
 const router = Router();
 
@@ -9,12 +10,12 @@ router.get('/summary', customersController.getCustomersSummary);
 router.get('/:id', customersController.getCustomerById);
 
 // POST routes
-router.post('/', customersController.createCustomer);
+router.post('/', requireRole('Admin', 'Manager', 'Salesperson'), customersController.createCustomer);
 
 // PUT routes
-router.put('/:id', customersController.updateCustomer);
+router.put('/:id', requireRole('Admin', 'Manager', 'Salesperson'), customersController.updateCustomer);
 
 // DELETE routes
-router.delete('/:id', customersController.deleteCustomer);
+router.delete('/:id', requireRole('Admin', 'Manager'), customersController.deleteCustomer);
 
 export default router;

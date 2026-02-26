@@ -107,7 +107,44 @@ export class AssemblyService {
     return results;
   }
 
+  /**
+   * Start assembly - Test #78: Check component stock before starting
+   */
   async startAssembly(barcode: string, technicianId: string) {
+    // Test #78: Check component stock availability before starting assembly
+    const { data: journey } = await supabaseAdmin
+      .from('assembly_journeys')
+      .select('model_sku')
+      .eq('barcode', barcode)
+      .single();
+
+    if (journey?.model_sku) {
+      // Check if there's a BOM (bill of materials) for this model
+      const { data: components } = await supabaseAdmin
+        .from('assembly_components')
+        .select('item_id, item_name, quantity_required')
+        .eq('model_sku', journey.model_sku);
+
+      if (components && components.length > 0) {
+        for (const comp of components) {
+          if (!comp.item_id) continue;
+          const { data: item } = await supabaseAdmin
+            .from('items')
+            .select('current_stock, item_name')
+            .eq('id', comp.item_id)
+            .single();
+
+          if (item) {
+            const available = Number(item.current_stock) || 0;
+            const required = Number(comp.quantity_required) || 0;
+            if (required > available) {
+              throw new Error(`Cannot start assembly: component "${item.item_name || comp.item_name}" needs ${required} but only ${available} in stock.`);
+            }
+          }
+        }
+      }
+    }
+
     const { data, error } = await supabaseAdmin.rpc('start_assembly', {
       p_barcode: barcode,
       p_technician_id: technicianId

@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { SalesOrdersController } from '../controllers/sales-orders.controller';
+import { requireRole } from '../middleware/auth.middleware';
 
 const router = Router();
 const salesOrdersController = new SalesOrdersController();
@@ -16,7 +17,7 @@ router.get('/generate-number', salesOrdersController.generateSalesOrderNumber);
  * @desc    Create a new sales order
  * @access  Public
  */
-router.post('/', salesOrdersController.createSalesOrder);
+router.post('/', requireRole('Admin', 'Manager', 'Salesperson'), salesOrdersController.createSalesOrder);
 
 /**
  * @route   GET /api/sales-orders
@@ -37,13 +38,13 @@ router.get('/:id', salesOrdersController.getSalesOrderById);
  * @desc    Update a sales order
  * @access  Public
  */
-router.put('/:id', salesOrdersController.updateSalesOrder);
+router.put('/:id', requireRole('Admin', 'Manager', 'Salesperson'), salesOrdersController.updateSalesOrder);
 
 /**
  * @route   DELETE /api/sales-orders/:id
  * @desc    Delete a sales order
  * @access  Public
  */
-router.delete('/:id', salesOrdersController.deleteSalesOrder);
+router.delete('/:id', requireRole('Admin', 'Manager'), salesOrdersController.deleteSalesOrder);
 
 export default router;

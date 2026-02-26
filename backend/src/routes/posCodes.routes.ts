@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { getAllPosCodes, createPosCode, updatePosCode, deletePosCode, verifyPosCode } from '../controllers/posCodes.controller';
+import { requireRole } from '../middleware/auth.middleware';
 
 const router = Router();
 

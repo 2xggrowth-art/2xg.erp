@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import placementTasksController from '../controllers/placementTasks.controller';
+import { requireRole } from '../middleware/auth.middleware';
 
 const router = Router();
 

@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { getAllItemSizes, createItemSize, deleteItemSize } from '../controllers/itemSizes.controller';
+import { requireRole } from '../middleware/auth.middleware';
 
 const router = Router();
 

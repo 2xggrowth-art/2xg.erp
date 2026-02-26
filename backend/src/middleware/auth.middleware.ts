@@ -4,6 +4,65 @@ import { supabaseAdmin } from '../config/supabase';
 
 const JWT_SECRET: string = process.env.JWT_SECRET!;
 
+/**
+ * Test #46: Brute-force protection for POS/login endpoints
+ * Tracks failed attempts by IP. After 5 failures, blocks for 15 minutes.
+ */
+const loginAttempts = new Map<string, { count: number; lastAttempt: number; blockedUntil: number }>();
+const MAX_ATTEMPTS = 5;
+const BLOCK_DURATION = 15 * 60 * 1000; // 15 minutes
+
+export const loginRateLimiter = (req: Request, res: Response, next: NextFunction) => {
+  const ip = req.ip || req.socket.remoteAddress || 'unknown';
+  const now = Date.now();
+  const record = loginAttempts.get(ip);
+
+  if (record) {
+    // Check if still blocked
+    if (record.blockedUntil > now) {
+      const minutesLeft = Math.ceil((record.blockedUntil - now) / 60000);
+      return res.status(429).json({
+        success: false,
+        error: `Too many failed attempts. Try again in ${minutesLeft} minute(s).`
+      });
+    }
+
+    // Reset if block period has passed
+    if (record.blockedUntil > 0 && record.blockedUntil <= now) {
+      loginAttempts.delete(ip);
+    }
+  }
+
+  next();
+};
+
+/**
+ * Record a failed login attempt for brute-force tracking
+ */
+export const recordFailedLogin = (req: Request) => {
+  const ip = req.ip || req.socket.remoteAddress || 'unknown';
+  const now = Date.now();
+  const record = loginAttempts.get(ip) || { count: 0, lastAttempt: 0, blockedUntil: 0 };
+
+  record.count += 1;
+  record.lastAttempt = now;
+
+  if (record.count >= MAX_ATTEMPTS) {
+    record.blockedUntil = now + BLOCK_DURATION;
+    console.warn(`Auth: IP ${ip} blocked for ${BLOCK_DURATION / 60000} minutes after ${record.count} failed login attempts`);
+  }
+
+  loginAttempts.set(ip, record);
+};
+
+/**
+ * Clear failed login tracking after successful login
+ */
+export const clearFailedLogins = (req: Request) => {
+  const ip = req.ip || req.socket.remoteAddress || 'unknown';
+  loginAttempts.delete(ip);
+};
+
 export interface AuthenticatedRequest extends Request {
   user?: {
     userId: string;
@@ -119,7 +178,22 @@ export const authMiddleware = async (
     }
 
     // Attach user info to request
-    req.user = { ...decoded, buildlineRole };
+    // Test #98: Override token's role with live DB role to ensure role changes take effect immediately
+    const liveRole = decoded.role; // default to token role
+    try {
+      const { data: roleCheck } = await supabaseAdmin
+        .from('users')
+        .select('role')
+        .eq('id', decoded.userId)
+        .single();
+      if (roleCheck && roleCheck.role) {
+        req.user = { ...decoded, role: roleCheck.role, buildlineRole };
+      } else {
+        req.user = { ...decoded, buildlineRole };
+      }
+    } catch {
+      req.user = { ...decoded, buildlineRole };
+    }
     next();
   } catch (error: any) {
     if (error.name === 'JsonWebTokenError') {

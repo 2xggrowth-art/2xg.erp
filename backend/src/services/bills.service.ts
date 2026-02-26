@@ -109,6 +109,48 @@ export class BillsService {
       // Generate bill number if not provided
       const billNumber = data.bill_number || await this.generateBillNumber();
 
+      // === VALIDATION GUARDS ===
+
+      // Test #55: Duplicate bill number per vendor
+      if (data.vendor_id) {
+        const { data: existingBill } = await supabase
+          .from('bills')
+          .select('id')
+          .eq('bill_number', billNumber)
+          .eq('vendor_id', data.vendor_id)
+          .limit(1);
+
+        if (existingBill && existingBill.length > 0) {
+          throw new Error(`Bill number "${billNumber}" already exists for this vendor.`);
+        }
+      }
+
+      // Test #51: If linked to PO, warn if bill qty > PO qty
+      if (data.purchase_order_id && data.items) {
+        try {
+          const { data: poItems } = await supabase
+            .from('purchase_order_items')
+            .select('item_id, item_name, quantity')
+            .eq('purchase_order_id', data.purchase_order_id);
+
+          if (poItems && poItems.length > 0) {
+            for (const billItem of data.items) {
+              const poItem = poItems.find((p: any) => p.item_id === billItem.item_id);
+              if (poItem && Number(billItem.quantity) > Number(poItem.quantity)) {
+                console.warn(`BillsService: Item "${billItem.item_name}" bill qty (${billItem.quantity}) exceeds PO qty (${poItem.quantity})`);
+              }
+            }
+          }
+        } catch (poErr) {
+          console.warn('BillsService: Could not validate PO quantities:', poErr);
+        }
+      }
+
+      // Test #62: Block creating a bill if total is zero or negative
+      if (Number(data.total_amount) <= 0) {
+        throw new Error('Bill total amount must be greater than zero');
+      }
+
       // Calculate balance due
       const balanceDue = data.total_amount;
 
@@ -429,7 +471,14 @@ export class BillsService {
         throw error;
       }
 
-      return data;
+      // Test #56: Add overdue flag to bills past due date
+      const today = new Date().toISOString().split('T')[0];
+      const enrichedBills = (data || []).map((bill: any) => ({
+        ...bill,
+        is_overdue: bill.due_date && bill.due_date < today && bill.payment_status !== 'paid',
+      }));
+
+      return enrichedBills;
     } catch (error) {
       console.error('Error fetching bills:', error);
       throw error;
@@ -560,9 +609,21 @@ export class BillsService {
 
   /**
    * Delete a bill
+   * Test #52: Block delete if payments are linked
    */
   async deleteBill(id: string) {
     try {
+      // Test #52: Check for linked payments before deleting
+      const { data: linkedPayments } = await supabase
+        .from('payments_made')
+        .select('id, payment_number, amount')
+        .eq('bill_id', id);
+
+      if (linkedPayments && linkedPayments.length > 0) {
+        const totalPaid = linkedPayments.reduce((sum: number, p: any) => sum + (Number(p.amount) || 0), 0);
+        throw new Error(`Cannot delete: ${linkedPayments.length} payment(s) totalling ₹${totalPaid} are linked to this bill. Delete the payments first.`);
+      }
+
       // Delete bill items first (foreign key constraint)
       await supabase.from('bill_items').delete().eq('bill_id', id);
 

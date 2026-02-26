@@ -869,9 +869,85 @@ export class ItemsService {
   }
 
   /**
+   * Sanitize text to prevent XSS attacks (Test #9)
+   */
+  private sanitizeText(text: string | null | undefined): string | null {
+    if (!text) return null;
+    return text.replace(/<[^>]*>/g, '').trim();
+  }
+
+  /**
    * Create a new item
    */
   async createItem(itemData: any) {
+    const warnings: string[] = [];
+
+    // === VALIDATION GUARDS ===
+
+    // Test #9: XSS sanitization on text fields
+    if (itemData.name) itemData.name = this.sanitizeText(itemData.name);
+    if (itemData.description) itemData.description = this.sanitizeText(itemData.description);
+
+    // Test #7: Name length validation (max 200 characters)
+    if (itemData.name && itemData.name.length > 200) {
+      throw new Error('Item name too long (maximum 200 characters)');
+    }
+
+    // Test #3: Duplicate SKU check
+    if (itemData.sku) {
+      const { data: existingSku } = await supabaseAdmin
+        .from('items')
+        .select('id, item_name')
+        .eq('sku', itemData.sku)
+        .limit(1);
+
+      if (existingSku && existingSku.length > 0) {
+        throw new Error(`SKU "${itemData.sku}" already exists on item: ${existingSku[0].item_name}`);
+      }
+    }
+
+    // Test #15: HSN code must be 4-8 digit numeric
+    if (itemData.hsn_code && !/^\d{4,8}$/.test(itemData.hsn_code)) {
+      throw new Error('HSN code must be 4 to 8 digits (numbers only). Example: 6404');
+    }
+
+    // Test #11: Negative stock not allowed
+    if (itemData.current_stock !== undefined && parseInt(itemData.current_stock) < 0) {
+      throw new Error('Stock quantity cannot be negative');
+    }
+
+    // Test #10: Selling price < buying price warning (non-blocking)
+    const unitPrice = parseFloat(itemData.unit_price) || 0;
+    const costPrice = parseFloat(itemData.cost_price) || 0;
+    if (unitPrice > 0 && costPrice > 0 && unitPrice < costPrice) {
+      warnings.push(`Selling price (₹${unitPrice}) is less than buying price (₹${costPrice}) — selling at ₹${costPrice - unitPrice} loss per unit`);
+    }
+
+    // Test #2: Zero price warning (non-blocking)
+    if (unitPrice === 0) {
+      warnings.push('Item has zero selling price — customers will get it for free');
+    }
+
+    // Test #12: Default category if none selected
+    if (!itemData.category) {
+      warnings.push('No category selected — item will appear as "Uncategorized" in reports');
+    }
+
+    // Test #13: Duplicate variant check (same color + size under same item name)
+    if (itemData.name && (itemData.color || itemData.size)) {
+      const { data: existingVariant } = await supabaseAdmin
+        .from('items')
+        .select('id, item_name')
+        .eq('item_name', itemData.name)
+        .eq('color', itemData.color || '')
+        .eq('size', itemData.size || '')
+        .limit(1);
+
+      if (existingVariant && existingVariant.length > 0) {
+        warnings.push(`Variant with same color "${itemData.color || ''}" and size "${itemData.size || ''}" already exists for "${itemData.name}"`);
+      }
+    }
+
     // Get organization_id (default to first organization)
     const { data: org } = await supabaseAdmin
       .from('organizations')
@@ -891,8 +967,8 @@ export class ItemsService {
       category_id: itemData.category || null,
       subcategory_id: itemData.subcategory || null,
       description: itemData.description || null,
-      unit_price: parseFloat(itemData.unit_price) || 0,
-      cost_price: parseFloat(itemData.cost_price) || 0,
+      unit_price: unitPrice,
+      cost_price: costPrice,
       current_stock: parseInt(itemData.current_stock) || 0,
       reorder_point: itemData.reorder_point !== undefined && itemData.reorder_point !== null ? parseInt(itemData.reorder_point) : 0,
       max_stock: parseInt(itemData.max_stock) || null,
@@ -941,13 +1017,57 @@ export class ItemsService {
       .single();
 
     if (error) throw error;
-    return data;
+    return { ...data, warnings: warnings.length > 0 ? warnings : undefined };
   }
 
   /**
    * Update an existing item
    */
   async updateItem(id: string, itemData: any) {
+    const warnings: string[] = [];
+
+    // === VALIDATION GUARDS ===
+
+    // Test #9: XSS sanitization
+    if (itemData.name) itemData.name = this.sanitizeText(itemData.name);
+    if (itemData.description) itemData.description = this.sanitizeText(itemData.description);
+
+    // Test #7: Name length check
+    if (itemData.name && itemData.name.length > 200) {
+      throw new Error('Item name too long (maximum 200 characters)');
+    }
+
+    // Test #3: Duplicate SKU check (exclude current item)
+    if (itemData.sku) {
+      const { data: existingSku } = await supabaseAdmin
+        .from('items')
+        .select('id, item_name')
+        .eq('sku', itemData.sku)
+        .neq('id', id)
+        .limit(1);
+
+      if (existingSku && existingSku.length > 0) {
+        throw new Error(`SKU "${itemData.sku}" already exists on item: ${existingSku[0].item_name}`);
+      }
+    }
+
+    // Test #15: HSN code format
+    if (itemData.hsn_code && !/^\d{4,8}$/.test(itemData.hsn_code)) {
+      throw new Error('HSN code must be 4 to 8 digits (numbers only). Example: 6404');
+    }
+
+    // Test #11: Negative stock
+    if (itemData.current_stock !== undefined && parseInt(itemData.current_stock) < 0) {
+      throw new Error('Stock quantity cannot be negative');
+    }
+
+    // Test #10: Selling below cost warning
+    const unitPrice = itemData.unit_price !== undefined ? (parseFloat(itemData.unit_price) || 0) : null;
+    const costPrice = itemData.cost_price !== undefined ? (parseFloat(itemData.cost_price) || 0) : null;
+    if (unitPrice !== null && costPrice !== null && unitPrice > 0 && costPrice > 0 && unitPrice < costPrice) {
+      warnings.push(`Selling price (₹${unitPrice}) is less than buying price (₹${costPrice})`);
+    }
+
     // Map frontend field names to database column names (same as createItem)
     const updateData: any = {};
 
@@ -1018,13 +1138,47 @@ export class ItemsService {
 
     if (error) throw error;
     console.log('Updated item data returned:', data);
-    return data;
+    return { ...data, warnings: warnings.length > 0 ? warnings : undefined };
   }
 
   /**
    * Delete an item (soft delete by marking as inactive)
+   * Test #6: Block delete if item is used on invoices or bills
    */
   async deleteItem(id: string) {
+    // Test #6: Check if item is used on any invoices
+    const { data: invoiceItems } = await supabaseAdmin
+      .from('invoice_items')
+      .select('id')
+      .eq('item_id', id)
+      .limit(1);
+
+    if (invoiceItems && invoiceItems.length > 0) {
+      // Count total usage
+      const { count: invoiceCount } = await supabaseAdmin
+        .from('invoice_items')
+        .select('id', { count: 'exact', head: true })
+        .eq('item_id', id);
+
+      throw new Error(`Cannot delete: item is used on ${invoiceCount || 'some'} invoice(s). Deactivate it instead.`);
+    }
+
+    // Test #6: Check if item is used on any bills
+    const { data: billItems } = await supabaseAdmin
+      .from('bill_items')
+      .select('id')
+      .eq('item_id', id)
+      .limit(1);
+
+    if (billItems && billItems.length > 0) {
+      const { count: billCount } = await supabaseAdmin
+        .from('bill_items')
+        .select('id', { count: 'exact', head: true })
+        .eq('item_id', id);
+
+      throw new Error(`Cannot delete: item is used on ${billCount || 'some'} bill(s). Deactivate it instead.`);
+    }
+
     const { data, error } = await supabaseAdmin
       .from('items')
       .update({ is_active: false })

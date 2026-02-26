@@ -5,20 +5,7 @@ import bcrypt from 'bcrypt';
  * Run this with: ts-node scripts/create-default-users.ts
  */
 
-const defaultUsers = [
-  {
-    name: 'Zaheer',
-    email: 'mohd.zaheer@gmail.com',
-    password: 'admin123',
-    role: 'Admin'
-  },
-  {
-    name: 'Rahul Kumar',
-    email: 'rahul@gmail.com',
-    password: 'admin123',
-    role: 'Manager'
-  }
-];
+const defaultUsers: { name: string; email: string; password: string; role: string }[] = [];
 
 async function generateHashes() {
   console.log('Generating bcrypt hashes for default users...\n');

@@ -350,6 +350,27 @@ export class VendorCreditsService {
         throw new Error('Insufficient credit balance');
       }
 
+      // Test #54: Check bill balance_due before applying credit
+      const { data: bill, error: billError } = await supabaseAdmin
+        .from('bills')
+        .select('bill_number, balance_due, payment_status')
+        .eq('id', billId)
+        .single();
+
+      if (billError) throw billError;
+
+      if (!bill) {
+        throw new Error('Bill not found');
+      }
+
+      if (bill.payment_status === 'paid' || Number(bill.balance_due) <= 0) {
+        throw new Error(`Bill "${bill.bill_number}" is already fully paid. Cannot apply credit.`);
+      }
+
+      if (amount > Number(bill.balance_due)) {
+        throw new Error(`Credit amount (₹${amount}) exceeds bill balance due (₹${bill.balance_due}) for "${bill.bill_number}".`);
+      }
+
       // Update credit
       const newAmountUsed = parseFloat(credit.amount_used || 0) + amount;
       const newBalance = parseFloat(credit.total_amount) - newAmountUsed;

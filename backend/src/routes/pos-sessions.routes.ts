@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { PosSessionsController } from '../controllers/pos-sessions.controller';
+import { requireRole } from '../middleware/auth.middleware';
 
 const router = Router();
 const posSessionsController = new PosSessionsController();

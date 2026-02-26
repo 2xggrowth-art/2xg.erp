@@ -16,7 +16,7 @@ export class PurchaseOrdersService {
         *,
         purchase_order_items (*)
       `)
-      .order('created_at', { ascending: false});
+      .order('created_at', { ascending: false });
 
     if (filters?.status) {
       query = query.eq('status', filters.status);
@@ -93,6 +93,16 @@ export class PurchaseOrdersService {
       throw new Error('At least one item is required');
     }
 
+    // Test #53: Old date warning — PO date more than 1 year ago
+    if (poData.order_date) {
+      const orderDate = new Date(poData.order_date);
+      const oneYearAgo = new Date();
+      oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
+      if (orderDate < oneYearAgo) {
+        console.warn(`PurchaseOrdersService: PO ${poData.po_number} has very old date: ${poData.order_date} — is this correct?`);
+      }
+    }
+
     // Get organization_id
     const { data: org } = await supabaseAdmin
       .from('organizations')
@@ -120,21 +130,21 @@ export class PurchaseOrdersService {
       throw new Error('CGST/SGST and IGST cannot be applied together. Use either CGST+SGST or IGST.');
     }
 
-    // Calculate GST
-    const cgstAmount = (afterDiscount * (poData.cgst_rate || 0)) / 100;
-    const sgstAmount = (afterDiscount * (poData.sgst_rate || 0)) / 100;
-    const igstAmount = (afterDiscount * (poData.igst_rate || 0)) / 100;
-    const gstTotal = cgstAmount + sgstAmount + igstAmount;
+    // Calculate GST (Test #71: Round all monetary values to 2 decimal places)
+    const cgstAmount = Math.round((afterDiscount * (poData.cgst_rate || 0)) / 100 * 100) / 100;
+    const sgstAmount = Math.round((afterDiscount * (poData.sgst_rate || 0)) / 100 * 100) / 100;
+    const igstAmount = Math.round((afterDiscount * (poData.igst_rate || 0)) / 100 * 100) / 100;
+    const gstTotal = Math.round((cgstAmount + sgstAmount + igstAmount) * 100) / 100;
 
     // Calculate TDS/TCS
     let tdsTcsAmount = 0;
     if (poData.tds_tcs_type && poData.tds_tcs_rate) {
-      tdsTcsAmount = (afterDiscount * poData.tds_tcs_rate) / 100;
+      tdsTcsAmount = Math.round((afterDiscount * poData.tds_tcs_rate) / 100 * 100) / 100;
     }
 
-    const taxAmount = gstTotal + tdsTcsAmount;
+    const taxAmount = Math.round((gstTotal + tdsTcsAmount) * 100) / 100;
     const adjustment = parseFloat(poData.adjustment) || 0;
-    const totalAmount = afterDiscount + taxAmount + adjustment;
+    const totalAmount = Math.round((afterDiscount + taxAmount + adjustment) * 100) / 100;
 
     // Create PO
     const newPO = {
@@ -222,8 +232,20 @@ export class PurchaseOrdersService {
 
   /**
    * Update purchase order
+   * Test #60: Block update if PO already has linked bills
    */
   async updatePurchaseOrder(id: string, poData: any) {
+    // Test #60: Check if PO has been converted to bill
+    const { data: linkedBills } = await supabaseAdmin
+      .from('bills')
+      .select('id, bill_number')
+      .eq('purchase_order_id', id)
+      .limit(1);
+
+    if (linkedBills && linkedBills.length > 0) {
+      throw new Error(`Cannot edit: this PO has already been converted to bill "${linkedBills[0].bill_number}".`);
+    }
+
     // Validate GST mutual exclusivity
     if ((poData.cgst_rate || poData.sgst_rate) && poData.igst_rate) {
       throw new Error('CGST/SGST and IGST cannot be applied together. Use either CGST+SGST or IGST.');
@@ -243,19 +265,19 @@ export class PurchaseOrdersService {
     }
 
     const afterDiscount = subtotal - discountAmount;
-    const cgstAmount = (afterDiscount * (poData.cgst_rate || 0)) / 100;
-    const sgstAmount = (afterDiscount * (poData.sgst_rate || 0)) / 100;
-    const igstAmount = (afterDiscount * (poData.igst_rate || 0)) / 100;
-    const gstTotal = cgstAmount + sgstAmount + igstAmount;
+    const cgstAmount = Math.round((afterDiscount * (poData.cgst_rate || 0)) / 100 * 100) / 100;
+    const sgstAmount = Math.round((afterDiscount * (poData.sgst_rate || 0)) / 100 * 100) / 100;
+    const igstAmount = Math.round((afterDiscount * (poData.igst_rate || 0)) / 100 * 100) / 100;
+    const gstTotal = Math.round((cgstAmount + sgstAmount + igstAmount) * 100) / 100;
 
     let tdsTcsAmount = 0;
     if (poData.tds_tcs_type && poData.tds_tcs_rate) {
-      tdsTcsAmount = (afterDiscount * poData.tds_tcs_rate) / 100;
+      tdsTcsAmount = Math.round((afterDiscount * poData.tds_tcs_rate) / 100 * 100) / 100;
     }
 
-    const taxAmount = gstTotal + tdsTcsAmount;
+    const taxAmount = Math.round((gstTotal + tdsTcsAmount) * 100) / 100;
     const adjustment = parseFloat(poData.adjustment) || 0;
-    const totalAmount = afterDiscount + taxAmount + adjustment;
+    const totalAmount = Math.round((afterDiscount + taxAmount + adjustment) * 100) / 100;
 
     // Build update object with only valid DB columns
     const updateData: any = {
@@ -348,8 +370,26 @@ export class PurchaseOrdersService {
 
   /**
    * Delete purchase order
+   * Test #27: Block delete if PO has linked bills
    */
   async deletePurchaseOrder(id: string) {
+    // Test #27: Check for linked bills before deleting
+    const { data: linkedBills } = await supabaseAdmin
+      .from('bills')
+      .select('id, bill_number')
+      .eq('purchase_order_id', id)
+      .limit(1);
+
+    if (linkedBills && linkedBills.length > 0) {
+      throw new Error(`Cannot delete: PO has been converted to bill "${linkedBills[0].bill_number}". Delete the bill first.`);
+    }
+
+    // Delete PO items first
+    await supabaseAdmin
+      .from('purchase_order_items')
+      .delete()
+      .eq('purchase_order_id', id);
+
     const { data, error } = await supabaseAdmin
       .from('purchase_orders')
       .delete()
