@@ -78,7 +78,7 @@ export const getMobileUsers = async (req: Request, res: Response) => {
 
 export const createMobileUser = async (req: Request, res: Response) => {
   try {
-    const { phone_number, pin, employee_name, employee_id, branch } = req.body;
+    const { phone_number, pin, employee_name, employee_id, branch, role } = req.body;
 
     if (!phone_number || !pin || !employee_name) {
       return res.status(400).json({
@@ -99,7 +99,8 @@ export const createMobileUser = async (req: Request, res: Response) => {
       pin,
       employee_name,
       employee_id,
-      branch
+      branch,
+      role
     });
 
     res.status(201).json({
@@ -139,6 +140,19 @@ export const updateMobileUserPin = async (req: Request, res: Response) => {
     res.status(400).json({
       success: false,
       error: error.message || 'Failed to update PIN'
+    });
+  }
+};
+
+export const deleteMobileUser = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    await mobileAuthService.deleteUser(id);
+    res.json({ success: true, message: 'User deleted successfully' });
+  } catch (error: any) {
+    res.status(400).json({
+      success: false,
+      error: error.message || 'Failed to delete user'
     });
   }
 };

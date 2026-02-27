@@ -109,6 +109,7 @@ export class MobileAuthService {
     employee_name: string;
     employee_id?: string;
     branch?: string;
+    role?: string;
   }) {
     const cleanPhone = userData.phone_number.replace(/[\s\-]/g, '').replace(/^\+91/, '');
 
@@ -123,6 +124,7 @@ export class MobileAuthService {
         employee_name: userData.employee_name,
         employee_id: userData.employee_id || null,
         branch: userData.branch || 'Head Office',
+        role: userData.role || 'counter',
         is_active: true
       })
       .select()
@@ -158,5 +160,18 @@ export class MobileAuthService {
 
     if (error) throw error;
     return data;
+  }
+
+  /**
+   * Delete a mobile user
+   */
+  async deleteUser(userId: string) {
+    const { error } = await supabaseAdmin
+      .from('mobile_users')
+      .delete()
+      .eq('id', userId);
+
+    if (error) throw error;
+    return { success: true };
   }
 }

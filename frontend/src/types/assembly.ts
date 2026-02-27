@@ -160,6 +160,8 @@ export interface BinMovementHistory {
 export interface Technician {
   id: string;
   name: string;
-  email: string;
+  email?: string;
+  phone?: string;
+  phone_number?: string;
   buildline_role: string;
 }

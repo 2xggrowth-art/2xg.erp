@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { UserCog, Plus, X, Trash2 } from 'lucide-react';
 import { assemblyService } from '../../../services/assembly.service';
-import { authService } from '../../../services/auth.service';
+import apiClient from '../../../services/api.client';
 import toast from 'react-hot-toast';
 import { Technician } from '../../../types/assembly';
 
@@ -55,24 +55,23 @@ export const ManageTechnicians = ({ onSuccess }: ManageTechniciansProps) => {
 
     try {
       setAdding(true);
-      // 1. Create the user with phone + PIN
-      const createdUser = await authService.register({
-        name: newTech.name,
-        phone: newTech.phone,
+      // Create mobile user with role via mobile-auth API
+      const response = await apiClient.post('/mobile-auth/users', {
+        employee_name: newTech.name,
+        phone_number: newTech.phone,
         pin: newTech.pin,
-        role: 'Staff'
+        role: newTech.buildline_role
       });
 
-      // 2. Set their buildline role
-      await authService.updateUser(createdUser.id, {
-        buildline_role: newTech.buildline_role
-      } as any);
-
-      toast.success(`${newTech.name} added as ${newTech.buildline_role}`);
-      setShowAddModal(false);
-      setNewTech({ name: '', phone: '', pin: '', buildline_role: 'technician' });
-      loadTechnicians();
-      onSuccess?.();
+      if (response.data.success) {
+        toast.success(`${newTech.name} added as ${newTech.buildline_role}`);
+        setShowAddModal(false);
+        setNewTech({ name: '', phone: '', pin: '', buildline_role: 'technician' });
+        loadTechnicians();
+        onSuccess?.();
+      } else {
+        toast.error(response.data.error || 'Failed to add technician');
+      }
     } catch (error: any) {
       console.error('Failed to add technician:', error);
       toast.error(error.response?.data?.error || error.message || 'Failed to add technician');
@@ -87,13 +86,13 @@ export const ManageTechnicians = ({ onSuccess }: ManageTechniciansProps) => {
 
     try {
       setDeletingId(tech.id);
-      await authService.deleteUser(tech.id);
+      await apiClient.delete(`/mobile-auth/users/${tech.id}`);
       toast.success(`${tech.name} deleted`);
       loadTechnicians();
       onSuccess?.();
     } catch (error: any) {
       console.error('Failed to delete technician:', error);
-      toast.error(error.message || 'Failed to delete technician');
+      toast.error(error.response?.data?.error || error.message || 'Failed to delete technician');
     } finally {
       setDeletingId(null);
     }
@@ -128,7 +127,7 @@ export const ManageTechnicians = ({ onSuccess }: ManageTechniciansProps) => {
                 <div className="flex items-center justify-between">
                   <div>
                     <h4 className="font-bold text-gray-900">{tech.name}</h4>
-                    <p className="text-sm text-gray-600">{tech.phone || tech.email}</p>
+                    <p className="text-sm text-gray-600">{tech.phone_number || tech.phone || tech.email}</p>
                   </div>
                   <div className="flex items-center gap-2">
                     <span className="px-2 py-1 rounded-full text-xs font-bold bg-blue-100 text-blue-800">

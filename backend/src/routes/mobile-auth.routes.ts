@@ -11,5 +11,6 @@ router.get('/verify', mobileAuthController.verifyMobileToken);
 router.get('/users', mobileAuthController.getMobileUsers);
 router.post('/users', mobileAuthController.createMobileUser);
 router.put('/users/:id/pin', mobileAuthController.updateMobileUserPin);
+router.delete('/users/:id', mobileAuthController.deleteMobileUser);
 
 export default router;
