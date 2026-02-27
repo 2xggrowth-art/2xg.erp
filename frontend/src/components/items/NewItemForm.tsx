@@ -2,7 +2,6 @@ import { useState, useEffect } from 'react';
 import { ArrowLeft, Package, Save, Upload } from 'lucide-react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { itemsService, ProductCategory, ProductSubcategory } from '../../services/items.service';
-import { vendorsService, Vendor } from '../../services/vendors.service';
 import { brandsService, Brand } from '../../services/brands.service';
 import { manufacturersService, Manufacturer } from '../../services/manufacturers.service';
 import { useAuth } from '../../contexts/AuthContext';
@@ -18,13 +17,11 @@ const NewItemForm = () => {
   const isEditMode = !!id;
   const { user } = useAuth();
 
-  // Check if user is admin or super_admin to show purchase price (case-insensitive)
   const userRole = user?.role?.toLowerCase() || '';
   const canViewPurchasePrice = userRole === 'admin' || userRole === 'super_admin' || userRole === 'super admin';
   const [loading, setLoading] = useState(false);
   const [fetching, setFetching] = useState(false);
   const [showUploadModal, setShowUploadModal] = useState(false);
-  const [vendors, setVendors] = useState<Vendor[]>([]);
   const [categories, setCategories] = useState<ProductCategory[]>([]);
   const [allSubcategories, setAllSubcategories] = useState<ProductSubcategory[]>([]);
   const [brands, setBrands] = useState<Brand[]>([]);
@@ -32,52 +29,27 @@ const NewItemForm = () => {
   const [itemSizes, setItemSizes] = useState<ItemSize[]>([]);
   const [itemColors, setItemColors] = useState<ItemColor[]>([]);
   const [formData, setFormData] = useState({
-    type: ['goods'] as string[],
     name: '',
+    sku: '',
     size: '',
     color: '',
-    variant: '',
-    sku: '',
-    unit: '',
+    unit: 'pcs',
     category: '',
     subcategory: '',
-    returnableItem: false,
     hsnCode: '',
-    taxPreference: 'taxable',
     cgst_rate: 9,
     sgst_rate: 9,
-    igst_rate: 0,
     manufacturer: '',
     brand: '',
-
-    // Sales Information
-    sellable: true,
     sellingPrice: '',
-    salesAccount: 'Sales',
-    salesDescription: '',
-    // Purchase Information
-    purchasable: true,
     costPrice: '',
-    purchaseAccount: 'Cost of Goods Sold',
-    purchaseDescription: '',
-    preferredVendor: '',
-    // Inventory Tracking
-    trackInventory: true,
-    trackBinLocation: false,
-    advancedTracking: 'none',
-    inventoryAccount: '',
-    valuationMethod: '',
     reorderPoint: '',
-    isPremiumTagged: false,
-    incentiveType: '',
   });
 
-  // Fetch items for SKU validation
   const [items, setItems] = useState<any[]>([]);
   const [duplicateSkuError, setDuplicateSkuError] = useState<boolean>(false);
 
   useEffect(() => {
-    fetchVendors();
     fetchItems();
     fetchCategories();
     fetchAllSubcategories();
@@ -88,7 +60,6 @@ const NewItemForm = () => {
     if (isEditMode && id) {
       fetchItemDetails(id);
     } else {
-      // Auto-generate SKU for new items
       generateNewSku();
     }
   }, [id, isEditMode]);
@@ -97,18 +68,11 @@ const NewItemForm = () => {
     try {
       const response = await itemsService.generateSku();
       if (response.data.success && response.data.data) {
-        setFormData(prev => ({
-          ...prev,
-          sku: response.data.data.sku
-        }));
+        setFormData(prev => ({ ...prev, sku: response.data.data.sku }));
       }
     } catch (error) {
       console.error('Error generating SKU:', error);
-      // Fallback SKU
-      setFormData(prev => ({
-        ...prev,
-        sku: `SKU-${Date.now().toString().slice(-6)}`
-      }));
+      setFormData(prev => ({ ...prev, sku: `SKU-${Date.now().toString().slice(-6)}` }));
     }
   };
 
@@ -116,8 +80,7 @@ const NewItemForm = () => {
     try {
       const response = await itemsService.getAllItems();
       if (response.data.success && response.data.data) {
-        const fetchedItems = response.data.data;
-        setItems(fetchedItems);
+        setItems(response.data.data);
       }
     } catch (error) {
       console.error('Error fetching items:', error);
@@ -143,18 +106,6 @@ const NewItemForm = () => {
       }
     } catch (error) {
       console.error('Error fetching subcategories:', error);
-    }
-  };
-
-  const fetchVendors = async () => {
-    try {
-      const response = await vendorsService.getAllVendors({ isActive: true });
-      const apiResponse = response.data;
-      if (apiResponse.success && apiResponse.data) {
-        setVendors(apiResponse.data);
-      }
-    } catch (error) {
-      console.error('Error fetching vendors:', error);
     }
   };
 
@@ -274,7 +225,6 @@ const NewItemForm = () => {
       const response = await itemsService.deleteCategory(id);
       if (response.data.success) {
         setCategories(categories.filter(c => c.id !== id));
-        // Remove subcategories that belonged to this category
         setAllSubcategories(allSubcategories.filter(s => s.category_id !== id));
         const deleted = categories.find(c => c.id === id);
         if (deleted && deleted.name === formData.category) {
@@ -330,14 +280,12 @@ const NewItemForm = () => {
     try {
       let brandsCreated = 0;
       let manufacturersCreated = 0;
-      const manufacturerMap = new Map<string, string>(); // name -> id
+      const manufacturerMap = new Map<string, string>();
 
-      // Step 1: Create manufacturers first
       if (data.manufacturers && data.manufacturers.length > 0) {
         const response = await manufacturersService.bulkCreateManufacturers(data.manufacturers);
         if (response.data.success && response.data.data) {
           manufacturersCreated = data.manufacturers.length;
-          // Build map of manufacturer names to IDs
           response.data.data.forEach((mfr: any) => {
             manufacturerMap.set(mfr.name.toLowerCase(), mfr.id);
           });
@@ -345,9 +293,7 @@ const NewItemForm = () => {
         }
       }
 
-      // Step 2: Create brands with manufacturer_id links
       if (data.brands && data.brands.length > 0) {
-        // Map brands to include manufacturer_id
         const brandsWithManufacturer = data.brands.map((brand: any) => {
           const brandData: any = { name: brand.name };
           if (brand.manufacturerName) {
@@ -380,53 +326,24 @@ const NewItemForm = () => {
       const apiResponse = response.data;
       if (apiResponse.success && apiResponse.data) {
         const item = apiResponse.data;
-
         setFormData({
-          type: item.item_type ? item.item_type.split(',') : ['goods'],
           name: item.item_name,
+          sku: item.sku,
           size: item.size || '',
           color: item.color || '',
-          variant: item.variant || '',
-          sku: item.sku,
-          unit: item.unit_of_measurement,
+          unit: item.unit_of_measurement || 'pcs',
           category: categories.find(c => c.id === item.category_id)?.name || '',
           subcategory: '',
-          returnableItem: item.is_returnable,
           hsnCode: item.hsn_code || '',
-          taxPreference: item.tax_rate > 0 ? 'taxable' : 'non-taxable',
-          cgst_rate: item.tax_rate > 0 ? item.tax_rate / 2 : 0,
-          sgst_rate: item.tax_rate > 0 ? item.tax_rate / 2 : 0,
-          igst_rate: 0,
-          // Removed dimension and weight fields
+          cgst_rate: item.tax_rate > 0 ? item.tax_rate / 2 : 9,
+          sgst_rate: item.tax_rate > 0 ? item.tax_rate / 2 : 9,
           manufacturer: item.manufacturer || '',
           brand: item.brand || '',
-          // Removed UPC, MPN, EAN, ISBN fields
-
-          // Sales Information
-          sellable: item.is_active, // Assuming is_active relates to sellable for now, or fetch specific field if added
           sellingPrice: item.unit_price ? item.unit_price.toString() : '',
-          salesAccount: 'Sales', // Default, as not returned in getById usually
-          salesDescription: item.description || '',
-
-          // Purchase Information
-          purchasable: true,
           costPrice: item.cost_price ? item.cost_price.toString() : '',
-          purchaseAccount: 'Cost of Goods Sold',
-          purchaseDescription: '', // Not in item interface shown
-          preferredVendor: item.preferred_vendor_id || item.supplier_id || '',
-
-          // Inventory Tracking
-          trackInventory: true,
-          trackBinLocation: false,
-          advancedTracking: item.advanced_tracking_type || 'none',
-          inventoryAccount: '',
-          valuationMethod: '',
           reorderPoint: item.reorder_point ? item.reorder_point.toString() : '',
-          isPremiumTagged: item.is_premium_tagged || false,
-          incentiveType: item.incentive_type || '',
         });
 
-        // Load subcategory name if item has one
         if (item.subcategory_id && allSubcategories.length > 0) {
           const sub = allSubcategories.find(s => s.id === item.subcategory_id);
           if (sub) {
@@ -444,14 +361,8 @@ const NewItemForm = () => {
   };
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
-    const { name, value, type } = e.target;
-    // Handle checkbox specifically
-    const checked = (e.target as HTMLInputElement).checked;
-
-    setFormData(prev => ({
-      ...prev,
-      [name]: type === 'checkbox' ? checked : value
-    }));
+    const { name, value } = e.target;
+    setFormData(prev => ({ ...prev, [name]: value }));
 
     if (name === 'sku') {
       const isDuplicate = items.some(i => i.sku.toLowerCase() === value.toLowerCase() && i.id !== id);
@@ -470,13 +381,11 @@ const NewItemForm = () => {
     setLoading(true);
 
     try {
-      // Prepare item data for API
       const itemData: any = {
         name: formData.name,
-        item_type: formData.type.join(','),
+        item_type: 'goods',
         size: formData.size || undefined,
         color: formData.color || undefined,
-        variant: formData.variant || undefined,
         sku: formData.sku,
         unit: formData.unit,
         category: categories.find(c => c.name === formData.category)?.id || undefined,
@@ -484,63 +393,26 @@ const NewItemForm = () => {
         hsn_code: formData.hsnCode || undefined,
         manufacturer: formData.manufacturer || undefined,
         brand: formData.brand || undefined,
-        // Removed UPC, MPN, EAN, ISBN fields
-        is_returnable: formData.returnableItem,
-        // Removed weight and dimensions
-        tax_rate: formData.taxPreference === 'taxable'
-          ? (formData.igst_rate || (formData.cgst_rate + formData.sgst_rate))
-          : 0,
-
-        // Sales Information
-        is_sellable: formData.sellable,
-        unit_price: formData.sellingPrice ? parseFloat(formData.sellingPrice) : 0, // Map selling price to unit_price
+        tax_rate: formData.cgst_rate + formData.sgst_rate,
+        unit_price: formData.sellingPrice ? parseFloat(formData.sellingPrice) : 0,
         selling_price: formData.sellingPrice ? parseFloat(formData.sellingPrice) : undefined,
-        sales_account: formData.salesAccount || undefined,
-        sales_description: formData.salesDescription || undefined,
-
-        // Purchase Information
-        is_purchasable: formData.purchasable,
-        cost_price: formData.costPrice ? parseFloat(formData.costPrice) : 0, // Add cost_price mapping
-        purchase_account: formData.purchaseAccount || undefined,
-        purchase_description: formData.purchaseDescription || undefined,
-        preferred_vendor_id: formData.preferredVendor || undefined, // TODO: Convert vendor name to UUID
-
-        // Inventory Tracking
-        track_inventory: formData.trackInventory,
-        track_bin_location: formData.trackBinLocation,
-        advanced_tracking_type: formData.advancedTracking,
-        inventory_account: formData.inventoryAccount || undefined,
-        valuation_method: formData.valuationMethod || undefined,
+        cost_price: formData.costPrice ? parseFloat(formData.costPrice) : 0,
         reorder_point: formData.reorderPoint ? parseInt(formData.reorderPoint) : 10,
-
-        // Premium & Incentive
-        is_premium_tagged: formData.isPremiumTagged,
-        incentive_type: formData.incentiveType || null,
+        track_inventory: true,
+        advanced_tracking_type: 'none',
       };
 
-      // Call API to create or update item
       let response;
       if (isEditMode && id) {
-        console.log('=== FRONTEND UPDATE ===');
-        console.log('Item ID:', id);
-        console.log('formData.name:', formData.name);
-        console.log('itemData.name:', itemData.name);
-        console.log('Full itemData:', JSON.stringify(itemData, null, 2));
         response = await itemsService.updateItem(id, itemData);
       } else {
         response = await itemsService.createItem(itemData);
       }
 
-      console.log('API Response:', response);
-      console.log('Returned item name:', response.data.data?.item_name);
-
-      // Axios response structure: response.data = { success: boolean, data: Item, error?: string }
       if (response.data.success && response.data.data) {
-        // Navigate to the items list page with refetch flag
         navigate('/items', { state: { refetch: true } });
       } else {
         const errorMsg = response.data.error || 'Failed to save item. Please try again.';
-        console.error('Save failed:', errorMsg);
         alert(errorMsg);
       }
     } catch (error: any) {
@@ -605,42 +477,13 @@ const NewItemForm = () => {
       </div>
 
       {/* Form Content */}
-      <div className="max-w-5xl mx-auto p-6">
-        <form onSubmit={handleSubmit} className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 space-y-6">
+      <div className="max-w-4xl mx-auto p-6">
+        <form onSubmit={handleSubmit} className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 space-y-5">
 
-          {/* Type Selection - Radio */}
-          <div className="grid grid-cols-4 gap-4 items-center">
-            <label className="text-sm font-medium text-gray-700 flex items-center gap-1">
-              Type
-              <span className="text-gray-400 cursor-help">ⓘ</span>
-            </label>
-            <div className="col-span-3 flex gap-6">
-              {['goods', 'service', 'free_accessories', 'offers'].map((t) => (
-                <label key={t} className="flex items-center gap-2 cursor-pointer">
-                  <input
-                    type="radio"
-                    name="itemType"
-                    checked={formData.type[0] === t}
-                    onChange={() => {
-                      setFormData(prev => ({
-                        ...prev,
-                        type: [t]
-                      }));
-                    }}
-                    className="w-4 h-4 text-blue-600"
-                  />
-                  <span className="text-sm text-gray-700">
-                    {t === 'goods' ? 'Goods' : t === 'service' ? 'Service' : t === 'free_accessories' ? 'Free Accessories' : 'Offers'}
-                  </span>
-                </label>
-              ))}
-            </div>
-          </div>
-
-          {/* Name */}
+          {/* Item Name */}
           <div className="grid grid-cols-4 gap-4 items-center">
             <label className="text-sm font-medium text-gray-700">
-              Name<span className="text-red-500">*</span>
+              Item Name<span className="text-red-500">*</span>
             </label>
             <div className="col-span-3">
               <input
@@ -655,10 +498,57 @@ const NewItemForm = () => {
             </div>
           </div>
 
-          {/* Size, Color, Variant */}
+          {/* SKU */}
+          <div className="grid grid-cols-4 gap-4 items-center">
+            <label className="text-sm font-medium text-gray-700">
+              SKU<span className="text-red-500">*</span>
+            </label>
+            <div className="col-span-3">
+              <input
+                type="text"
+                name="sku"
+                value={formData.sku}
+                onChange={isEditMode ? handleInputChange : undefined}
+                readOnly={!isEditMode}
+                className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                  duplicateSkuError ? 'border-red-500' : !isEditMode ? 'border-gray-300 bg-gray-50' : 'border-gray-300'
+                }`}
+                placeholder={isEditMode ? "Enter SKU" : "Auto-generating..."}
+                required
+              />
+              {duplicateSkuError && (
+                <p className="text-xs text-red-500 mt-1">SKU already exists. Please choose a unique SKU.</p>
+              )}
+              {!isEditMode && formData.sku && (
+                <p className="text-xs text-green-600 mt-1">Auto-generated: <span className="font-semibold">{formData.sku}</span></p>
+              )}
+            </div>
+          </div>
+
+          {/* Category */}
+          <div className="grid grid-cols-4 gap-4 items-center">
+            <label className="text-sm font-medium text-gray-700">Category</label>
+            <div className="col-span-3">
+              <CategoryPicker
+                categories={categories}
+                allSubcategories={allSubcategories}
+                categoryValue={formData.category}
+                subcategoryValue={formData.subcategory}
+                onCategoryChange={(val) => setFormData(prev => ({ ...prev, category: val, subcategory: '' }))}
+                onSubcategoryChange={(val) => setFormData(prev => ({ ...prev, subcategory: val }))}
+                onCreateCategory={handleCreateCategory}
+                onDeleteCategory={handleDeleteCategory}
+                onCreateSubcategory={handleCreateSubcategory}
+                onDeleteSubcategory={handleDeleteSubcategory}
+                placeholder="Search or add category"
+              />
+            </div>
+          </div>
+
+          {/* Size & Color */}
           <div className="grid grid-cols-4 gap-4 items-center">
             <label className="text-sm font-medium text-gray-700">Size</label>
-            <div className="col-span-3 grid grid-cols-3 gap-4">
+            <div className="col-span-3 grid grid-cols-2 gap-4">
               <CreatableSelect
                 options={itemSizes.map(s => ({ id: s.id, name: s.name }))}
                 value={formData.size}
@@ -680,55 +570,59 @@ const NewItemForm = () => {
                   label="color"
                 />
               </div>
-              <div>
-                <label className="text-sm font-medium text-gray-700 block mb-1">Variant</label>
-                <select
-                  name="variant"
-                  value={formData.variant}
-                  onChange={handleInputChange}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                >
-                  <option value="">Select variant</option>
-                  <option value="MS">MS</option>
-                  <option value="SS">SS</option>
-                </select>
-              </div>
             </div>
           </div>
 
-          {/* SKU - Auto-generated for new items */}
+          {/* Brand & Manufacturer */}
           <div className="grid grid-cols-4 gap-4 items-center">
-            <label className="text-sm font-medium text-gray-700 flex items-center gap-1">
-              SKU<span className="text-red-500">*</span>
-              <span className="text-gray-400 cursor-help">ⓘ</span>
+            <label className="text-sm font-medium text-gray-700">
+              Brand / Manufacturer
+              <button
+                type="button"
+                onClick={() => setShowUploadModal(true)}
+                className="ml-2 text-xs text-blue-600 hover:text-blue-800"
+              >
+                <Upload className="w-3 h-3 inline" /> Import
+              </button>
             </label>
-            <div className="col-span-3">
-              <input
-                type="text"
-                name="sku"
-                value={formData.sku}
-                onChange={isEditMode ? handleInputChange : undefined}
-                readOnly={!isEditMode}
-                className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
-                  duplicateSkuError ? 'border-red-500' : !isEditMode ? 'border-gray-300 bg-gray-50' : 'border-blue-400'
-                }`}
-                placeholder={isEditMode ? "Enter SKU" : "Auto-generating..."}
-                required
+            <div className="col-span-3 grid grid-cols-2 gap-4">
+              <CreatableSelect
+                options={brands.map(b => ({ id: b.id, name: b.name }))}
+                value={formData.brand}
+                onChange={(val) => setFormData(prev => ({ ...prev, brand: val }))}
+                onCreateOption={async (name) => {
+                  try {
+                    const response = await brandsService.createBrand({ name });
+                    if (response.data.success) {
+                      setBrands(prev => [...prev, response.data.data]);
+                      setFormData(prev => ({ ...prev, brand: name }));
+                    }
+                  } catch (error) {
+                    console.error('Error creating brand:', error);
+                    alert('Failed to create brand');
+                  }
+                }}
+                placeholder="Select or add brand"
+                label="brand"
               />
-              {duplicateSkuError && (
-                <p className="text-xs text-red-500 mt-1">SKU already exists. Please choose a unique SKU.</p>
-              )}
-              {!isEditMode && formData.sku && (
-                <p className="text-xs text-green-600 mt-1">SKU auto-generated: <span className="font-semibold">{formData.sku}</span></p>
-              )}
+              <div>
+                <label className="text-sm font-medium text-gray-700 block mb-1">Manufacturer</label>
+                <CreatableSelect
+                  options={manufacturers.map(m => ({ id: m.id, name: m.name }))}
+                  value={formData.manufacturer}
+                  onChange={(val) => setFormData(prev => ({ ...prev, manufacturer: val }))}
+                  onCreateOption={handleCreateManufacturer}
+                  placeholder="Select or add manufacturer"
+                  label="manufacturer"
+                />
+              </div>
             </div>
           </div>
 
           {/* Unit */}
           <div className="grid grid-cols-4 gap-4 items-center">
-            <label className="text-sm font-medium text-gray-700 flex items-center gap-1">
+            <label className="text-sm font-medium text-gray-700">
               Unit<span className="text-red-500">*</span>
-              <span className="text-gray-400 cursor-help">ⓘ</span>
             </label>
             <div className="col-span-3">
               <select
@@ -738,518 +632,123 @@ const NewItemForm = () => {
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 required
               >
-                <option value="" disabled>Select Unit</option>
                 <option value="pcs">Pieces (pcs)</option>
                 <option value="box">Box (box)</option>
               </select>
             </div>
           </div>
 
-          {/* Category & Sub Category - single drill-down picker */}
-          <div className="grid grid-cols-4 gap-4 items-center">
-            <label className="text-sm font-medium text-gray-700 flex items-center gap-1">
-              Category
-            </label>
-            <div className="col-span-3">
-              <CategoryPicker
-                categories={categories}
-                allSubcategories={allSubcategories}
-                categoryValue={formData.category}
-                subcategoryValue={formData.subcategory}
-                onCategoryChange={(val) => setFormData(prev => ({ ...prev, category: val, subcategory: '' }))}
-                onSubcategoryChange={(val) => setFormData(prev => ({ ...prev, subcategory: val }))}
-                onCreateCategory={handleCreateCategory}
-                onDeleteCategory={handleDeleteCategory}
-                onCreateSubcategory={handleCreateSubcategory}
-                onDeleteSubcategory={handleDeleteSubcategory}
-                placeholder="Search or add category"
-              />
-            </div>
-          </div>
-
-          {/* Returnable Item */}
-          <div className="grid grid-cols-4 gap-4 items-center">
-            <label className="text-sm font-medium text-gray-700"></label>
-            <div className="col-span-3">
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="checkbox"
-                  name="returnableItem"
-                  checked={formData.returnableItem}
-                  onChange={handleInputChange}
-                  className="w-4 h-4 text-blue-600 rounded"
-                />
-                <span className="text-sm text-gray-700 flex items-center gap-1">
-                  Returnable Item
-                  <span className="text-gray-400 cursor-help">ⓘ</span>
-                </span>
-              </label>
-            </div>
-          </div>
-
-          {/* Is Premium Tagged Item */}
-          <div className="grid grid-cols-4 gap-4 items-center">
-            <label className="text-sm font-medium text-gray-700"></label>
-            <div className="col-span-3">
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="checkbox"
-                  name="isPremiumTagged"
-                  checked={formData.isPremiumTagged}
-                  onChange={handleInputChange}
-                  className="w-4 h-4 text-blue-600 rounded"
-                />
-                <span className="text-sm text-gray-700">
-                  Is a Premium Tagged Item
-                </span>
-              </label>
-            </div>
-          </div>
-
-          {/* Incentive Type */}
+          {/* Selling Price & Cost Price */}
           <div className="grid grid-cols-4 gap-4 items-center">
             <label className="text-sm font-medium text-gray-700">
-              Incentive Type
+              Selling Price<span className="text-red-500">*</span>
             </label>
-            <div className="col-span-3">
-              <input
-                type="text"
-                name="incentiveType"
-                value={formData.incentiveType}
-                onChange={handleInputChange}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                placeholder="Enter incentive type"
-              />
+            <div className={`${canViewPurchasePrice ? '' : 'col-span-3'}`}>
+              <div className="flex items-center gap-2">
+                <span className="text-gray-500 text-sm">INR</span>
+                <input
+                  type="number"
+                  name="sellingPrice"
+                  value={formData.sellingPrice}
+                  onChange={handleInputChange}
+                  className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="0.00"
+                  step="0.01"
+                />
+              </div>
             </div>
+            {canViewPurchasePrice && (
+              <>
+                <label className="text-sm font-medium text-gray-700 text-right">Cost Price</label>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-gray-500 text-sm">INR</span>
+                    <input
+                      type="number"
+                      name="costPrice"
+                      value={formData.costPrice}
+                      onChange={handleInputChange}
+                      className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      placeholder="0.00"
+                      step="0.01"
+                    />
+                  </div>
+                </div>
+              </>
+            )}
           </div>
 
           {/* HSN Code */}
           <div className="grid grid-cols-4 gap-4 items-center">
-            <label className="text-sm font-medium text-gray-700">
-              HSN Code
-            </label>
-            <div className="col-span-3 flex items-center gap-2">
+            <label className="text-sm font-medium text-gray-700">HSN / SAC Code</label>
+            <div className="col-span-3">
               <input
                 type="text"
                 name="hsnCode"
                 value={formData.hsnCode}
                 onChange={handleInputChange}
-                className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 placeholder="Enter HSN code"
               />
-              <button type="button" className="p-2 text-gray-400 hover:text-gray-600">
-                🔍
-              </button>
             </div>
           </div>
 
-          {/* Tax Preference */}
+          {/* GST Rates */}
           <div className="grid grid-cols-4 gap-4 items-center">
-            <label className="text-sm font-medium text-gray-700">
-              Tax Preference<span className="text-red-500">*</span>
-            </label>
-            <div className="col-span-3">
-              <select
-                name="taxPreference"
-                value={formData.taxPreference}
-                onChange={handleInputChange}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              >
-                <option value="taxable">Taxable</option>
-                <option value="non-taxable">Non-Taxable</option>
-                <option value="exempt">Exempt</option>
-              </select>
-            </div>
-          </div>
-
-          {/* GST Rates - only shown when Taxable */}
-          {formData.taxPreference === 'taxable' && (
-            <div className="grid grid-cols-4 gap-4 items-center">
-              <label className="text-sm font-medium text-gray-700">
-                GST Rates
-              </label>
-              <div className="col-span-3 space-y-3">
-                <div className="flex items-center gap-3">
-                  <span className={`text-sm w-12 ${formData.igst_rate ? 'text-gray-400' : 'text-gray-700'}`}>CGST</span>
-                  <select
-                    value={formData.cgst_rate}
-                    onChange={(e) => setFormData({ ...formData, cgst_rate: parseFloat(e.target.value) || 0, igst_rate: 0 })}
-                    disabled={!!formData.igst_rate}
-                    className={`px-2 py-1.5 border border-gray-300 rounded-lg text-sm w-24 ${formData.igst_rate ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : 'bg-white'}`}
-                  >
-                    <option value={0}>0%</option>
-                    <option value={2.5}>2.5%</option>
-                    <option value={6}>6%</option>
-                    <option value={9}>9%</option>
-                    <option value={14}>14%</option>
-                  </select>
-                </div>
-                <div className="flex items-center gap-3">
-                  <span className={`text-sm w-12 ${formData.igst_rate ? 'text-gray-400' : 'text-gray-700'}`}>SGST</span>
-                  <select
-                    value={formData.sgst_rate}
-                    onChange={(e) => setFormData({ ...formData, sgst_rate: parseFloat(e.target.value) || 0, igst_rate: 0 })}
-                    disabled={!!formData.igst_rate}
-                    className={`px-2 py-1.5 border border-gray-300 rounded-lg text-sm w-24 ${formData.igst_rate ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : 'bg-white'}`}
-                  >
-                    <option value={0}>0%</option>
-                    <option value={2.5}>2.5%</option>
-                    <option value={6}>6%</option>
-                    <option value={9}>9%</option>
-                    <option value={14}>14%</option>
-                  </select>
-                </div>
-                <div className="flex items-center gap-3">
-                  <span className={`text-sm w-12 ${(formData.cgst_rate || formData.sgst_rate) ? 'text-gray-400' : 'text-gray-700'}`}>IGST</span>
-                  <select
-                    value={formData.igst_rate}
-                    onChange={(e) => setFormData({ ...formData, igst_rate: parseFloat(e.target.value) || 0, cgst_rate: 0, sgst_rate: 0 })}
-                    disabled={!!(formData.cgst_rate || formData.sgst_rate)}
-                    className={`px-2 py-1.5 border border-gray-300 rounded-lg text-sm w-24 ${(formData.cgst_rate || formData.sgst_rate) ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : 'bg-white'}`}
-                  >
-                    <option value={0}>0%</option>
-                    <option value={5}>5%</option>
-                    <option value={12}>12%</option>
-                    <option value={18}>18%</option>
-                    <option value={28}>28%</option>
-                  </select>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Manufacturer/Brand */}
-          <div className="grid grid-cols-4 gap-4 items-center">
-            <label className="text-sm font-medium text-gray-700">
-              Manufacturer/Brand
-            </label>
-            <div className="col-span-3">
-              <div className="flex justify-end mb-2">
-                <button
-                  type="button"
-                  onClick={() => setShowUploadModal(true)}
-                  className="text-sm text-blue-600 hover:text-blue-800 flex items-center gap-1"
+            <label className="text-sm font-medium text-gray-700">GST Rate</label>
+            <div className="col-span-3 flex items-center gap-4">
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-gray-600">CGST</span>
+                <select
+                  value={formData.cgst_rate}
+                  onChange={(e) => {
+                    const val = parseFloat(e.target.value) || 0;
+                    setFormData(prev => ({ ...prev, cgst_rate: val, sgst_rate: val }));
+                  }}
+                  className="px-2 py-1.5 border border-gray-300 rounded-lg text-sm w-24"
                 >
-                  <Upload className="w-4 h-4" />
-                  Import from Excel
-                </button>
+                  <option value={0}>0%</option>
+                  <option value={2.5}>2.5%</option>
+                  <option value={6}>6%</option>
+                  <option value={9}>9%</option>
+                  <option value={14}>14%</option>
+                </select>
               </div>
-              <CreatableSelect
-                options={manufacturers.map(m => ({ id: m.id, name: m.name }))}
-                value={formData.manufacturer}
-                onChange={(val) => setFormData(prev => ({ ...prev, manufacturer: val }))}
-                onCreateOption={handleCreateManufacturer}
-                placeholder="Select or add manufacturer/brand"
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-gray-600">SGST</span>
+                <select
+                  value={formData.sgst_rate}
+                  onChange={(e) => {
+                    const val = parseFloat(e.target.value) || 0;
+                    setFormData(prev => ({ ...prev, sgst_rate: val, cgst_rate: val }));
+                  }}
+                  className="px-2 py-1.5 border border-gray-300 rounded-lg text-sm w-24"
+                >
+                  <option value={0}>0%</option>
+                  <option value={2.5}>2.5%</option>
+                  <option value={6}>6%</option>
+                  <option value={9}>9%</option>
+                  <option value={14}>14%</option>
+                </select>
+              </div>
+              <span className="text-sm text-gray-500">
+                Total: {formData.cgst_rate + formData.sgst_rate}%
+              </span>
+            </div>
+          </div>
+
+          {/* Reorder Point */}
+          <div className="grid grid-cols-4 gap-4 items-center">
+            <label className="text-sm font-medium text-gray-700">Reorder Point</label>
+            <div className="col-span-3">
+              <input
+                type="number"
+                name="reorderPoint"
+                value={formData.reorderPoint}
+                onChange={handleInputChange}
+                className="w-48 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                placeholder="10"
               />
-            </div>
-          </div>
-
-          {/* Sales and Purchase Information - Side by Side */}
-          <div className="col-span-4 mt-8 border-t pt-6">
-            <div className="grid grid-cols-2 gap-8">
-              {/* Sales Information Section */}
-              <div>
-                <div className="flex items-center justify-between mb-4">
-                  <h2 className="text-lg font-semibold text-gray-800">Sales Information</h2>
-                  <label className="flex items-center gap-2 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      name="sellable"
-                      checked={formData.sellable}
-                      onChange={handleInputChange}
-                      className="w-4 h-4 text-blue-600 rounded"
-                    />
-                    <span className="text-sm text-gray-700">Sellable</span>
-                  </label>
-                </div>
-
-                {formData.sellable && (
-                  <div className="space-y-4">
-                    {/* Selling Price */}
-                    <div>
-                      <label className="text-sm font-medium text-red-500 block mb-2">
-                        Selling Price<span>*</span>
-                      </label>
-                      <div className="flex items-center gap-2">
-                        <span className="text-gray-600">INR</span>
-                        <input
-                          type="number"
-                          name="sellingPrice"
-                          value={formData.sellingPrice}
-                          onChange={handleInputChange}
-                          className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                          placeholder="0.00"
-                          step="0.01"
-                        />
-                      </div>
-                    </div>
-
-                    {/* Account */}
-                    <div>
-                      <label className="text-sm font-medium text-red-500 block mb-2">
-                        Account<span>*</span>
-                      </label>
-                      <select
-                        name="salesAccount"
-                        value={formData.salesAccount}
-                        onChange={handleInputChange}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      >
-                        <option value="Sales">Sales</option>
-                        <option value="Other Income">Other Income</option>
-                      </select>
-                    </div>
-
-                    {/* Description */}
-                    <div>
-                      <label className="text-sm font-medium text-gray-700 block mb-2">
-                        Description
-                      </label>
-                      <textarea
-                        name="salesDescription"
-                        value={formData.salesDescription}
-                        onChange={handleInputChange}
-                        rows={3}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        placeholder="Description for sales transactions"
-                      />
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* Purchase Information Section */}
-              <div>
-                <div className="flex items-center justify-between mb-4">
-                  <h2 className="text-lg font-semibold text-gray-800">Purchase Information</h2>
-                  <label className="flex items-center gap-2 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      name="purchasable"
-                      checked={formData.purchasable}
-                      onChange={handleInputChange}
-                      className="w-4 h-4 text-blue-600 rounded"
-                    />
-                    <span className="text-sm text-gray-700">Purchasable</span>
-                  </label>
-                </div>
-
-                {formData.purchasable && (
-                  <div className="space-y-4">
-                    {/* Cost Price - Only visible to admin and super_admin */}
-                    {canViewPurchasePrice && (
-                      <div>
-                        <label className="text-sm font-medium text-red-500 block mb-2">
-                          Cost Price<span>*</span>
-                        </label>
-                        <div className="flex items-center gap-2">
-                          <span className="text-gray-600">INR</span>
-                          <input
-                            type="number"
-                            name="costPrice"
-                            value={formData.costPrice}
-                            onChange={handleInputChange}
-                            className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                            placeholder="0.00"
-                            step="0.01"
-                          />
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Account */}
-                    <div>
-                      <label className="text-sm font-medium text-red-500 block mb-2">
-                        Account<span>*</span>
-                      </label>
-                      <select
-                        name="purchaseAccount"
-                        value={formData.purchaseAccount}
-                        onChange={handleInputChange}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      >
-                        <option value="Cost of Goods Sold">Cost of Goods Sold</option>
-                        <option value="Purchases">Purchases</option>
-                      </select>
-                    </div>
-
-                    {/* Description */}
-                    <div>
-                      <label className="text-sm font-medium text-gray-700 block mb-2">
-                        Description
-                      </label>
-                      <textarea
-                        name="purchaseDescription"
-                        value={formData.purchaseDescription}
-                        onChange={handleInputChange}
-                        rows={3}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        placeholder="Description for purchase transactions"
-                      />
-                    </div>
-
-                    {/* Preferred Vendor */}
-                    <div>
-                      <label className="text-sm font-medium text-gray-700 block mb-2">
-                        Preferred Vendor
-                      </label>
-                      <select
-                        name="preferredVendor"
-                        value={formData.preferredVendor}
-                        onChange={handleInputChange}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      >
-                        <option value="">Select a vendor</option>
-                        {vendors.map(vendor => (
-                          <option key={vendor.id} value={vendor.id}>
-                            {vendor.supplier_name}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-
-          {/* Inventory Tracking Section */}
-          <div className="col-span-4 mt-8 border-t pt-6">
-            <h2 className="text-lg font-semibold text-gray-800 mb-4">Inventory Tracking</h2>
-
-            <div className="space-y-4">
-              {/* Track Inventory */}
-              <div className="flex items-start gap-2">
-                <input
-                  type="checkbox"
-                  name="trackInventory"
-                  checked={formData.trackInventory}
-                  onChange={handleInputChange}
-                  className="w-4 h-4 text-blue-600 rounded mt-1"
-                />
-                <div>
-                  <label className="text-sm font-medium text-gray-700 cursor-pointer">
-                    Track Inventory for this item
-                  </label>
-                  <p className="text-xs text-gray-500 mt-1">
-                    You cannot enable/disable inventory tracking once you've created transactions for this item
-                  </p>
-                </div>
-              </div>
-
-              {/* Track Bin Location */}
-              <div className="flex items-start gap-2">
-                <input
-                  type="checkbox"
-                  name="trackBinLocation"
-                  checked={formData.trackBinLocation}
-                  onChange={handleInputChange}
-                  className="w-4 h-4 text-blue-600 rounded mt-1"
-                  disabled={!formData.trackInventory}
-                />
-                <div>
-                  <label className={`text-sm font-medium cursor-pointer ${formData.trackInventory ? 'text-gray-700' : 'text-gray-400'}`}>
-                    Track Bin location for this item
-                  </label>
-                  <p className="text-xs text-gray-500 mt-1">
-                    Enable this option if you want to track the bin locations for this item while creating transactions
-                  </p>
-                </div>
-              </div>
-
-              {/* Advanced Inventory Tracking */}
-              {formData.trackInventory && (
-                <>
-                  <div className="mt-6">
-                    <h3 className="text-sm font-semibold text-gray-800 mb-3">Advanced Inventory Tracking</h3>
-                    <div className="space-y-2">
-                      <label className="flex items-center gap-2 cursor-pointer">
-                        <input
-                          type="radio"
-                          name="advancedTracking"
-                          value="none"
-                          checked={formData.advancedTracking === 'none'}
-                          onChange={handleInputChange}
-                          className="w-4 h-4 text-blue-600"
-                        />
-                        <span className="text-sm text-gray-700">None</span>
-                      </label>
-                      <label className="flex items-center gap-2 cursor-pointer">
-                        <input
-                          type="radio"
-                          name="advancedTracking"
-                          value="serial"
-                          checked={formData.advancedTracking === 'serial'}
-                          onChange={handleInputChange}
-                          className="w-4 h-4 text-blue-600"
-                        />
-                        <span className="text-sm text-gray-700">Track Serial Number</span>
-                      </label>
-                      <label className="flex items-center gap-2 cursor-pointer">
-                        <input
-                          type="radio"
-                          name="advancedTracking"
-                          value="batches"
-                          checked={formData.advancedTracking === 'batches'}
-                          onChange={handleInputChange}
-                          className="w-4 h-4 text-blue-600"
-                        />
-                        <span className="text-sm text-gray-700">Track Batches</span>
-                      </label>
-                    </div>
-                  </div>
-
-                  {/* Inventory Account and Valuation Method */}
-                  <div className="grid grid-cols-2 gap-6 mt-6">
-                    <div>
-                      <label className="text-sm font-medium text-red-500 block mb-2">
-                        Inventory Account<span>*</span>
-                      </label>
-                      <select
-                        name="inventoryAccount"
-                        value={formData.inventoryAccount}
-                        onChange={handleInputChange}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      >
-                        <option value="">Select an account</option>
-                        <option value="Inventory Asset">Inventory Asset</option>
-                        <option value="Stock">Stock</option>
-                      </select>
-                    </div>
-                    <div>
-                      <label className="text-sm font-medium text-red-500 block mb-2">
-                        Inventory Valuation Method<span>*</span>
-                      </label>
-                      <select
-                        name="valuationMethod"
-                        value={formData.valuationMethod}
-                        onChange={handleInputChange}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      >
-                        <option value="">Select the valuation method</option>
-                        <option value="FIFO">FIFO (First In First Out)</option>
-                        <option value="LIFO">LIFO (Last In First Out)</option>
-                        <option value="Weighted Average">Weighted Average</option>
-                      </select>
-                    </div>
-                  </div>
-
-                  {/* Reorder Point */}
-                  <div className="mt-4">
-                    <label className="text-sm font-medium text-gray-700 block mb-2">
-                      Reorder Point
-                    </label>
-                    <input
-                      type="number"
-                      name="reorderPoint"
-                      value={formData.reorderPoint}
-                      onChange={handleInputChange}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      placeholder="10"
-                    />
-                  </div>
-                </>
-              )}
             </div>
           </div>
 
