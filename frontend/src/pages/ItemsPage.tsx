@@ -13,11 +13,13 @@ interface Item {
   sku: string;
   unit: string;
   category: string;
+  selling_price: number;
   stock_on_hand: number;
   reorder_level: number;
   color: string;
   variant: string;
   size: string;
+  brand: string;
 }
 
 const ItemsPage = () => {
@@ -76,11 +78,13 @@ const ItemsPage = () => {
           sku: item.sku,
           unit: item.unit_of_measurement,
           category: '',
+          selling_price: item.unit_price || 0,
           stock_on_hand: item.current_stock,
           reorder_level: item.reorder_point,
           color: item.color || '',
           variant: item.variant || '',
-          size: item.size || ''
+          size: item.size || '',
+          brand: item.brand || ''
         }));
         console.log('Mapped items with names:', mappedItems.map(i => ({ id: i.id, name: i.name })));
         setItems(mappedItems);
@@ -450,11 +454,14 @@ const ItemsPage = () => {
                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                           SKU
                         </th>
-                        <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          STOCK ON HAND
+                        <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          SELLING PRICE
                         </th>
                         <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          REORDER LEVEL
+                          STOCK
+                        </th>
+                        <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          REORDER
                         </th>
                       </>
                     )}
@@ -463,7 +470,7 @@ const ItemsPage = () => {
                 <tbody className="divide-y divide-gray-200">
                   {filteredItems.length === 0 ? (
                     <tr>
-                      <td colSpan={selectedItemId ? 1 : 5} className="px-6 py-12 text-center">
+                      <td colSpan={selectedItemId ? 1 : 6} className="px-6 py-12 text-center">
                         <div className="flex flex-col items-center justify-center text-gray-400">
                           <Package className="w-12 h-12 mb-3" />
                           <p className="text-lg font-medium">No items found</p>
@@ -501,7 +508,7 @@ const ItemsPage = () => {
                               </div>
                               {(item.color || item.variant || item.size) && (
                                 <div className="text-xs text-gray-500 truncate">
-                                  {[item.color, item.variant, item.size].filter(Boolean).join(' | ')}
+                                  {[item.color, item.brand, item.size].filter(Boolean).join(' | ')}
                                 </div>
                               )}
                               {selectedItemId && (
@@ -515,8 +522,13 @@ const ItemsPage = () => {
                             <td className="px-6 py-4">
                               <div className="text-sm text-gray-900">{item.sku}</div>
                             </td>
+                            <td className="px-6 py-4 text-right">
+                              <div className="text-sm font-medium text-gray-900">
+                                {item.selling_price > 0 ? `₹${item.selling_price.toLocaleString('en-IN')}` : '-'}
+                              </div>
+                            </td>
                             <td className="px-6 py-4 text-center">
-                              <div className="text-sm text-gray-900">{item.stock_on_hand.toFixed(2)}</div>
+                              <div className="text-sm text-gray-900">{item.stock_on_hand}</div>
                             </td>
                             <td className="px-6 py-4 text-center">
                               <div className="text-sm text-gray-900">{item.reorder_level}</div>

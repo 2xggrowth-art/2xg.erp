@@ -896,6 +896,11 @@ export class ItemsService {
       throw new Error('Item name too long (maximum 200 characters)');
     }
 
+    // Auto-generate SKU if not provided
+    if (!itemData.sku) {
+      itemData.sku = await this.generateSku();
+    }
+
     // Test #3: Duplicate SKU check
     if (itemData.sku) {
       const { data: existingSku } = await supabaseAdmin
@@ -906,6 +911,30 @@ export class ItemsService {
 
       if (existingSku && existingSku.length > 0) {
         throw new Error(`SKU "${itemData.sku}" already exists on item: ${existingSku[0].item_name}`);
+      }
+    }
+
+    // Resolve category_name to category_id if provided
+    if (itemData.category_name && !itemData.category) {
+      const { data: cat } = await supabaseAdmin
+        .from('product_categories')
+        .select('id')
+        .ilike('name', itemData.category_name.trim())
+        .limit(1)
+        .single();
+
+      if (cat) {
+        itemData.category = cat.id;
+      } else {
+        // Create the category
+        const { data: newCat } = await supabaseAdmin
+          .from('product_categories')
+          .insert({ name: itemData.category_name.trim() })
+          .select('id')
+          .single();
+        if (newCat) {
+          itemData.category = newCat.id;
+        }
       }
     }
 

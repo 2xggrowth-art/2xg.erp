@@ -246,9 +246,7 @@ export const validateImportData = async (req: Request, res: Response) => {
       if (!item.name || item.name.trim() === '') {
         errors.push({ row, field: 'name', message: 'Item name is required' });
       }
-      if (!item.sku || item.sku.trim() === '') {
-        errors.push({ row, field: 'sku', message: 'SKU is required' });
-      }
+      // SKU is optional — auto-generated if not provided
 
       // Check duplicates
       if (item.sku) {

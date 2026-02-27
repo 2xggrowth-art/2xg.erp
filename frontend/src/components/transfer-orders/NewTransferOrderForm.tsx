@@ -1,6 +1,6 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { X, Plus, Trash2, RefreshCw, AlertCircle } from 'lucide-react';
+import { X, Plus, Trash2, RefreshCw, AlertCircle, Search } from 'lucide-react';
 import { transferOrdersService, CreateTransferOrderData, TransferOrderItem, ItemLocationStock } from '../../services/transfer-orders.service';
 import { itemsService, Item } from '../../services/items.service';
 import { locationsService, Location } from '../../services/locations.service';
@@ -42,6 +42,25 @@ const NewTransferOrderForm = () => {
       unit_of_measurement: 'Pcs',
     },
   ]);
+
+  // Searchable item selector state
+  const [itemSearchQueries, setItemSearchQueries] = useState<Record<number, string>>({});
+  const [activeDropdown, setActiveDropdown] = useState<number | null>(null);
+  const dropdownRefs = useRef<Record<number, HTMLDivElement | null>>({});
+
+  // Close dropdown on outside click
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (activeDropdown !== null) {
+        const ref = dropdownRefs.current[activeDropdown];
+        if (ref && !ref.contains(e.target as Node)) {
+          setActiveDropdown(null);
+        }
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [activeDropdown]);
 
   useEffect(() => {
     fetchItems();
@@ -389,19 +408,65 @@ const NewTransferOrderForm = () => {
                   {transferItems.map((item, index) => (
                     <tr key={index}>
                       <td className="px-4 py-3">
-                        <select
-                          value={item.item_id}
-                          onChange={(e) => handleItemChange(index, 'item_id', e.target.value)}
-                          className="w-full px-2 py-1 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 mb-1"
-                        >
-                          <option value="">Select from items</option>
-                          {items.map(i => (
-                            <option key={i.id} value={i.id}>{i.item_name}</option>
-                          ))}
-                        </select>
-                        {item.item_name && (
-                          <p className="text-xs text-gray-500 mt-1 px-1">{item.description || ''}</p>
-                        )}
+                        <div className="relative" ref={(el) => { dropdownRefs.current[index] = el; }}>
+                          <div className="relative">
+                            <Search size={14} className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-400" />
+                            <input
+                              type="text"
+                              value={activeDropdown === index ? (itemSearchQueries[index] ?? '') : (item.item_name ? `${item.item_name}${item.description ? ` (${item.description})` : ''}` : '')}
+                              onChange={(e) => {
+                                setItemSearchQueries({ ...itemSearchQueries, [index]: e.target.value });
+                                setActiveDropdown(index);
+                              }}
+                              onFocus={() => {
+                                setActiveDropdown(index);
+                                if (item.item_name) {
+                                  setItemSearchQueries({ ...itemSearchQueries, [index]: '' });
+                                }
+                              }}
+                              placeholder="Search by name or SKU..."
+                              className="w-full pl-7 pr-2 py-1.5 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                            />
+                          </div>
+                          {activeDropdown === index && (
+                            <div className="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-60 overflow-y-auto">
+                              {items
+                                .filter(i => {
+                                  const q = (itemSearchQueries[index] || '').toLowerCase();
+                                  if (!q) return true;
+                                  return (
+                                    i.item_name?.toLowerCase().includes(q) ||
+                                    i.sku?.toLowerCase().includes(q) ||
+                                    i.color?.toLowerCase().includes(q) ||
+                                    i.brand?.toLowerCase().includes(q)
+                                  );
+                                })
+                                .map(i => (
+                                  <div
+                                    key={i.id}
+                                    onClick={() => {
+                                      handleItemChange(index, 'item_id', i.id);
+                                      setActiveDropdown(null);
+                                      setItemSearchQueries({ ...itemSearchQueries, [index]: '' });
+                                    }}
+                                    className={`px-3 py-2 hover:bg-blue-50 cursor-pointer border-b border-gray-100 last:border-0 ${item.item_id === i.id ? 'bg-blue-50' : ''}`}
+                                  >
+                                    <div className="text-sm font-medium text-gray-900">{i.item_name}</div>
+                                    <div className="text-xs text-gray-500">
+                                      {i.sku}{i.color ? ` | ${i.color}` : ''}{i.brand ? ` | ${i.brand}` : ''}
+                                    </div>
+                                  </div>
+                                ))}
+                              {items.filter(i => {
+                                const q = (itemSearchQueries[index] || '').toLowerCase();
+                                if (!q) return true;
+                                return i.item_name?.toLowerCase().includes(q) || i.sku?.toLowerCase().includes(q) || i.color?.toLowerCase().includes(q) || i.brand?.toLowerCase().includes(q);
+                              }).length === 0 && (
+                                <div className="px-3 py-3 text-sm text-gray-500 text-center">No items found</div>
+                              )}
+                            </div>
+                          )}
+                        </div>
                       </td>
                       <td className="px-4 py-3 text-center">
                         <span className={`text-sm font-medium ${(item.source_availability || 0) > 0 ? 'text-green-600' : 'text-gray-400'}`}>
