@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { X, Plus, Upload, Search, MapPin } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import ItemSelector from '../shared/ItemSelector';
 import { billsService, BillItem, BinAllocation } from '../../services/bills.service';
 import { vendorsService, Vendor } from '../../services/vendors.service';
@@ -58,7 +58,10 @@ interface Location {
  */
 const NewBillForm = () => {
   const navigate = useNavigate();
+  const { id: editId } = useParams<{ id: string }>();
+  const isEditMode = Boolean(editId);
   const [loading, setLoading] = useState(false);
+  const [initialLoading, setInitialLoading] = useState(false);
   const [vendors, setVendors] = useState<Vendor[]>([]);
   const [items, setItems] = useState<Item[]>([]);
   const [locations] = useState<Location[]>([
@@ -120,6 +123,73 @@ const NewBillForm = () => {
     fetchVendors();
     fetchItems();
   }, []);
+
+  // Fetch existing bill data when in edit mode
+  useEffect(() => {
+    if (isEditMode && editId && items.length > 0) {
+      fetchBillForEdit(editId);
+    }
+  }, [isEditMode, editId, items.length]);
+
+  const fetchBillForEdit = async (billId: string) => {
+    try {
+      setInitialLoading(true);
+      const response = await billsService.getBillById(billId);
+      if (response.success && response.data) {
+        const bill = response.data;
+
+        setFormData({
+          vendor_id: bill.vendor_id || '',
+          vendor_name: bill.vendor_name || '',
+          vendor_email: bill.vendor_email || '',
+          vendor_phone: bill.vendor_phone || '',
+          bill_number: bill.bill_number || '',
+          auto_bill_number: false,
+          reference_number: bill.reference_number || '',
+          bill_date: bill.bill_date ? bill.bill_date.split('T')[0] : new Date().toISOString().split('T')[0],
+          due_date: bill.due_date ? bill.due_date.split('T')[0] : '',
+          payment_terms: 'due_on_receipt',
+          subject: '',
+          location_id: '1',
+          discount_type: 'amount',
+          discount_value: bill.discount_amount || 0,
+          cgst_rate: 0,
+          sgst_rate: 0,
+          igst_rate: 0,
+          adjustment: bill.adjustment || 0,
+          notes: bill.notes || '',
+          status: bill.status || 'draft',
+        });
+
+        if (bill.items && bill.items.length > 0) {
+          const loadedItems = bill.items.map((item: BillItem) => ({
+            item_id: item.item_id || '',
+            item_name: item.item_name || '',
+            account: item.account || 'Cost of Goods Sold',
+            description: item.description || '',
+            quantity: item.quantity || 0,
+            unit_of_measurement: item.unit_of_measurement || 'pcs',
+            unit_price: item.unit_price || 0,
+            tax_rate: item.tax_rate || 0,
+            discount: item.discount || 0,
+            total: item.total || 0,
+            serial_numbers: item.serial_numbers || [],
+            bin_allocations: item.bin_allocations || [],
+          }));
+          setBillItems(loadedItems);
+        }
+      } else {
+        alert('Failed to load bill for editing');
+        navigate('/purchases/bills');
+      }
+    } catch (error) {
+      console.error('Error fetching bill for edit:', error);
+      alert('Failed to load bill for editing');
+      navigate('/purchases/bills');
+    } finally {
+      setInitialLoading(false);
+    }
+  };
 
   const fetchVendors = async () => {
     try {
@@ -396,20 +466,37 @@ const NewBillForm = () => {
         }))
       };
 
-      const response = await billsService.createBill(billData);
+      let response;
+      if (isEditMode && editId) {
+        response = await billsService.updateBill(editId, billData);
+      } else {
+        response = await billsService.createBill(billData);
+      }
 
       if (response.success) {
-        navigate('/purchases/bills');
+        if (isEditMode && editId) {
+          navigate(`/purchases/bills/${editId}`);
+        } else {
+          navigate('/purchases/bills');
+        }
       } else {
-        alert('Failed to create bill');
+        alert(isEditMode ? 'Failed to update bill' : 'Failed to create bill');
       }
     } catch (error: any) {
-      console.error('Error creating bill:', error);
-      alert(error.message || 'Failed to create bill');
+      console.error(isEditMode ? 'Error updating bill:' : 'Error creating bill:', error);
+      alert(error.message || (isEditMode ? 'Failed to update bill' : 'Failed to create bill'));
     } finally {
       setLoading(false);
     }
   };
+
+  if (initialLoading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -422,7 +509,7 @@ const NewBillForm = () => {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
               </svg>
             </div>
-            <h1 className="text-xl font-semibold text-gray-900">New Bill</h1>
+            <h1 className="text-xl font-semibold text-gray-900">{isEditMode ? 'Edit Bill' : 'New Bill'}</h1>
           </div>
           <button
             onClick={() => navigate('/purchases/bills')}
@@ -978,26 +1065,38 @@ const NewBillForm = () => {
             </div>
             <div className="flex gap-3">
               <button
-                onClick={() => navigate('/purchases/bills')}
+                onClick={() => isEditMode && editId ? navigate(`/purchases/bills/${editId}`) : navigate('/purchases/bills')}
                 className="px-5 py-2 border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50 transition-colors"
                 disabled={loading}
               >
                 Cancel
               </button>
-              <button
-                onClick={() => handleSubmit('draft')}
-                className="px-5 py-2 border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50 transition-colors"
-                disabled={loading}
-              >
-                Save as Draft
-              </button>
-              <button
-                onClick={() => handleSubmit('open')}
-                className="px-5 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors shadow-sm"
-                disabled={loading || !formData.vendor_id}
-              >
-                Save as Open
-              </button>
+              {isEditMode ? (
+                <button
+                  onClick={() => handleSubmit(formData.status as 'draft' | 'open')}
+                  className="px-5 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors shadow-sm"
+                  disabled={loading}
+                >
+                  {loading ? 'Updating...' : 'Update Bill'}
+                </button>
+              ) : (
+                <>
+                  <button
+                    onClick={() => handleSubmit('draft')}
+                    className="px-5 py-2 border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50 transition-colors"
+                    disabled={loading}
+                  >
+                    Save as Draft
+                  </button>
+                  <button
+                    onClick={() => handleSubmit('open')}
+                    className="px-5 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors shadow-sm"
+                    disabled={loading || !formData.vendor_id}
+                  >
+                    Save as Open
+                  </button>
+                </>
+              )}
             </div>
           </div>
         </div>

@@ -380,7 +380,7 @@ const NewTransferOrderForm = () => {
             <label className="block text-sm font-medium text-gray-700 mb-2">
               Item Details
             </label>
-            <div className="border border-gray-300 rounded-lg overflow-x-auto">
+            <div className="border border-gray-300 rounded-lg overflow-visible">
               <table className="min-w-full divide-y divide-gray-200">
                 <thead className="bg-gray-50">
                   <tr>
