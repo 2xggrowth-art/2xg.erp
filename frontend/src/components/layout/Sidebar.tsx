@@ -53,7 +53,7 @@ const Sidebar = ({ isOpen, onClose }: SidebarProps) => {
   const navItems = [
     { icon: Headphones, label: '2XG CARE', path: '/care', module: 'Tasks' },
     { icon: Receipt, label: 'Expenses', path: '/expenses', module: 'Expenses' },
-    { icon: CheckSquare, label: 'Workchat', path: '/tasks', module: 'Workchat' },
+    { icon: CheckSquare, label: 'Workchat', path: 'https://workchat.2xg.in', module: 'Workchat', external: true },
     { icon: TrendingUp, label: '2XG Earn', path: '/earn', module: 'Reports' },
     { icon: FileText, label: 'Reports', path: '/reports', module: 'Reports' },
     { icon: Search, label: 'Search', path: '/search', module: 'Reports' },
@@ -364,14 +364,31 @@ const Sidebar = ({ isOpen, onClose }: SidebarProps) => {
             // Only show if user has access to the module
             if (!canAccessModule(item.module)) return null;
 
+            const className = `flex items-center gap-3 px-6 py-3 transition-colors border-l-4 ${isActive
+              ? 'bg-slate-700 border-blue-500 text-white'
+              : 'border-transparent hover:bg-slate-700 hover:border-blue-500'
+            }`;
+
+            if ((item as any).external) {
+              return (
+                <a
+                  key={item.path}
+                  href={item.path}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className={className}
+                >
+                  <item.icon size={20} />
+                  <span className="font-medium">{item.label}</span>
+                </a>
+              );
+            }
+
             return (
               <Link
                 key={item.path}
                 to={item.path}
-                className={`flex items-center gap-3 px-6 py-3 transition-colors border-l-4 ${isActive
-                  ? 'bg-slate-700 border-blue-500 text-white'
-                  : 'border-transparent hover:bg-slate-700 hover:border-blue-500'
-                  }`}
+                className={className}
               >
                 <item.icon size={20} />
                 <span className="font-medium">{item.label}</span>
