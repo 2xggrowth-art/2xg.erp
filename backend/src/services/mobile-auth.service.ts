@@ -166,12 +166,31 @@ export class MobileAuthService {
    * Delete a mobile user
    */
   async deleteUser(userId: string) {
+    // Get the mobile user's phone number before deleting
+    const { data: mobileUser, error: fetchError } = await supabaseAdmin
+      .from('mobile_users')
+      .select('phone_number')
+      .eq('id', userId)
+      .single();
+
+    if (fetchError) throw fetchError;
+
+    // Delete from mobile_users
     const { error } = await supabaseAdmin
       .from('mobile_users')
       .delete()
       .eq('id', userId);
 
     if (error) throw error;
+
+    // Also delete matching entry from users table (by phone number)
+    if (mobileUser?.phone_number) {
+      await supabaseAdmin
+        .from('users')
+        .delete()
+        .eq('phone', mobileUser.phone_number);
+    }
+
     return { success: true };
   }
 }
