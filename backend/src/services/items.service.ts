@@ -1146,39 +1146,7 @@ export class ItemsService {
    * Test #6: Block delete if item is used on invoices or bills
    */
   async deleteItem(id: string) {
-    // Test #6: Check if item is used on any invoices
-    const { data: invoiceItems } = await supabaseAdmin
-      .from('invoice_items')
-      .select('id')
-      .eq('item_id', id)
-      .limit(1);
-
-    if (invoiceItems && invoiceItems.length > 0) {
-      // Count total usage
-      const { count: invoiceCount } = await supabaseAdmin
-        .from('invoice_items')
-        .select('id', { count: 'exact', head: true })
-        .eq('item_id', id);
-
-      throw new Error(`Cannot delete: item is used on ${invoiceCount || 'some'} invoice(s). Deactivate it instead.`);
-    }
-
-    // Test #6: Check if item is used on any bills
-    const { data: billItems } = await supabaseAdmin
-      .from('bill_items')
-      .select('id')
-      .eq('item_id', id)
-      .limit(1);
-
-    if (billItems && billItems.length > 0) {
-      const { count: billCount } = await supabaseAdmin
-        .from('bill_items')
-        .select('id', { count: 'exact', head: true })
-        .eq('item_id', id);
-
-      throw new Error(`Cannot delete: item is used on ${billCount || 'some'} bill(s). Deactivate it instead.`);
-    }
-
+    // Soft delete — set is_active to false. Invoice/bill references remain intact.
     const { data, error } = await supabaseAdmin
       .from('items')
       .update({ is_active: false })
