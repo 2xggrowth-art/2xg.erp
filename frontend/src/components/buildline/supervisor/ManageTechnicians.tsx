@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { UserCog, Plus, X, Phone } from 'lucide-react';
+import { UserCog, Plus, X, Trash2 } from 'lucide-react';
 import { assemblyService } from '../../../services/assembly.service';
 import { authService } from '../../../services/auth.service';
 import toast from 'react-hot-toast';
@@ -13,6 +13,7 @@ export const ManageTechnicians = ({ onSuccess }: ManageTechniciansProps) => {
   const [technicians, setTechnicians] = useState<Technician[]>([]);
   const [showAddModal, setShowAddModal] = useState(false);
   const [adding, setAdding] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
   const [newTech, setNewTech] = useState({
     name: '',
     phone: '',
@@ -80,6 +81,24 @@ export const ManageTechnicians = ({ onSuccess }: ManageTechniciansProps) => {
     }
   };
 
+  const handleDeleteTechnician = async (tech: Technician) => {
+    const confirmed = window.confirm(`Are you sure you want to delete "${tech.name}"? This cannot be undone.`);
+    if (!confirmed) return;
+
+    try {
+      setDeletingId(tech.id);
+      await authService.deleteUser(tech.id);
+      toast.success(`${tech.name} deleted`);
+      loadTechnicians();
+      onSuccess?.();
+    } catch (error: any) {
+      console.error('Failed to delete technician:', error);
+      toast.error(error.message || 'Failed to delete technician');
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div className="bg-white rounded-lg shadow p-6">
@@ -111,9 +130,23 @@ export const ManageTechnicians = ({ onSuccess }: ManageTechniciansProps) => {
                     <h4 className="font-bold text-gray-900">{tech.name}</h4>
                     <p className="text-sm text-gray-600">{tech.phone || tech.email}</p>
                   </div>
-                  <span className="px-2 py-1 rounded-full text-xs font-bold bg-blue-100 text-blue-800">
-                    {tech.buildline_role}
-                  </span>
+                  <div className="flex items-center gap-2">
+                    <span className="px-2 py-1 rounded-full text-xs font-bold bg-blue-100 text-blue-800">
+                      {tech.buildline_role}
+                    </span>
+                    <button
+                      onClick={() => handleDeleteTechnician(tech)}
+                      disabled={deletingId === tech.id}
+                      className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition disabled:opacity-50"
+                      title="Delete technician"
+                    >
+                      {deletingId === tech.id ? (
+                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-red-600"></div>
+                      ) : (
+                        <Trash2 size={16} />
+                      )}
+                    </button>
+                  </div>
                 </div>
               </div>
             ))
