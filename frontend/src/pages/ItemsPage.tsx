@@ -128,12 +128,20 @@ const ItemsPage = () => {
   const handleBulkDelete = async () => {
     if (window.confirm(`Are you sure you want to delete ${selectedItems.length} item(s)?`)) {
       try {
-        await Promise.all(selectedItems.map(id => itemsService.deleteItem(id)));
-        setSelectedItems([]);
-        fetchItems();
-      } catch (error) {
+        const results = await Promise.allSettled(selectedItems.map(id => itemsService.deleteItem(id)));
+        const failures = results.filter(r => r.status === 'rejected');
+        const successes = results.filter(r => r.status === 'fulfilled');
+        if (successes.length > 0) {
+          setSelectedItems([]);
+          fetchItems();
+        }
+        if (failures.length > 0) {
+          const errorMsg = (failures[0] as PromiseRejectedResult).reason?.response?.data?.error || 'Unknown error';
+          alert(`Failed to delete ${failures.length} item(s): ${errorMsg}`);
+        }
+      } catch (error: any) {
         console.error('Error deleting items:', error);
-        alert('Failed to delete some items. Please try again.');
+        alert(error.response?.data?.error || 'Failed to delete items. Please try again.');
       }
     }
   };

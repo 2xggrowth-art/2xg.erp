@@ -177,7 +177,8 @@ export const deleteItem = async (req: Request, res: Response) => {
     const item = await itemsService.deleteItem(id);
     res.json({ success: true, data: item });
   } catch (error: any) {
-    res.status(500).json({ success: false, error: error.message });
+    const status = error.message?.startsWith('Cannot delete') ? 400 : 500;
+    res.status(status).json({ success: false, error: error.message });
   }
 };
 
