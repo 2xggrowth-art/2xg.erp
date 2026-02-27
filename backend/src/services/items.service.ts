@@ -750,6 +750,9 @@ export class ItemsService {
 
     if (filters?.isActive !== undefined) {
       query = query.eq('is_active', filters.isActive);
+    } else {
+      // Default: only show active items
+      query = query.eq('is_active', true);
     }
 
     const { data, error } = await query;
