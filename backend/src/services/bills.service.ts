@@ -607,10 +607,38 @@ export class BillsService {
 
       // Update items if provided
       if (data.items) {
-        // Delete existing items
+        // 1. Fetch old bill items to reverse their stock impact
+        const { data: oldItems } = await supabase
+          .from('bill_items')
+          .select('item_id, quantity')
+          .eq('bill_id', id);
+
+        // 2. Reverse old stock (subtract old quantities)
+        if (oldItems && oldItems.length > 0) {
+          for (const oldItem of oldItems) {
+            if (oldItem.item_id && oldItem.quantity > 0) {
+              const { data: currentItem } = await supabase
+                .from('items')
+                .select('current_stock')
+                .eq('id', oldItem.item_id)
+                .single();
+
+              if (currentItem) {
+                const newStock = (currentItem.current_stock || 0) - oldItem.quantity;
+                await supabase
+                  .from('items')
+                  .update({ current_stock: Math.max(0, newStock) })
+                  .eq('id', oldItem.item_id);
+              }
+            }
+          }
+        }
+
+        // 3. Delete existing bill items (cascades to bin allocations)
         await supabase.from('bill_items').delete().eq('bill_id', id);
 
-        // Insert new items
+        // 4. Insert new items
+        let insertedItems: any[] = [];
         if (data.items.length > 0) {
           const billItems = data.items.map((item: BillItem) => ({
             bill_id: id,
@@ -627,7 +655,60 @@ export class BillsService {
             serial_numbers: item.serial_numbers || [],
           }));
 
-          await supabase.from('bill_items').insert(billItems);
+          const { data: inserted } = await supabase.from('bill_items').insert(billItems).select();
+          insertedItems = inserted || [];
+        }
+
+        // 5. Insert bin allocations for new items
+        if (insertedItems.length > 0) {
+          for (const item of data.items) {
+            if (item.bin_allocations && item.bin_allocations.length > 0) {
+              const matchedItem = insertedItems.find(
+                (inserted: any) => inserted.item_name === item.item_name && inserted.item_id === (item.item_id || null)
+              );
+
+              if (matchedItem) {
+                const allSerials = item.serial_numbers || [];
+                let serialIndex = 0;
+
+                const binAllocations = item.bin_allocations.map((allocation: any) => {
+                  const qty = Math.floor(allocation.quantity);
+                  const binSerials = allSerials.slice(serialIndex, serialIndex + qty);
+                  serialIndex += qty;
+
+                  return {
+                    bill_item_id: matchedItem.id,
+                    bin_location_id: allocation.bin_location_id,
+                    quantity: allocation.quantity,
+                    serial_numbers: binSerials,
+                  };
+                });
+
+                await supabase
+                  .from('bill_item_bin_allocations')
+                  .insert(binAllocations);
+              }
+            }
+          }
+        }
+
+        // 6. Add new stock (add new quantities)
+        for (const item of data.items) {
+          if (item.item_id && item.quantity > 0) {
+            const { data: currentItem } = await supabase
+              .from('items')
+              .select('current_stock')
+              .eq('id', item.item_id)
+              .single();
+
+            if (currentItem) {
+              const newStock = (currentItem.current_stock || 0) + item.quantity;
+              await supabase
+                .from('items')
+                .update({ current_stock: newStock })
+                .eq('id', item.item_id);
+            }
+          }
         }
       }
 
