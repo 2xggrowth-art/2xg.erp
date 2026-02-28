@@ -318,7 +318,7 @@ const PosCreate: React.FC = () => {
         setDenominations(denominations.map(d => ({ ...d, count: 0 })));
         fetchSessions();
         // Navigate to session detail page and auto-trigger print
-        navigate(`/pos/sessions/${closedSessionId}?print=true`);
+        navigate(`/sales/pos/sessions/${closedSessionId}?print=true`);
       }
     } catch (error: any) {
       console.error('Error closing session:', error);
