@@ -13,7 +13,7 @@ import { posCodesService } from '../services/posCodes.service';
 import SplitPaymentModal from '../components/pos/SplitPaymentModal';
 import NewDeliveryChallanForm, { DeliveryFormData } from '../components/delivery-challans/NewDeliveryChallanForm';
 import { deliveryChallansService } from '../services/delivery-challans.service';
-import { openCashDrawer } from '../utils/cashDrawer';
+import { openCashDrawer, checkPrinterStatus } from '../utils/cashDrawer';
 
 // Define the shape of a Cart Item
 interface BinAllocation {
@@ -104,6 +104,9 @@ const PosCreate: React.FC = () => {
     { note: 1, count: 0 },
   ]);
 
+  // Printer connection status
+  const [printerConnected, setPrinterConnected] = useState(false);
+
   // Cash movement states
   const [showCashMovementModal, setShowCashMovementModal] = useState(false);
   const [cashMovementType, setCashMovementType] = useState<'in' | 'out'>('in');
@@ -181,6 +184,13 @@ const PosCreate: React.FC = () => {
     fetchSalespersons();
     fetchSessions();
     fetchActiveSession();
+
+    // Check printer connection status and re-check every 30s
+    checkPrinterStatus().then(setPrinterConnected);
+    const printerCheck = setInterval(() => {
+      checkPrinterStatus().then(setPrinterConnected);
+    }, 30000);
+    return () => clearInterval(printerCheck);
   }, []);
 
   // Check for active session when on newsale tab (only after session check completes)
@@ -1352,16 +1362,25 @@ const PosCreate: React.FC = () => {
             <>
 
               {/* Item Search Input - Inline */}
-              <div className="px-6 py-4 border-b border-gray-200 bg-white relative z-20">
-                <div className="relative">
-                  <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-                  <input
-                    type="text"
-                    placeholder="Type here or scan an item to add [F10]"
-                    value={itemSearch}
-                    onChange={(e) => setItemSearch(e.target.value)}
+              <div className="px-6 py-3 border-b border-gray-200 bg-white relative z-20">
+                <div className="flex items-center gap-3">
+                  <div className="relative flex-1">
+                    <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                    <input
+                      type="text"
+                      placeholder="Type here or scan an item to add [F10]"
+                      value={itemSearch}
+                      onChange={(e) => setItemSearch(e.target.value)}
                     className="w-full pl-10 pr-4 py-2.5 bg-gray-50 border border-gray-300 rounded-lg text-sm text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   />
+                  </div>
+                  {/* Printer Status Indicator */}
+                  <div className={`flex items-center gap-1.5 px-3 py-2 rounded-lg border text-xs font-medium whitespace-nowrap ${printerConnected ? 'bg-green-50 border-green-200 text-green-700' : 'bg-red-50 border-red-200 text-red-600'}`}
+                    title={printerConnected ? 'Printer connected' : 'Printer not connected'}
+                  >
+                    <span className={`w-2 h-2 rounded-full ${printerConnected ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`}></span>
+                    <Printer size={14} />
+                  </div>
                 </div>
 
                 {/* Inline Dropdown Results */}
@@ -1503,7 +1522,7 @@ const PosCreate: React.FC = () => {
               </div>
 
               {/* Footer Actions */}
-              <div className="p-4 bg-gray-50 border-t border-gray-200 flex gap-2">
+              <div className="px-4 py-2 bg-gray-50 border-t border-gray-200 flex gap-2">
                 <button
                   onClick={handleClearCart}
                   className="px-4 py-2 bg-red-50 border border-red-300 hover:bg-red-100 text-red-700 rounded-lg text-xs font-medium flex items-center gap-2 transition-colors"
@@ -1739,7 +1758,7 @@ const PosCreate: React.FC = () => {
 
         {/* Right Sidebar */}
         <div className="w-[420px] flex flex-col bg-white border-l border-gray-200 overflow-hidden">
-          <div className="p-5 space-y-5 overflow-y-auto flex-shrink">
+          <div className="p-4 space-y-3 overflow-y-auto flex-1 min-h-0">
             {/* Current POS Operator */}
             {posEmployeeName && (
               <div className="flex items-center justify-between px-3 py-2 bg-purple-50 border border-purple-200 rounded-lg">
@@ -1853,8 +1872,8 @@ const PosCreate: React.FC = () => {
             </div>
           </div>
 
-          <div className="mt-auto p-5 bg-gray-50 border-t border-gray-200 flex-shrink-0">
-            <div className="mb-5">
+          <div className="mt-auto p-4 bg-gray-50 border-t border-gray-200 flex-shrink-0">
+            <div className="mb-3">
               <div className="flex justify-between items-center text-sm text-gray-500 mb-1">
                 <span>Subtotal ({cart.length} items, {totalQty} qty)</span>
                 <span>₹{subtotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
@@ -1865,9 +1884,9 @@ const PosCreate: React.FC = () => {
                   <span>-₹{discountAmount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
                 </div>
               )}
-              <div className="flex justify-between items-end mt-2">
-                <div className="text-xl font-bold text-gray-800">Total</div>
-                <div className="text-3xl font-bold text-gray-900">₹{total.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</div>
+              <div className="flex justify-between items-end mt-1">
+                <div className="text-lg font-bold text-gray-800">Total</div>
+                <div className="text-2xl font-bold text-gray-900">₹{total.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</div>
               </div>
             </div>
 
@@ -1875,7 +1894,7 @@ const PosCreate: React.FC = () => {
               <button
                 onClick={() => handlePaymentClick('Cash')}
                 disabled={cart.length === 0 || processingPayment}
-                className="col-span-2 py-3.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg text-sm uppercase transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                className="col-span-2 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg text-sm uppercase transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {processingPayment ? 'Processing...' : 'Cash [F1]'}
               </button>
