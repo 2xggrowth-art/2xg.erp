@@ -1,4 +1,4 @@
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from './contexts/AuthContext';
 import { DateFilterProvider } from './contexts/DateFilterContext';
 import ProtectedRoute from './components/auth/ProtectedRoute';
@@ -87,6 +87,13 @@ const BuildlineRoute = ({ children }: { children: React.ReactNode }) => {
   return <DashboardLayout>{children}</DashboardLayout>;
 };
 
+// Redirect old /pos/sessions/:id URLs to /sales/pos/sessions/:id
+const PosSessionRedirect = () => {
+  const sessionId = window.location.pathname.split('/pos/sessions/')[1]?.split('?')[0];
+  const search = window.location.search;
+  return <Navigate to={`/sales/pos/sessions/${sessionId}${search}`} replace />;
+};
+
 function App() {
   return (
     <Router>
@@ -165,6 +172,8 @@ function App() {
             <Route path="/sales/pos" element={<ProtectedRoute><DashboardLayout><PosPage /></DashboardLayout></ProtectedRoute>} />
             <Route path="/sales/pos/new" element={<ProtectedRoute><DashboardLayout><PosCreate /></DashboardLayout></ProtectedRoute>} />
             <Route path="/sales/pos/sessions/:sessionId" element={<ProtectedRoute><DashboardLayout><SessionDetailPage /></DashboardLayout></ProtectedRoute>} />
+            {/* Redirect old /pos/sessions/ URLs to correct /sales/pos/sessions/ path */}
+            <Route path="/pos/sessions/:sessionId" element={<PosSessionRedirect />} />
 
             <Route path="/sales/sales-order" element={<ProtectedRoute><DashboardLayout><SalesOrderPage /></DashboardLayout></ProtectedRoute>} />
             <Route path="/sales/sales-orders" element={<ProtectedRoute><DashboardLayout><SalesOrdersPage /></DashboardLayout></ProtectedRoute>} />
