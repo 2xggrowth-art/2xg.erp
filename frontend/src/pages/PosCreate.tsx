@@ -13,6 +13,7 @@ import { posCodesService } from '../services/posCodes.service';
 import SplitPaymentModal from '../components/pos/SplitPaymentModal';
 import NewDeliveryChallanForm, { DeliveryFormData } from '../components/delivery-challans/NewDeliveryChallanForm';
 import { deliveryChallansService } from '../services/delivery-challans.service';
+import { openCashDrawer } from '../utils/cashDrawer';
 
 // Define the shape of a Cart Item
 interface BinAllocation {
@@ -1162,6 +1163,9 @@ const PosCreate: React.FC = () => {
 
     printWindow.document.write(printContent);
     printWindow.document.close();
+
+    // Auto-open cash drawer (if QZ Tray is running on the POS machine)
+    openCashDrawer();
   };
 
   const handleCashMovement = async () => {

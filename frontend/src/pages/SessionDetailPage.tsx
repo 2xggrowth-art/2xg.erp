@@ -3,6 +3,7 @@ import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { ArrowLeft, Calendar, Clock, DollarSign, TrendingUp, TrendingDown, Printer, Package, RefreshCw } from 'lucide-react';
 import { invoicesService } from '../services/invoices.service';
 import { posSessionsService } from '../services/pos-sessions.service';
+import { openCashDrawer } from '../utils/cashDrawer';
 
 interface Invoice {
   id: string;
@@ -441,6 +442,9 @@ const SessionDetailPage = () => {
 
     printWindow.document.write(printContent);
     printWindow.document.close();
+
+    // Auto-open cash drawer (if QZ Tray is running on the POS machine)
+    openCashDrawer();
   };
 
   if (loading) {
