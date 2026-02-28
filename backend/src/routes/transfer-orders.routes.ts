@@ -1,6 +1,7 @@
 import express from 'express';
 import { TransferOrdersController } from '../controllers/transfer-orders.controller';
 import { requireRole } from '../middleware/auth.middleware';
+import { uploadTransferOrderFiles } from '../middleware/upload.middleware';
 
 const router = express.Router();
 const controller = new TransferOrdersController();
@@ -22,6 +23,9 @@ router.get('/:id', controller.getTransferOrderById);
 
 // Create transfer order
 router.post('/', requireRole('Admin', 'Manager'), controller.createTransferOrder);
+
+// Upload files for transfer order
+router.post('/upload', requireRole('Admin', 'Manager'), uploadTransferOrderFiles.array('files', 5) as any, controller.uploadFiles);
 
 // Update transfer order
 router.put('/:id', requireRole('Admin', 'Manager'), controller.updateTransferOrder);

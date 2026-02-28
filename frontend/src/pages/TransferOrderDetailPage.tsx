@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Edit, Trash2, Calendar, MapPin, Package, ArrowRight } from 'lucide-react';
+import { ArrowLeft, Edit, Trash2, Calendar, MapPin, Package, ArrowRight, Truck, CheckCircle, XCircle, PlayCircle, Paperclip, FileText, Image, ExternalLink } from 'lucide-react';
 import { transferOrdersService, TransferOrder } from '../services/transfer-orders.service';
 
 const TransferOrderDetailPage = () => {
@@ -8,6 +8,7 @@ const TransferOrderDetailPage = () => {
   const navigate = useNavigate();
   const [order, setOrder] = useState<TransferOrder | null>(null);
   const [loading, setLoading] = useState(true);
+  const [statusUpdating, setStatusUpdating] = useState(false);
 
   useEffect(() => {
     if (id) {
@@ -29,9 +30,35 @@ const TransferOrderDetailPage = () => {
     }
   };
 
+  const handleStatusUpdate = async (newStatus: string, confirmMessage: string) => {
+    if (!window.confirm(confirmMessage)) return;
+    try {
+      setStatusUpdating(true);
+      const response = await transferOrdersService.updateTransferOrderStatus(id!, newStatus);
+      if (response.success) {
+        setOrder(response.data);
+        // Re-fetch to get items too
+        await fetchOrderDetails();
+      }
+    } catch (error: any) {
+      console.error('Error updating status:', error);
+      alert(error.response?.data?.message || error.message || 'Failed to update status');
+    } finally {
+      setStatusUpdating(false);
+    }
+  };
+
   const handleDelete = async () => {
-    if (window.confirm('Are you sure you want to delete this transfer order?')) {
+    const hasAllocations = order?.status === 'initiated' || order?.status === 'in_transit';
+    const message = hasAllocations
+      ? 'This transfer order has active stock allocations. Deleting it will reverse all stock movements. Are you sure?'
+      : 'Are you sure you want to delete this transfer order?';
+    if (window.confirm(message)) {
       try {
+        // If there are allocations, cancel first to clean up stock, then delete
+        if (hasAllocations) {
+          await transferOrdersService.updateTransferOrderStatus(id!, 'cancelled');
+        }
         await transferOrdersService.deleteTransferOrder(id!);
         navigate('/inventory/transfer-orders');
       } catch (error) {
@@ -65,6 +92,78 @@ const TransferOrderDetailPage = () => {
     });
   };
 
+  // Determine which status action buttons to show
+  const getStatusActions = () => {
+    if (!order) return null;
+    switch (order.status) {
+      case 'draft':
+        return (
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => handleStatusUpdate('initiated', 'Initiate this transfer? Stock will be allocated from the source location.')}
+              disabled={statusUpdating}
+              className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
+            >
+              <PlayCircle className="w-4 h-4" />
+              {statusUpdating ? 'Processing...' : 'Initiate Transfer'}
+            </button>
+            <button
+              onClick={() => handleStatusUpdate('cancelled', 'Cancel this transfer order?')}
+              disabled={statusUpdating}
+              className="flex items-center gap-2 px-4 py-2 border border-red-300 text-red-600 rounded-lg hover:bg-red-50 transition-colors disabled:opacity-50"
+            >
+              <XCircle className="w-4 h-4" />
+              Cancel
+            </button>
+          </div>
+        );
+      case 'initiated':
+        return (
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => handleStatusUpdate('in_transit', 'Mark this transfer as in transit?')}
+              disabled={statusUpdating}
+              className="flex items-center gap-2 px-4 py-2 bg-yellow-500 text-white rounded-lg hover:bg-yellow-600 transition-colors disabled:opacity-50"
+            >
+              <Truck className="w-4 h-4" />
+              {statusUpdating ? 'Processing...' : 'Mark In Transit'}
+            </button>
+            <button
+              onClick={() => handleStatusUpdate('cancelled', 'Cancel this transfer? Stock allocations will be reversed.')}
+              disabled={statusUpdating}
+              className="flex items-center gap-2 px-4 py-2 border border-red-300 text-red-600 rounded-lg hover:bg-red-50 transition-colors disabled:opacity-50"
+            >
+              <XCircle className="w-4 h-4" />
+              Cancel Transfer
+            </button>
+          </div>
+        );
+      case 'in_transit':
+        return (
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => handleStatusUpdate('received', 'Confirm that the items have been received at the destination?')}
+              disabled={statusUpdating}
+              className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50"
+            >
+              <CheckCircle className="w-4 h-4" />
+              {statusUpdating ? 'Processing...' : 'Mark as Received'}
+            </button>
+            <button
+              onClick={() => handleStatusUpdate('cancelled', 'Cancel this transfer? Stock allocations will be reversed.')}
+              disabled={statusUpdating}
+              className="flex items-center gap-2 px-4 py-2 border border-red-300 text-red-600 rounded-lg hover:bg-red-50 transition-colors disabled:opacity-50"
+            >
+              <XCircle className="w-4 h-4" />
+              Cancel Transfer
+            </button>
+          </div>
+        );
+      default:
+        return null; // received and cancelled are terminal states
+    }
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -92,6 +191,9 @@ const TransferOrderDetailPage = () => {
     );
   }
 
+  const isDraft = order.status === 'draft';
+  const isTerminal = order.status === 'received' || order.status === 'cancelled';
+
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
@@ -115,23 +217,41 @@ const TransferOrderDetailPage = () => {
             <span className={`px-3 py-1 rounded-full text-sm font-semibold ${getStatusColor(order.status)}`}>
               {order.status.replace('_', ' ').toUpperCase()}
             </span>
-            <button
-              onClick={() => navigate(`/inventory/transfer-orders/edit/${order.id}`)}
-              className="flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-            >
-              <Edit className="w-4 h-4" />
-              Edit
-            </button>
-            <button
-              onClick={handleDelete}
-              className="flex items-center gap-2 px-4 py-2 border border-red-300 text-red-600 rounded-lg hover:bg-red-50 transition-colors"
-            >
-              <Trash2 className="w-4 h-4" />
-              Delete
-            </button>
+            {isDraft && (
+              <button
+                onClick={() => navigate(`/inventory/transfer-orders/edit/${order.id}`)}
+                className="flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+              >
+                <Edit className="w-4 h-4" />
+                Edit
+              </button>
+            )}
+            {!isTerminal && (
+              <button
+                onClick={handleDelete}
+                className="flex items-center gap-2 px-4 py-2 border border-red-300 text-red-600 rounded-lg hover:bg-red-50 transition-colors"
+              >
+                <Trash2 className="w-4 h-4" />
+                Delete
+              </button>
+            )}
           </div>
         </div>
       </div>
+
+      {/* Status Action Bar */}
+      {getStatusActions() && (
+        <div className="bg-white border-b border-gray-200 px-6 py-3">
+          <div className="flex items-center justify-between">
+            <p className="text-sm text-gray-600">
+              {order.status === 'draft' && 'This transfer order is a draft. Initiate it to allocate stock.'}
+              {order.status === 'initiated' && 'Stock has been allocated. Mark as in transit when items are dispatched.'}
+              {order.status === 'in_transit' && 'Items are in transit. Mark as received when they arrive at the destination.'}
+            </p>
+            {getStatusActions()}
+          </div>
+        </div>
+      )}
 
       {/* Content */}
       <div className="p-6 max-w-7xl mx-auto">
@@ -177,7 +297,7 @@ const TransferOrderDetailPage = () => {
                     {order.items?.map((item: any, index: number) => (
                       <tr key={index}>
                         <td className="px-4 py-3 text-sm text-gray-900">{item.item_name}</td>
-                        <td className="px-4 py-3 text-sm text-gray-900 text-right">{item.quantity}</td>
+                        <td className="px-4 py-3 text-sm text-gray-900 text-right">{item.transfer_quantity}</td>
                         <td className="px-4 py-3 text-sm text-gray-600">{item.unit_of_measurement}</td>
                         <td className="px-4 py-3 text-sm text-gray-600">{item.description || '-'}</td>
                       </tr>
@@ -192,6 +312,44 @@ const TransferOrderDetailPage = () => {
               <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
                 <h2 className="text-lg font-semibold text-gray-900 mb-4">Notes</h2>
                 <p className="text-gray-700 whitespace-pre-wrap">{order.notes}</p>
+              </div>
+            )}
+
+            {/* Attachments */}
+            {order.attachment_urls && order.attachment_urls.length > 0 && (
+              <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+                <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
+                  <Paperclip className="w-5 h-5" />
+                  Attachments ({order.attachment_urls.length})
+                </h2>
+                <div className="space-y-2">
+                  {order.attachment_urls.map((url: string, index: number) => {
+                    const fileName = url.split('/').pop() || `File ${index + 1}`;
+                    const isImage = /\.(jpg|jpeg|png|gif|webp)$/i.test(url);
+                    const apiBase = import.meta.env.VITE_API_URL?.replace('/api', '') || '';
+                    const fullUrl = `${apiBase}${url}`;
+
+                    return (
+                      <a
+                        key={index}
+                        href={fullUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center gap-3 bg-gray-50 border border-gray-200 rounded-lg px-4 py-3 hover:bg-blue-50 hover:border-blue-200 transition-colors group"
+                      >
+                        {isImage ? (
+                          <Image className="w-5 h-5 text-blue-500 flex-shrink-0" />
+                        ) : (
+                          <FileText className="w-5 h-5 text-red-500 flex-shrink-0" />
+                        )}
+                        <span className="text-sm text-gray-700 truncate flex-1 group-hover:text-blue-700">
+                          {fileName}
+                        </span>
+                        <ExternalLink className="w-4 h-4 text-gray-400 group-hover:text-blue-500 flex-shrink-0" />
+                      </a>
+                    );
+                  })}
+                </div>
               </div>
             )}
           </div>

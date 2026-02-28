@@ -176,12 +176,43 @@ export class TransferOrdersController {
   };
 
   /**
+   * Upload files for transfer order
+   */
+  uploadFiles = async (req: Request, res: Response) => {
+    try {
+      const processedFiles = (req as any).processedFiles || [];
+
+      if (processedFiles.length === 0) {
+        return res.status(400).json({
+          success: false,
+          message: 'No files uploaded'
+        });
+      }
+
+      res.json({
+        success: true,
+        data: processedFiles.map((f: any) => ({ url: f.url, filename: f.originalname })),
+        message: `${processedFiles.length} file(s) uploaded successfully`
+      });
+    } catch (error: any) {
+      res.status(500).json({
+        success: false,
+        error: error.message
+      });
+    }
+  };
+
+  /**
    * Update transfer order status
    */
   updateTransferOrderStatus = async (req: Request, res: Response) => {
     try {
       const { id } = req.params;
       const { status } = req.body;
+
+      if (!status) {
+        return res.status(400).json({ success: false, message: 'Status is required' });
+      }
 
       const order = await this.transferOrdersService.updateTransferOrderStatus(id, status);
 
@@ -191,8 +222,9 @@ export class TransferOrdersController {
         message: 'Transfer order status updated successfully'
       });
     } catch (error: any) {
-      res.status(500).json({
+      res.status(400).json({
         success: false,
+        message: error.message || 'Failed to update transfer order status',
         error: error.message
       });
     }

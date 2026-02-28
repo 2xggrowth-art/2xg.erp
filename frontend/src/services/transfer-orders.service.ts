@@ -199,6 +199,22 @@ export const transferOrdersService = {
       throw error;
     }
   },
+
+  uploadFiles: async (files: File[]): Promise<APIResponse<{ url: string; filename: string }[]>> => {
+    try {
+      const formData = new FormData();
+      files.forEach(file => formData.append('files', file));
+      const response = await apiClient.post<APIResponse<{ url: string; filename: string }[]>>(
+        `/transfer-orders/upload`,
+        formData,
+        { headers: { 'Content-Type': 'multipart/form-data' } }
+      );
+      return response.data;
+    } catch (error) {
+      console.error('Error uploading transfer order files:', error);
+      throw error;
+    }
+  },
 };
 
 export default transferOrdersService;

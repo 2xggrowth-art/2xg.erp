@@ -7,11 +7,15 @@ import { Request, Response, NextFunction } from 'express';
 // Ensure uploads directories exist
 const expenseUploadDir = path.join(__dirname, '../../uploads/expenses');
 const billUploadDir = path.join(__dirname, '../../uploads/bills');
+const transferOrderUploadDir = path.join(__dirname, '../../uploads/transfer-orders');
 if (!fs.existsSync(expenseUploadDir)) {
   fs.mkdirSync(expenseUploadDir, { recursive: true });
 }
 if (!fs.existsSync(billUploadDir)) {
   fs.mkdirSync(billUploadDir, { recursive: true });
+}
+if (!fs.existsSync(transferOrderUploadDir)) {
+  fs.mkdirSync(transferOrderUploadDir, { recursive: true });
 }
 const uploadDir = expenseUploadDir;
 
@@ -179,6 +183,73 @@ export const uploadBillFiles = {
     return [
       billUpload.array(fieldName, maxCount),
       compressBillFiles
+    ];
+  }
+};
+
+// Transfer order file upload - multiple files (up to 5, 10MB each)
+const transferOrderUpload = multer({
+  storage: memoryStorage,
+  fileFilter: fileFilter,
+  limits: {
+    fileSize: 10 * 1024 * 1024 // 10MB limit per file
+  }
+});
+
+const compressTransferOrderFiles = async (req: Request, res: Response, next: NextFunction) => {
+  if (!req.files || !Array.isArray(req.files) || req.files.length === 0) {
+    return next();
+  }
+
+  try {
+    const processedFiles: { filename: string; originalname: string; url: string }[] = [];
+
+    for (const file of req.files) {
+      const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+      const originalExt = path.extname(file.originalname);
+      const nameWithoutExt = path.basename(file.originalname, originalExt);
+      const isImage = file.mimetype.startsWith('image/');
+
+      if (isImage) {
+        const compressedFilename = `${nameWithoutExt}-${uniqueSuffix}.jpg`;
+        const outputPath = path.join(transferOrderUploadDir, compressedFilename);
+
+        await sharp(file.buffer)
+          .resize(1920, 1920, { fit: 'inside', withoutEnlargement: true })
+          .jpeg({ quality: 75, progressive: true })
+          .toFile(outputPath);
+
+        processedFiles.push({
+          filename: compressedFilename,
+          originalname: file.originalname,
+          url: `/uploads/transfer-orders/${compressedFilename}`,
+        });
+      } else {
+        const pdfFilename = `${nameWithoutExt}-${uniqueSuffix}${originalExt}`;
+        const outputPath = path.join(transferOrderUploadDir, pdfFilename);
+        fs.writeFileSync(outputPath, file.buffer);
+
+        processedFiles.push({
+          filename: pdfFilename,
+          originalname: file.originalname,
+          url: `/uploads/transfer-orders/${pdfFilename}`,
+        });
+      }
+    }
+
+    (req as any).processedFiles = processedFiles;
+    next();
+  } catch (error) {
+    console.error('Error processing transfer order files:', error);
+    next(error);
+  }
+};
+
+export const uploadTransferOrderFiles = {
+  array: (fieldName: string, maxCount: number) => {
+    return [
+      transferOrderUpload.array(fieldName, maxCount),
+      compressTransferOrderFiles
     ];
   }
 };

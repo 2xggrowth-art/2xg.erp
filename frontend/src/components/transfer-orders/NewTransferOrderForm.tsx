@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { X, Plus, Trash2, RefreshCw, AlertCircle, Search } from 'lucide-react';
+import { X, Plus, Trash2, RefreshCw, AlertCircle, Search, Upload, FileText, Image } from 'lucide-react';
 import { transferOrdersService, CreateTransferOrderData, TransferOrderItem, ItemLocationStock } from '../../services/transfer-orders.service';
 import { itemsService, Item } from '../../services/items.service';
 import { locationsService, Location } from '../../services/locations.service';
@@ -42,6 +42,12 @@ const NewTransferOrderForm = () => {
       unit_of_measurement: 'Pcs',
     },
   ]);
+
+  // File upload state
+  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
+  const [uploadedUrls, setUploadedUrls] = useState<string[]>([]);
+  const [uploading, setUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Searchable item selector state
   const [itemSearchQueries, setItemSearchQueries] = useState<Record<number, string>>({});
@@ -273,6 +279,28 @@ const NewTransferOrderForm = () => {
       setShowError(false);
       setErrorMessage('');
 
+      // Upload files first if any are selected
+      let attachmentUrls: string[] = [...uploadedUrls];
+      if (selectedFiles.length > 0) {
+        setUploading(true);
+        try {
+          const uploadRes = await transferOrdersService.uploadFiles(selectedFiles);
+          if (uploadRes.success && uploadRes.data) {
+            const newUrls = uploadRes.data.map(f => f.url);
+            attachmentUrls = [...attachmentUrls, ...newUrls];
+            setUploadedUrls(attachmentUrls);
+            setSelectedFiles([]);
+          }
+        } catch (uploadError: any) {
+          console.error('Error uploading files:', uploadError);
+          setShowError(true);
+          setErrorMessage(uploadError.message || 'Failed to upload files');
+          return;
+        } finally {
+          setUploading(false);
+        }
+      }
+
       const orderData: CreateTransferOrderData = {
         transfer_order_number: transferOrderNumber,
         transfer_date: formData.transfer_date,
@@ -282,6 +310,7 @@ const NewTransferOrderForm = () => {
         reason: formData.reason,
         status: saveType,
         notes: formData.notes,
+        attachment_urls: attachmentUrls.length > 0 ? attachmentUrls : undefined,
         items: transferItems.filter(item => item.item_name && item.transfer_quantity > 0),
       };
 
@@ -643,12 +672,82 @@ const NewTransferOrderForm = () => {
             <label className="block text-sm font-medium text-gray-700 mb-2">
               Attach File(s)
             </label>
-            <button className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 text-sm">
-              Upload File
-            </button>
-            <p className="text-xs text-gray-500 mt-1">
-              You can upload a maximum of 5 files, 10MB each
-            </p>
+            <input
+              ref={fileInputRef}
+              type="file"
+              multiple
+              accept="image/jpeg,image/png,image/gif,image/webp,application/pdf"
+              className="hidden"
+              onChange={(e) => {
+                if (e.target.files) {
+                  const newFiles = Array.from(e.target.files);
+                  const total = selectedFiles.length + newFiles.length;
+                  if (total > 5) {
+                    setShowError(true);
+                    setErrorMessage('Maximum 5 files allowed.');
+                    return;
+                  }
+                  const oversized = newFiles.find(f => f.size > 10 * 1024 * 1024);
+                  if (oversized) {
+                    setShowError(true);
+                    setErrorMessage(`File "${oversized.name}" exceeds the 10MB limit.`);
+                    return;
+                  }
+                  setSelectedFiles(prev => [...prev, ...newFiles]);
+                }
+                // Reset input so same file can be re-selected
+                e.target.value = '';
+              }}
+            />
+            <div
+              onClick={() => fileInputRef.current?.click()}
+              className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center cursor-pointer hover:border-blue-400 hover:bg-blue-50/30 transition-colors"
+            >
+              <Upload className="w-8 h-8 text-gray-400 mx-auto mb-2" />
+              <p className="text-sm text-gray-600">Click to upload or drag files here</p>
+              <p className="text-xs text-gray-400 mt-1">
+                JPEG, PNG, GIF, WEBP, PDF — max 5 files, 10MB each
+              </p>
+            </div>
+
+            {/* Selected files list */}
+            {selectedFiles.length > 0 && (
+              <div className="mt-3 space-y-2">
+                {selectedFiles.map((file, idx) => (
+                  <div key={idx} className="flex items-center gap-3 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2">
+                    {file.type.startsWith('image/') ? (
+                      <Image className="w-4 h-4 text-blue-500 flex-shrink-0" />
+                    ) : (
+                      <FileText className="w-4 h-4 text-red-500 flex-shrink-0" />
+                    )}
+                    <span className="text-sm text-gray-700 truncate flex-1">{file.name}</span>
+                    <span className="text-xs text-gray-400 flex-shrink-0">
+                      {(file.size / 1024).toFixed(0)} KB
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedFiles(prev => prev.filter((_, i) => i !== idx))}
+                      className="text-gray-400 hover:text-red-500 flex-shrink-0"
+                    >
+                      <X size={16} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Already uploaded files (after upload) */}
+            {uploadedUrls.length > 0 && (
+              <div className="mt-3">
+                <p className="text-xs text-green-600 font-medium mb-1">{uploadedUrls.length} file(s) uploaded</p>
+                {uploadedUrls.map((url, idx) => (
+                  <div key={idx} className="flex items-center gap-2 text-xs text-gray-500">
+                    <FileText className="w-3 h-3" />
+                    <span className="truncate">{url.split('/').pop()}</span>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
           {/* Action Buttons */}
@@ -675,7 +774,7 @@ const NewTransferOrderForm = () => {
                 disabled={loading}
                 className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
               >
-                {loading ? 'Processing...' : 'Initiate Transfer'}
+                {loading ? (uploading ? 'Uploading files...' : 'Processing...') : 'Initiate Transfer'}
               </button>
             </div>
           </div>

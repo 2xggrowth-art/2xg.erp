@@ -353,6 +353,18 @@ export class TransferOrdersService {
    */
   async updateTransferOrder(id: string, orderData: Partial<TransferOrder>): Promise<any> {
     try {
+      // Only allow editing draft orders
+      const { data: currentOrder, error: fetchError } = await supabaseAdmin
+        .from('transfer_orders')
+        .select('status')
+        .eq('id', id)
+        .single();
+
+      if (fetchError) throw fetchError;
+      if (currentOrder.status !== 'draft') {
+        throw new Error(`Cannot edit a transfer order with status "${currentOrder.status}". Only draft orders can be edited.`);
+      }
+
       const { items, ...mainData } = orderData;
 
       // Validate if locations are being updated
@@ -466,12 +478,48 @@ export class TransferOrdersService {
   }
 
   /**
+   * Valid status transitions
+   */
+  private validTransitions: Record<string, string[]> = {
+    draft: ['initiated', 'cancelled'],
+    initiated: ['in_transit', 'cancelled'],
+    in_transit: ['received', 'cancelled'],
+    received: [],    // terminal state
+    cancelled: [],   // terminal state
+  };
+
+  /**
    * Update transfer order status
    */
   async updateTransferOrderStatus(id: string, status: string): Promise<any> {
     try {
-      // If initiating, process stock movement
+      // Fetch current order to validate transition
+      const { data: currentOrder, error: fetchError } = await supabaseAdmin
+        .from('transfer_orders')
+        .select('status')
+        .eq('id', id)
+        .single();
+
+      if (fetchError) throw fetchError;
+
+      const currentStatus = currentOrder.status;
+      const allowed = this.validTransitions[currentStatus] || [];
+      if (!allowed.includes(status)) {
+        throw new Error(`Cannot change status from "${currentStatus}" to "${status}". Allowed transitions: ${allowed.join(', ') || 'none (terminal state)'}.`);
+      }
+
+      // If initiating, check for existing allocations (idempotency) then process stock movement
       if (status === 'initiated') {
+        const { data: existingAllocations } = await supabaseAdmin
+          .from('transfer_order_allocations')
+          .select('id')
+          .eq('transfer_order_id', id)
+          .limit(1);
+
+        if (existingAllocations && existingAllocations.length > 0) {
+          throw new Error('Stock allocations already exist for this transfer order. Cannot initiate again.');
+        }
+
         await this.processTransferStockMovement(id);
       }
 
