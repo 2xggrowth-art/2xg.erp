@@ -1,19 +1,34 @@
 import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
-import { ArrowLeft, Calendar, Clock, DollarSign, TrendingUp, TrendingDown, Printer, Package, RefreshCw } from 'lucide-react';
+import { ArrowLeft, Calendar, Clock, DollarSign, TrendingUp, TrendingDown, Printer, Package, RefreshCw, FileText, ChevronDown, ChevronRight } from 'lucide-react';
 import { invoicesService } from '../services/invoices.service';
 import { posSessionsService } from '../services/pos-sessions.service';
 import { openCashDrawer } from '../utils/cashDrawer';
+
+interface InvoiceItem {
+  id: string;
+  item_name: string;
+  quantity: number;
+  rate: number;
+  amount: number;
+  unit_of_measurement?: string;
+}
 
 interface Invoice {
   id: string;
   invoice_number: string;
   customer_name: string;
+  salesperson_name?: string;
   invoice_date: string;
   total_amount: number;
+  sub_total: number;
+  discount_value: number;
+  discount_type: string;
   status: string;
   customer_notes?: string;
   subject?: string;
+  created_at?: string;
+  items?: InvoiceItem[];
 }
 
 interface CashTransaction {
@@ -53,7 +68,7 @@ interface PosSession {
   denomination_data?: { note: number; count: number; total: number }[];
 }
 
-type TabType = 'overview' | 'cash-activity';
+type TabType = 'overview' | 'invoices' | 'cash-activity';
 
 const SessionDetailPage = () => {
   const { sessionId } = useParams<{ sessionId: string }>();
@@ -61,6 +76,8 @@ const SessionDetailPage = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const [activeTab, setActiveTab] = useState<TabType>('overview');
   const [session, setSession] = useState<PosSession | null>(null);
+  const [invoices, setInvoices] = useState<Invoice[]>([]);
+  const [expandedInvoice, setExpandedInvoice] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const autoPrintDone = useRef(false);
 
@@ -100,10 +117,10 @@ const SessionDetailPage = () => {
       let ordersCount = 0;
 
       if (response.success && response.data) {
-        const invoices: Invoice[] = response.data.invoices || response.data.data || [];
-        ordersCount = invoices.length;
+        const fetchedInvoices: Invoice[] = response.data.invoices || response.data.data || [];
+        ordersCount = fetchedInvoices.length;
 
-        invoices.forEach((invoice: any) => {
+        fetchedInvoices.forEach((invoice: any) => {
           const amount = invoice.total_amount || 0;
           const notes = invoice.customer_notes || '';
 
@@ -127,6 +144,20 @@ const SessionDetailPage = () => {
             }
           }
         });
+
+        // Fetch items for each invoice
+        const invoicesWithItems = await Promise.all(
+          fetchedInvoices.map(async (inv: Invoice) => {
+            try {
+              const detail = await invoicesService.getInvoiceById(inv.id);
+              if (detail.success && detail.data) {
+                return { ...inv, items: detail.data.items || [] };
+              }
+            } catch { /* ignore */ }
+            return inv;
+          })
+        );
+        setInvoices(invoicesWithItems);
       }
 
       // Load cash transactions from localStorage (until we have a proper API)
@@ -553,6 +584,16 @@ const SessionDetailPage = () => {
               Overview
             </button>
             <button
+              onClick={() => setActiveTab('invoices')}
+              className={`py-3 px-1 border-b-2 transition-colors ${
+                activeTab === 'invoices'
+                  ? 'border-blue-600 text-blue-600 font-medium'
+                  : 'border-transparent text-gray-600 hover:text-gray-900'
+              }`}
+            >
+              Invoices ({invoices.length})
+            </button>
+            <button
               onClick={() => setActiveTab('cash-activity')}
               className={`py-3 px-1 border-b-2 transition-colors ${
                 activeTab === 'cash-activity'
@@ -568,7 +609,127 @@ const SessionDetailPage = () => {
 
       {/* Content */}
       <div className="flex-1 overflow-auto p-6">
-        {activeTab === 'overview' ? (
+        {activeTab === 'invoices' ? (
+          /* Invoices Tab */
+          <div className="space-y-4">
+            {invoices.length === 0 ? (
+              <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8 text-center">
+                <FileText className="w-12 h-12 mx-auto mb-3 text-gray-300" />
+                <p className="text-gray-500">No invoices in this session</p>
+              </div>
+            ) : (
+              <>
+                {/* Summary row */}
+                <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-gray-600">{invoices.length} invoice{invoices.length !== 1 ? 's' : ''} in this session</span>
+                    <span className="font-bold text-gray-900">
+                      Total: {formatCurrency(invoices.reduce((sum, inv) => sum + (inv.total_amount || 0), 0))}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Invoice list */}
+                {invoices.map((invoice) => {
+                  const isExpanded = expandedInvoice === invoice.id;
+                  const notes = invoice.customer_notes || '';
+                  // Parse payment mode
+                  const splitMatches: RegExpMatchArray[] = Array.from(notes.matchAll(/Payment \d+:\s*(.+?)\s*-\s*₹([\d,.]+)/g));
+                  let paymentMode = '-';
+                  if (splitMatches.length > 0) {
+                    paymentMode = splitMatches.map(m => m[1].trim()).join(' + ');
+                  } else {
+                    const paymentMatch = notes.match(/Payment Mode: ([^\n]+)/);
+                    if (paymentMatch) paymentMode = paymentMatch[1].trim();
+                  }
+
+                  return (
+                    <div key={invoice.id} className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+                      {/* Invoice header row */}
+                      <div
+                        className="flex items-center justify-between p-4 cursor-pointer hover:bg-gray-50 transition-colors"
+                        onClick={() => setExpandedInvoice(isExpanded ? null : invoice.id)}
+                      >
+                        <div className="flex items-center gap-4">
+                          <div className="text-gray-400">
+                            {isExpanded ? <ChevronDown className="w-5 h-5" /> : <ChevronRight className="w-5 h-5" />}
+                          </div>
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <span className="font-semibold text-gray-800">{invoice.invoice_number}</span>
+                              <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
+                                invoice.status === 'paid' ? 'bg-green-100 text-green-700' :
+                                invoice.status === 'draft' ? 'bg-gray-100 text-gray-600' :
+                                'bg-yellow-100 text-yellow-700'
+                              }`}>
+                                {invoice.status}
+                              </span>
+                            </div>
+                            <div className="flex items-center gap-3 mt-1 text-xs text-gray-500">
+                              <span>{invoice.customer_name || 'Walk-in Customer'}</span>
+                              {invoice.salesperson_name && (
+                                <>
+                                  <span className="text-gray-300">|</span>
+                                  <span>by {invoice.salesperson_name}</span>
+                                </>
+                              )}
+                              <span className="text-gray-300">|</span>
+                              <span>{paymentMode}</span>
+                              {invoice.created_at && (
+                                <>
+                                  <span className="text-gray-300">|</span>
+                                  <span>{new Date(invoice.created_at).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true })}</span>
+                                </>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <div className="font-bold text-gray-900">{formatCurrency(invoice.total_amount)}</div>
+                          {invoice.items && (
+                            <div className="text-xs text-gray-500 mt-0.5">{invoice.items.length} item{invoice.items.length !== 1 ? 's' : ''}</div>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Expanded items */}
+                      {isExpanded && invoice.items && invoice.items.length > 0 && (
+                        <div className="border-t border-gray-100 bg-gray-50">
+                          <table className="w-full text-sm">
+                            <thead>
+                              <tr className="text-xs text-gray-500 uppercase border-b border-gray-200">
+                                <th className="px-6 py-2 text-left font-medium">Item</th>
+                                <th className="px-4 py-2 text-center font-medium">Qty</th>
+                                <th className="px-4 py-2 text-right font-medium">Rate</th>
+                                <th className="px-4 py-2 text-right font-medium">Amount</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-gray-100">
+                              {invoice.items.map((item, idx) => (
+                                <tr key={item.id || idx} className="text-gray-700">
+                                  <td className="px-6 py-2">{item.item_name}</td>
+                                  <td className="px-4 py-2 text-center">{item.quantity} {item.unit_of_measurement || ''}</td>
+                                  <td className="px-4 py-2 text-right">{formatCurrency(item.rate)}</td>
+                                  <td className="px-4 py-2 text-right font-medium">{formatCurrency(item.amount)}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                            <tfoot>
+                              <tr className="border-t border-gray-200 font-semibold text-gray-800">
+                                <td className="px-6 py-2" colSpan={3}>Total</td>
+                                <td className="px-4 py-2 text-right">{formatCurrency(invoice.total_amount)}</td>
+                              </tr>
+                            </tfoot>
+                          </table>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </>
+            )}
+          </div>
+        ) : activeTab === 'overview' ? (
           <div className="space-y-6">
             {/* Key Metrics */}
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4">

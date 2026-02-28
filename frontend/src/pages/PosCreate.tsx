@@ -140,8 +140,8 @@ const PosCreate: React.FC = () => {
   const [generatedInvoice, setGeneratedInvoice] = useState<any>(null);
   const [pendingDeliveryData, setPendingDeliveryData] = useState<{ formData: DeliveryFormData; challanNumber: string } | null>(null);
 
-  // POS Code lock states
-  const [posLocked, setPosLocked] = useState(true);
+  // POS Code lock states — only lock when there's an active session
+  const [posLocked, setPosLocked] = useState(false);
   const [posCodeInput, setPosCodeInput] = useState('');
   const [posEmployeeName, setPosEmployeeName] = useState('');
   const [posCodeError, setPosCodeError] = useState('');
@@ -271,8 +271,10 @@ const PosCreate: React.FC = () => {
   const fetchActiveSession = async () => {
     try {
       const response = await posSessionsService.getActiveSession();
-      if (response.success) {
+      if (response.success && response.data) {
         setActiveSession(response.data);
+        // Lock POS only when there's an active open session
+        setPosLocked(true);
       }
     } catch (err: any) {
       console.error('Error fetching active session:', err);
