@@ -511,9 +511,40 @@ export class BillsService {
         throw itemsError;
       }
 
+      // Get bin allocations for all bill items
+      const itemIds = (items || []).map((item: any) => item.id);
+      let allocationsMap: Record<string, any[]> = {};
+
+      if (itemIds.length > 0) {
+        const { data: allocations, error: allocError } = await supabase
+          .from('bill_item_bin_allocations')
+          .select('*, bin_locations(id, bin_code, location_id, locations(name))')
+          .in('bill_item_id', itemIds);
+
+        if (!allocError && allocations) {
+          for (const alloc of allocations) {
+            const key = alloc.bill_item_id;
+            if (!allocationsMap[key]) allocationsMap[key] = [];
+            allocationsMap[key].push({
+              id: alloc.id,
+              bin_location_id: alloc.bin_location_id,
+              bin_code: alloc.bin_locations?.bin_code || '',
+              location_name: alloc.bin_locations?.locations?.name || '',
+              quantity: alloc.quantity,
+            });
+          }
+        }
+      }
+
+      // Attach bin_allocations to each item
+      const itemsWithAllocations = (items || []).map((item: any) => ({
+        ...item,
+        bin_allocations: allocationsMap[item.id] || [],
+      }));
+
       return {
         ...bill,
-        items: items || [],
+        items: itemsWithAllocations,
       };
     } catch (error) {
       console.error('Error fetching bill:', error);

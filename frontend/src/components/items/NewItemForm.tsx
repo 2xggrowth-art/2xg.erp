@@ -4,6 +4,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { itemsService, ProductCategory, ProductSubcategory } from '../../services/items.service';
 import { brandsService, Brand } from '../../services/brands.service';
 import { manufacturersService, Manufacturer } from '../../services/manufacturers.service';
+import { vendorsService, Vendor } from '../../services/vendors.service';
 import { useAuth } from '../../contexts/AuthContext';
 import CreatableSelect from '../shared/CreatableSelect';
 import CategoryPicker from '../shared/CategoryPicker';
@@ -28,11 +29,13 @@ const NewItemForm = () => {
   const [manufacturers, setManufacturers] = useState<Manufacturer[]>([]);
   const [itemSizes, setItemSizes] = useState<ItemSize[]>([]);
   const [itemColors, setItemColors] = useState<ItemColor[]>([]);
+  const [vendors, setVendors] = useState<Vendor[]>([]);
   const [formData, setFormData] = useState({
     name: '',
     sku: '',
     size: '',
     color: '',
+    variant: '',
     unit: 'pcs',
     category: '',
     subcategory: '',
@@ -44,6 +47,7 @@ const NewItemForm = () => {
     sellingPrice: '',
     costPrice: '',
     reorderPoint: '',
+    preferredVendor: '',
   });
 
   const [items, setItems] = useState<any[]>([]);
@@ -57,6 +61,7 @@ const NewItemForm = () => {
     fetchManufacturers();
     fetchItemSizes();
     fetchItemColors();
+    fetchVendors();
     if (isEditMode && id) {
       fetchItemDetails(id);
     } else {
@@ -150,6 +155,18 @@ const NewItemForm = () => {
       }
     } catch (error) {
       console.error('Error fetching item colors:', error);
+    }
+  };
+
+  const fetchVendors = async () => {
+    try {
+      const response = await vendorsService.getAllVendors({ isActive: true });
+      const apiResponse = response.data;
+      if (apiResponse.success && apiResponse.data) {
+        setVendors(apiResponse.data);
+      }
+    } catch (error) {
+      console.error('Error fetching vendors:', error);
     }
   };
 
@@ -331,6 +348,7 @@ const NewItemForm = () => {
           sku: item.sku,
           size: item.size || '',
           color: item.color || '',
+          variant: item.variant || '',
           unit: item.unit_of_measurement || 'pcs',
           category: categories.find(c => c.id === item.category_id)?.name || '',
           subcategory: '',
@@ -342,6 +360,7 @@ const NewItemForm = () => {
           sellingPrice: item.unit_price ? item.unit_price.toString() : '',
           costPrice: item.cost_price ? item.cost_price.toString() : '',
           reorderPoint: item.reorder_point ? item.reorder_point.toString() : '',
+          preferredVendor: item.preferred_vendor_id || '',
         });
 
         if (item.subcategory_id && allSubcategories.length > 0) {
@@ -386,6 +405,7 @@ const NewItemForm = () => {
         item_type: 'goods',
         size: formData.size || undefined,
         color: formData.color || undefined,
+        variant: formData.variant || undefined,
         sku: formData.sku,
         unit: formData.unit,
         category: categories.find(c => c.name === formData.category)?.id || undefined,
@@ -400,6 +420,7 @@ const NewItemForm = () => {
         reorder_point: formData.reorderPoint ? parseInt(formData.reorderPoint) : 10,
         track_inventory: true,
         advanced_tracking_type: 'none',
+        preferred_vendor_id: formData.preferredVendor || undefined,
       };
 
       let response;
@@ -545,10 +566,10 @@ const NewItemForm = () => {
             </div>
           </div>
 
-          {/* Size & Color */}
+          {/* Size, Color & Variant */}
           <div className="grid grid-cols-4 gap-4 items-center">
             <label className="text-sm font-medium text-gray-700">Size</label>
-            <div className="col-span-3 grid grid-cols-2 gap-4">
+            <div className="col-span-3 grid grid-cols-3 gap-4">
               <CreatableSelect
                 options={itemSizes.map(s => ({ id: s.id, name: s.name }))}
                 value={formData.size}
@@ -569,6 +590,19 @@ const NewItemForm = () => {
                   placeholder="Select or add color"
                   label="color"
                 />
+              </div>
+              <div>
+                <label className="text-sm font-medium text-gray-700 block mb-1">Variant</label>
+                <select
+                  name="variant"
+                  value={formData.variant}
+                  onChange={handleInputChange}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                >
+                  <option value="">Select variant</option>
+                  <option value="MS">MS</option>
+                  <option value="SS">SS</option>
+                </select>
               </div>
             </div>
           </div>
@@ -751,6 +785,28 @@ const NewItemForm = () => {
               />
             </div>
           </div>
+
+          {/* Preferred Vendor */}
+          {(canViewPurchasePrice) && (
+            <div className="grid grid-cols-4 gap-4 items-center">
+              <label className="text-sm font-medium text-gray-700">Preferred Vendor</label>
+              <div className="col-span-3">
+                <select
+                  name="preferredVendor"
+                  value={formData.preferredVendor}
+                  onChange={handleInputChange}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                >
+                  <option value="">Select a vendor</option>
+                  {vendors.map(vendor => (
+                    <option key={vendor.id} value={vendor.id}>
+                      {vendor.supplier_name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+          )}
 
           {/* Save Button */}
           <div className="flex justify-end gap-3 pt-6 border-t border-gray-200">
