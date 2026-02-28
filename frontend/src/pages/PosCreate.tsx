@@ -1261,7 +1261,7 @@ const PosCreate: React.FC = () => {
         </div>
       )}
 
-      <div className="flex h-screen bg-gray-50 text-gray-800 font-sans overflow-hidden">
+      <div className="flex bg-gray-50 text-gray-800 font-sans overflow-hidden -m-6" style={{ height: 'calc(100% + 48px)' }}>
         {/* Left Section: Product Entry */}
         <div className="flex-grow flex flex-col border-r border-gray-200 bg-white">
           {/* Header Tabs - Held Carts and Sessions */}
