@@ -1,6 +1,6 @@
-# CLAUDE.md — 2XG ERP System
+# CLAUDE.md
 
-This file provides guidance to Claude Code when working with this repository.
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
 ## Repository Structure
 
@@ -9,9 +9,16 @@ Monorepo for the 2XG ERP system. **Active code is at root level** (not inside `2
 ```
 /backend/              → Express + TypeScript + Supabase (DEPLOYED by Coolify)
 /frontend/             → React 18 + Vite + TypeScript + Tailwind CSS (DEPLOYED by Coolify)
+/pos-app/              → Electron + React + SQLite POS desktop app (offline-first)
 /mobile/               → React Native mobile app (technician/buildline)
 /stockcount-app/       → Node.js Google Sheets stock count sync tool
 /2xg-dashboard/        → LEGACY copy — DO NOT EDIT or deploy from here
+
+⚠️ SECURITY STATUS (as of Mar 4, 2026):
+- /api/auth/register is PUBLIC (no auth middleware) — CRITICAL, needs admin-only fix
+- /api/mobile-auth admin routes (GET /users, POST /users, DELETE /users/:id) are PUBLIC
+- admin123 hardcoded in backend/src/utils/seedData.ts and debugUser.ts
+- See task list Z-1 through Z-4 for fixes
 ```
 
 ## Deployment — Self-Hosted Coolify (NOT Vercel)
@@ -85,6 +92,14 @@ npm run build            # Vite production build
 npm run build:check      # TypeScript + Vite build
 ```
 
+```bash
+# POS Desktop App
+cd pos-app
+npm run dev              # Electron dev mode (Vite + Electron)
+npm run build            # Build for distribution
+npx tsc --noEmit         # Type-check without emitting
+```
+
 ## Architecture
 
 ### Backend — Routes → Controllers → Services → Supabase
@@ -94,9 +109,9 @@ backend/src/
 ├── server.ts              # Express app, CORS, route registration
 ├── config/supabase.ts     # Supabase admin client (service role key)
 ├── middleware/             # Auth middleware
-├── routes/                # 39 route files
-├── controllers/           # 38 controller files
-├── services/              # 41 service files (incl. scheduleChecker for auto stock counts)
+├── routes/                # 48 route files
+├── controllers/           # 47 controller files
+├── services/              # 50 service files (incl. scheduleChecker for auto stock counts)
 ├── types/index.ts
 └── utils/
     ├── database-schema.sql
@@ -104,17 +119,21 @@ backend/src/
     └── seedData.ts
 ```
 
-**39 API route prefixes** (registered in `server.ts`):
+**46 API route prefixes** (registered in `server.ts`):
 
-Public:
+Public (NO auth middleware — registered BEFORE `authMiddleware`):
 `/api/auth`, `/api/mobile-auth`
 
-Protected (require JWT):
-`/api/erp`, `/api/logistics`, `/api/care`, `/api/crm`, `/api/items`, `/api/purchases`, `/api/vendors`, `/api/purchase-orders`, `/api/bills`, `/api/sales`, `/api/expenses`, `/api/tasks`, `/api/reports`, `/api/search`, `/api/ai`, `/api/payments`, `/api/vendor-credits`, `/api/transfer-orders`, `/api/invoices`, `/api/customers`, `/api/sales-orders`, `/api/payments-received`, `/api/delivery-challans`, `/api/bin-locations`, `/api/locations`, `/api/brands`, `/api/manufacturers`, `/api/pos-sessions`, `/api/batches`, `/api/stock-counts`, `/api/damage-reports`, `/api/placement-tasks`, `/api/transfer-tasks`, `/api/placement-history`, `/api/admin`, `/api/exchanges`, `/api/assembly`
+⚠️ **SECURITY WARNING**: `/api/auth/register` has NO admin check — anyone can create accounts. `/api/mobile-auth` admin routes (GET /users, POST /users, PUT /users/:id/pin, DELETE /users/:id) are also unprotected. These are tasks Z-1 and Z-3.
+
+Protected (require JWT via `authMiddleware` at line 150):
+`/api/erp`, `/api/logistics`, `/api/care`, `/api/crm`, `/api/items`, `/api/purchases`, `/api/vendors`, `/api/purchase-orders`, `/api/bills`, `/api/sales`, `/api/expenses`, `/api/tasks`, `/api/reports`, `/api/search`, `/api/ai`, `/api/payments`, `/api/vendor-credits`, `/api/transfer-orders`, `/api/invoices`, `/api/customers`, `/api/sales-orders`, `/api/payments-received`, `/api/delivery-challans`, `/api/bin-locations`, `/api/locations`, `/api/brands`, `/api/manufacturers`, `/api/pos-sessions`, `/api/batches`, `/api/stock-counts`, `/api/damage-reports`, `/api/placement-tasks`, `/api/transfer-tasks`, `/api/placement-history`, `/api/admin`, `/api/exchanges`, `/api/assembly`, `/api/item-sizes`, `/api/item-colors`, `/api/pos-codes`, `/api/gst-settings`, `/api/gst-reports`, `/api/org-settings`, `/api/credit-notes`, `/api/pricelists`, `/api/registers`
 
 ### Backend Migrations
 
 Located in `backend/migrations/`. Each file exports `up` and `down` SQL strings. Run via Supabase pg-meta endpoint. Runner scripts (`run_0XX.js`) execute migrations.
+
+⚠️ **Note:** Some migration numbers are duplicated (004, 014/020, 015/024) — likely from rollback/retry attempts. Check actual DB state before re-running.
 
 | Migration | Purpose |
 |-----------|---------|
@@ -140,6 +159,14 @@ Located in `backend/migrations/`. Each file exports `up` and `down` SQL strings.
 | `032_add_item_details_to_assembly_journeys.js` | item_name, item_color, item_size on assembly journeys |
 | `033_fix_technician_queue_item_details.js` | Fix technician queue RPC for item details |
 | `034_add_item_details_to_kanban_view.js` | Item details in buildline kanban view |
+| `035_create_item_sizes_colors.js` | Item sizes and colors lookup tables |
+| `036_create_pos_codes.js` | POS barcode/code system |
+| `037_add_gst_compliance.js` | GST tax compliance fields and settings |
+| `038_add_denomination_to_pos_sessions.js` | Cash denomination tracking for POS sessions |
+| `039_org_settings_and_multi_tenant.js` | Organization settings and multi-tenant support |
+| `040_credit_notes_and_pricelists.js` | Credit notes and pricelist system |
+| `041_add_closed_by_to_sessions.js` | Add `closed_by` column to pos_sessions |
+| `042_add_org_code_and_device_number.js` | Add `org_code` to org_settings, `device_number` to registers |
 
 ### Frontend — Components → Services (axios) → Backend API
 
@@ -172,7 +199,7 @@ frontend/src/
 ├── contexts/               # Auth, DateFilter contexts
 ├── hooks/
 ├── pages/                  # 54 page components
-├── services/               # 31 API service files (incl. api.client.ts)
+├── services/               # 41 API service files (incl. api.client.ts)
 ├── types/
 └── utils/
     ├── csvParser.ts
@@ -181,18 +208,81 @@ frontend/src/
     └── pdfGenerators/
 ```
 
+### POS Desktop App — Electron + React + SQLite (Offline-First)
+
+```
+pos-app/
+├── electron/
+│   ├── main.ts              # Electron main process entry
+│   ├── preload.ts           # contextBridge API (window.electronAPI)
+│   ├── db/
+│   │   ├── database.ts      # better-sqlite3 singleton
+│   │   └── schema.ts        # SQLite CREATE TABLE + seed data
+│   ├── ipc/                 # IPC handlers (invoices, sessions, sync, etc.)
+│   └── sync/
+│       ├── api-client.ts    # Axios client using stored cloud_token
+│       ├── sync-engine.ts   # pullFromCloud, pushToCloud, registerDevice
+│       └── sync-queue.ts    # Outbox pattern for offline changes
+├── src/                     # React renderer (mirrors frontend/src patterns)
+│   ├── services/
+│   │   ├── ipc-client.ts    # Type-safe wrapper for window.electronAPI
+│   │   └── sync.service.ts  # Renderer-side sync API
+│   ├── components/
+│   │   ├── pos/             # POS UI components
+│   │   ├── setup/           # Setup wizard (Step1-Step4)
+│   │   └── settings/        # Settings page
+│   └── pages/
+```
+
+**Data flow:** React renderer → `ipc-client.ts` → `window.electronAPI` (preload) → IPC handlers → SQLite (local) or sync-engine → cloud API
+
+**Sync architecture:** Offline-first outbox pattern. Local changes queue in `_sync_queue` table, pushed to cloud periodically. Cloud data pulled into local SQLite.
+
+**Adding new IPC methods:** Update all 4 layers:
+1. `electron/ipc/*.ts` — add handler with `ipcMain.handle('channel:method', ...)`
+2. `electron/preload.ts` — expose via `ipcRenderer.invoke`
+3. `src/services/ipc-client.ts` — add to `ElectronAPI` interface
+4. `src/services/*.service.ts` — add renderer-side wrapper
+
+### Invoice/Session Number Prefixes (Device-Specific)
+
+Each POS device gets a unique prefix to prevent collisions during sync:
+- `org_settings.org_code` — short org identifier (e.g. `BCH`)
+- `registers.device_number` — auto-incrementing per org
+- Resulting prefixes: `BCH-POS1-INV-0001`, `BCH-POS2-S001`, etc.
+- Web POS uses `org_settings.invoice_prefix` directly (no device suffix)
+- POS app calls `POST /registers/register-device` during setup to get assigned a `device_number`
+
 ## Authentication
 
 Custom JWT auth (NOT Supabase Auth):
 - `POST /api/auth/login` — bcrypt compare → JWT
+- `POST /api/auth/technician-login` — phone + PIN auth for buildline technicians
 - `GET /api/auth/verify` — validate JWT, return user
-- `POST /api/auth/register` — create user (admin only)
-- `POST /api/auth/change-password`
-- `GET /api/auth/users` — list all users
-- `PUT /api/auth/users/:id` — update user
-- `DELETE /api/auth/users/:id` — delete user
+- `POST /api/auth/register` — create user (**⚠️ CURRENTLY PUBLIC — NO auth middleware. Should be admin-only. SECURITY FIX PENDING.**)
+- `POST /api/auth/change-password` — requires Bearer token (self-service)
+- `GET /api/auth/users` — list all users (**⚠️ NO auth middleware — anyone can list users**)
+- `PUT /api/auth/users/:id` — update user (**⚠️ NO auth middleware**)
+- `DELETE /api/auth/users/:id` — delete user (**⚠️ NO auth middleware — HARD DELETE**)
 
-Mobile auth (`/api/mobile-auth`) — separate routes for mobile app authentication.
+Mobile auth (`/api/mobile-auth`):
+- `POST /api/mobile-auth/login` — mobile login (public, as expected)
+- `GET /api/mobile-auth/verify` — verify mobile token (public, as expected)
+- `GET /api/mobile-auth/users` — list mobile users (**⚠️ PUBLIC — no auth**)
+- `POST /api/mobile-auth/users` — create mobile user (**⚠️ PUBLIC — no auth**)
+- `PUT /api/mobile-auth/users/:id/pin` — update PIN (**⚠️ PUBLIC — no auth**)
+- `DELETE /api/mobile-auth/users/:id` — delete mobile user (**⚠️ PUBLIC — no auth**)
+
+**Auth middleware chain** (server.ts order matters):
+1. Lines 141-143: `/api/auth/*` registered (PUBLIC — no authMiddleware)
+2. Lines 146-147: `/api/mobile-auth/*` registered (PUBLIC — no authMiddleware)
+3. Line 150: `app.use('/api', authMiddleware)` — everything after this is protected
+4. Lines 153-198: All other routes (PROTECTED by JWT)
+
+**Middleware available** (`backend/src/middleware/`):
+- `auth.middleware.ts` — JWT validation + `requireRole(...roles)` + `requireBuildlineRole(...roles)` + brute-force rate limiting
+- `readOnly.middleware.ts` — blocks POST/PUT/PATCH/DELETE when `READ_ONLY_MODE=true` (allows auth endpoints)
+- `upload.middleware.ts` — file upload handling
 
 ## CORS
 
@@ -372,6 +462,29 @@ Configured in `backend/src/server.ts`. Allowed origins:
 | `destination_bin_location_id` | UUID NOT NULL | FK → `bin_locations(id)` — stock added here |
 | `quantity` | DECIMAL(15,2) NOT NULL | CHECK (> 0) |
 
+### `org_settings` table
+| Column | Type | Notes |
+|--------|------|-------|
+| `organization_id` | UUID | FK → organizations |
+| `company_name` | TEXT NOT NULL | |
+| `org_code` | VARCHAR(10) | Short code for prefixes (e.g. `BCH`) — migration 042 |
+| `invoice_prefix` | TEXT | Default: `INV-` |
+| `session_prefix` | TEXT | Default: `SE1-` |
+| `gstin`, `pan` | TEXT | Indian tax IDs |
+| `address_line1`, `city`, `state`, `postal_code` | TEXT | Company address |
+| `bank_name`, `bank_account_number`, `bank_ifsc` | TEXT | Bank details |
+| `theme_color`, `accent_color` | TEXT | UI theming |
+
+### `registers` table
+| Column | Type | Notes |
+|--------|------|-------|
+| `id` | UUID PK | |
+| `organization_id` | UUID | |
+| `name` | TEXT NOT NULL | Device/register name |
+| `device_number` | INTEGER | Auto-incrementing per org — migration 042 |
+| `is_active` | BOOLEAN | |
+| `description` | TEXT | |
+
 ### Other schema quirks
 | Detail | Notes |
 |--------|-------|
@@ -409,8 +522,17 @@ bin_stock = Σ(bill_item_bin_allocations.quantity)        # purchases IN
 ## Git Workflow
 
 - **Main branch**: `main`
-- **Remote**: https://github.com/2xggrowth-art/2xg.erp.git
-- **Auto-deploy**: Coolify watches `main` and auto-deploys on push
+- **origin**: https://github.com/2xggrowth-art/2xg.erp.git (Ibrahim's org — legacy, kept for sync)
+- **mirror**: https://github.com/arsalan507/2xg.ERP.git (**Coolify deploys from HERE as of Mar 4, 2026**)
+- **Auto-deploy**: Coolify watches `mirror/main` (arsalan507) and auto-deploys on push
+- **Dev branches** (on mirror/arsalan507 only): `zaheer`, `sandeep` — devs push to their named branch, Arsalan reviews and merges to main
+- **Branch protection**: main branch requires PR review. Devs cannot push directly to main.
+
+### Dev Workflow ("Your Branch, My Deploy")
+```
+Dev: git checkout zaheer → work → git push origin zaheer → WhatsApp Arsalan
+Arsalan: review → merge to main → Coolify auto-deploys from arsalan507/main
+```
 
 ## Developer Rules
 
@@ -462,15 +584,16 @@ CORS in `backend/src/server.ts` controls which domains can call the API. Do not:
 - Remove the `credentials: true` setting
 
 ### 11. NEVER delete or restructure existing API routes
-All 30 API route prefixes are consumed by the deployed frontend. Renaming `/api/items` to `/api/inventory` will break the frontend immediately. Add new routes alongside existing ones if needed.
+All 46 API route prefixes are consumed by the deployed frontend. Renaming `/api/items` to `/api/inventory` will break the frontend immediately. Add new routes alongside existing ones if needed.
 
 ### 12. NEVER push directly to main without building first
 `main` branch auto-deploys via Coolify. Always verify before pushing:
 ```bash
 cd backend && npm run build
 cd frontend && npm run build
+cd pos-app && npx tsc --noEmit   # if pos-app was modified
 ```
-If either build fails, the deploy will fail and production goes down.
+If backend or frontend build fails, the deploy will fail and production goes down.
 
 ### 13. NEVER commit secrets or credentials
 Files like `.env`, `.github_token`, service role keys, JWT secrets must stay in `.gitignore`. Check `git status` before committing.
@@ -538,9 +661,13 @@ cd backend && npm run test-connection                                 # Supabase
 | `backend/src/services/exchanges.service.ts` | Exchange items |
 | `backend/src/services/scheduleChecker.service.ts` | Auto stock count generation (hourly) |
 | `backend/src/utils/database-schema.sql` | Base DB schema |
-| `backend/migrations/` | SQL migration files (001-034) |
+| `backend/migrations/` | SQL migration files (005-042) |
 | `frontend/.env.production` | API URL (overridden by Coolify env) |
 | `frontend/src/services/api.client.ts` | Axios base config with auth interceptor |
 | `frontend/src/App.tsx` | All frontend routes |
 | `frontend/src/components/shared/CategoryPicker.tsx` | Category/subcategory picker (double-click expand) |
 | `frontend/src/components/shared/CreatableSelect.tsx` | Dropdown with create-new option |
+| `pos-app/electron/db/schema.ts` | SQLite schema + seed data |
+| `pos-app/electron/sync/sync-engine.ts` | Cloud sync (pull/push/registerDevice) |
+| `pos-app/electron/preload.ts` | Electron ↔ renderer API bridge |
+| `pos-app/src/services/ipc-client.ts` | Type-safe IPC client for renderer |

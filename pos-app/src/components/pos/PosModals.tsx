@@ -4,6 +4,7 @@ import { Customer, CreateCustomerData } from '../../services/customers.service';
 import { Salesperson } from '../../services/salesperson.service';
 import { PosSession } from '../../services/pos-sessions.service';
 import { printerService, PrinterInfo } from '../../services/printer.service';
+import { posCodesService } from '../../services/pos-codes.service';
 import SplitPaymentModal from './SplitPaymentModal';
 import { CartItem, HeldCart } from './posTypes';
 
@@ -268,6 +269,42 @@ const PosModals: React.FC<PosModalsProps> = ({
   onClosePrintOptionsModal,
   onPrintWithOptions,
 }) => {
+  // Employee code verification state for Start Session
+  const [startCode, setStartCode] = useState('');
+  const [startCodeError, setStartCodeError] = useState('');
+  const [startCodeLoading, setStartCodeLoading] = useState(false);
+  const [startCodeVerified, setStartCodeVerified] = useState(false);
+
+  const handleStartCodeVerify = async () => {
+    if (!startCode.trim()) {
+      setStartCodeError('Please enter your employee code');
+      return;
+    }
+    setStartCodeLoading(true);
+    setStartCodeError('');
+    try {
+      const res = await posCodesService.verifyCode(startCode.trim());
+      if (res.data) {
+        setStartCodeVerified(true);
+        onStartSessionDataChange({ ...startSessionData, opened_by: res.data.employee_name });
+        setStartCodeError('');
+      } else {
+        setStartCodeError('Invalid employee code');
+      }
+    } catch (error: any) {
+      setStartCodeError(error?.message || 'Invalid employee code');
+    } finally {
+      setStartCodeLoading(false);
+    }
+  };
+
+  const handleCloseStartModal = () => {
+    setStartCode('');
+    setStartCodeError('');
+    setStartCodeVerified(false);
+    onCloseStartSessionModal();
+  };
+
   // Print Options local state
   const [printers, setPrinters] = useState<PrinterInfo[]>([]);
   const [selectedPrinter, setSelectedPrinter] = useState('');
@@ -983,79 +1020,107 @@ const PosModals: React.FC<PosModalsProps> = ({
               <h2 className="text-xl font-bold text-gray-800 dark:text-gray-200">
                 Start New Session
               </h2>
-              <button onClick={onCloseStartSessionModal}>
+              <button onClick={handleCloseStartModal}>
                 <X
                   size={22}
                   className="text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 cursor-pointer transition-colors"
                 />
               </button>
             </div>
-            <div className="p-6 space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                  Register Name
-                </label>
-                <input
-                  type="text"
-                  value={startSessionData.register}
-                  onChange={(e) =>
-                    onStartSessionDataChange({ ...startSessionData, register: e.target.value })
-                  }
-                  className="w-full bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg px-4 py-2.5 text-sm text-gray-800 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  placeholder="billing desk"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                  Opened By <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="text"
-                  value={startSessionData.opened_by}
-                  onChange={(e) =>
-                    onStartSessionDataChange({ ...startSessionData, opened_by: e.target.value })
-                  }
-                  className="w-full bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg px-4 py-2.5 text-sm text-gray-800 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  placeholder="Enter your name"
-                  autoFocus
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                  Opening Cash Balance
-                </label>
-                <div className="flex items-center bg-gray-50 dark:bg-gray-700 rounded-lg border border-gray-300 dark:border-gray-600 focus-within:ring-2 focus-within:ring-blue-500 focus-within:border-transparent px-4">
-                  <span className="text-gray-500 dark:text-gray-400">₹</span>
+
+            {!startCodeVerified ? (
+              /* Step 1: Employee Code Verification */
+              <div className="p-6 space-y-4">
+                <div className="flex flex-col items-center py-4">
+                  <div className="w-14 h-14 bg-blue-100 dark:bg-blue-900/30 rounded-full flex items-center justify-center mb-4">
+                    <Lock size={24} className="text-blue-600 dark:text-blue-400" />
+                  </div>
+                  <p className="text-sm text-gray-600 dark:text-gray-400 text-center">Enter your employee code to continue</p>
+                </div>
+                <div>
                   <input
-                    type="number"
-                    value={startSessionData.opening_balance}
-                    onChange={(e) =>
-                      onStartSessionDataChange({
-                        ...startSessionData,
-                        opening_balance: parseFloat(e.target.value) || 0,
-                      })
-                    }
-                    className="w-full bg-transparent border-none px-2 py-2.5 text-sm text-gray-800 dark:text-gray-200 focus:outline-none focus:ring-0"
-                    placeholder="0.00"
+                    type="password"
+                    value={startCode}
+                    onChange={(e) => { setStartCode(e.target.value); setStartCodeError(''); }}
+                    onKeyDown={(e) => { if (e.key === 'Enter') handleStartCodeVerify(); }}
+                    className="w-full bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg px-4 py-3 text-sm text-gray-800 dark:text-gray-200 text-center tracking-[0.3em] focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    placeholder="Employee Code"
+                    autoFocus
                   />
                 </div>
+                {startCodeError && (
+                  <p className="text-red-500 text-sm text-center">{startCodeError}</p>
+                )}
               </div>
-            </div>
+            ) : (
+              /* Step 2: Session Details (after code verified) */
+              <div className="p-6 space-y-4">
+                <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg px-4 py-2.5 flex items-center gap-2">
+                  <Check size={16} className="text-green-600 dark:text-green-400" />
+                  <span className="text-sm text-green-700 dark:text-green-300">Verified as <strong>{startSessionData.opened_by}</strong></span>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    Register Name
+                  </label>
+                  <input
+                    type="text"
+                    value={startSessionData.register}
+                    onChange={(e) =>
+                      onStartSessionDataChange({ ...startSessionData, register: e.target.value })
+                    }
+                    className="w-full bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg px-4 py-2.5 text-sm text-gray-800 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    placeholder="billing desk"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    Opening Cash Balance
+                  </label>
+                  <div className="flex items-center bg-gray-50 dark:bg-gray-700 rounded-lg border border-gray-300 dark:border-gray-600 focus-within:ring-2 focus-within:ring-blue-500 focus-within:border-transparent px-4">
+                    <span className="text-gray-500 dark:text-gray-400">₹</span>
+                    <input
+                      type="number"
+                      value={startSessionData.opening_balance}
+                      onChange={(e) =>
+                        onStartSessionDataChange({
+                          ...startSessionData,
+                          opening_balance: parseFloat(e.target.value) || 0,
+                        })
+                      }
+                      className="w-full bg-transparent border-none px-2 py-2.5 text-sm text-gray-800 dark:text-gray-200 focus:outline-none focus:ring-0"
+                      placeholder="0.00"
+                    />
+                  </div>
+                </div>
+              </div>
+            )}
+
             <div className="p-5 border-t border-gray-200 dark:border-gray-700 flex gap-3">
               <button
-                onClick={onCloseStartSessionModal}
-                disabled={sessionLoading}
+                onClick={handleCloseStartModal}
+                disabled={sessionLoading || startCodeLoading}
                 className="flex-1 py-2.5 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-lg text-sm font-medium hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors disabled:opacity-50"
               >
                 Cancel
               </button>
-              <button
-                onClick={onStartSession}
-                disabled={sessionLoading || !startSessionData.opened_by.trim()}
-                className="flex-1 py-2.5 bg-green-600 hover:bg-green-700 dark:bg-green-700 dark:hover:bg-green-600 text-white rounded-lg text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {sessionLoading ? 'Starting...' : 'Start Session'}
-              </button>
+              {!startCodeVerified ? (
+                <button
+                  onClick={handleStartCodeVerify}
+                  disabled={startCodeLoading || !startCode.trim()}
+                  className="flex-1 py-2.5 bg-blue-600 hover:bg-blue-700 dark:bg-blue-700 dark:hover:bg-blue-600 text-white rounded-lg text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {startCodeLoading ? 'Verifying...' : 'Verify'}
+                </button>
+              ) : (
+                <button
+                  onClick={onStartSession}
+                  disabled={sessionLoading}
+                  className="flex-1 py-2.5 bg-green-600 hover:bg-green-700 dark:bg-green-700 dark:hover:bg-green-600 text-white rounded-lg text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {sessionLoading ? 'Starting...' : 'Start Session'}
+                </button>
+              )}
             </div>
           </div>
         </div>

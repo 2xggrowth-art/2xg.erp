@@ -187,10 +187,12 @@ export function runMigration(
  * reorder existing entries — they are immutable once shipped.
  */
 const MIGRATIONS: Array<[number, string, string]> = [
-  // Example (uncomment when first post-v1 migration is needed):
-  // [2, 'add_loyalty_points', `
-  //   ALTER TABLE customers ADD COLUMN loyalty_points INTEGER DEFAULT 0;
-  // `],
+  [2, 'add_closed_by_to_sessions', `
+    ALTER TABLE pos_sessions ADD COLUMN closed_by TEXT;
+  `],
+  [3, 'add_org_code_to_org_settings', `
+    ALTER TABLE org_settings ADD COLUMN org_code TEXT;
+  `],
 ];
 
 /**
