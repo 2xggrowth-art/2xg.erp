@@ -59,6 +59,44 @@ export class RegistersController {
   };
 
   /**
+   * Register a device — assigns a unique device_number for POS prefix generation
+   */
+  registerDevice = async (req: Request, res: Response) => {
+    try {
+      const { name } = req.body;
+      const orgId = (req as any).user?.organizationId;
+
+      if (!name || name.trim() === '') {
+        return res.status(400).json({
+          success: false,
+          error: 'Device name is required',
+        });
+      }
+
+      if (!orgId) {
+        return res.status(400).json({
+          success: false,
+          error: 'Organization ID not found in token',
+        });
+      }
+
+      const register = await registersService.registerDevice(orgId, name.trim());
+
+      res.json({
+        success: true,
+        data: register,
+        message: `Device registered with number ${register.device_number}`,
+      });
+    } catch (error: any) {
+      console.error('Error registering device:', error);
+      res.status(500).json({
+        success: false,
+        error: error.message || 'Failed to register device',
+      });
+    }
+  };
+
+  /**
    * Update a register
    */
   updateRegister = async (req: Request, res: Response) => {

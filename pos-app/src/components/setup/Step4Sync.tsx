@@ -11,6 +11,7 @@ import {
   Users,
   MapPin,
   Settings,
+  Monitor,
 } from 'lucide-react';
 import { syncService } from '../../services/sync.service';
 
@@ -34,6 +35,7 @@ const Step4Sync: React.FC<Step4SyncProps> = ({ cloudConfigured }) => {
     { key: 'customers', label: 'Customers', icon: <Users size={16} />, status: 'pending' },
     { key: 'bins', label: 'Bin Locations', icon: <MapPin size={16} />, status: 'pending' },
     { key: 'settings', label: 'Settings', icon: <Settings size={16} />, status: 'pending' },
+    { key: 'device', label: 'Device Registration', icon: <Monitor size={16} />, status: 'pending' },
   ]);
   const [seedingData, setSeedingData] = useState(false);
 
@@ -47,29 +49,57 @@ const Step4Sync: React.FC<Step4SyncProps> = ({ cloudConfigured }) => {
     setSyncing(true);
     setSyncComplete(false);
 
-    // Simulate staged sync (in real implementation, each would be a separate API call)
-    const stageKeys = ['items', 'customers', 'bins', 'settings'];
-
-    for (const key of stageKeys) {
+    // Mark data stages as syncing
+    const dataStageKeys = ['items', 'customers', 'bins', 'settings'];
+    for (const key of dataStageKeys) {
       updateStage(key, { status: 'syncing' });
+    }
 
-      try {
-        // Use the sync service to pull data
-        const result = await syncService.pull();
+    try {
+      // Single pull that downloads items, customers, bins, settings, and POS codes
+      const result = await syncService.pull();
 
-        if (result.success) {
+      if (result.success) {
+        for (const key of dataStageKeys) {
           updateStage(key, { status: 'success', message: 'Synced' });
-        } else {
-          updateStage(key, {
-            status: 'error',
-            message: result.message || 'Sync failed',
-          });
         }
-      } catch (err: any) {
-        updateStage(key, {
-          status: 'error',
-          message: err?.message || 'Failed to sync',
-        });
+      } else {
+        const errorMsg = result.message || 'Sync failed';
+        const hasItemsError = errorMsg.toLowerCase().includes('items');
+        const hasCustomersError = errorMsg.toLowerCase().includes('customers');
+        const hasBinsError = errorMsg.toLowerCase().includes('bin');
+        const hasSettingsError = errorMsg.toLowerCase().includes('settings') || errorMsg.toLowerCase().includes('org');
+
+        updateStage('items', hasItemsError
+          ? { status: 'error', message: errorMsg }
+          : { status: 'success', message: 'Synced' });
+        updateStage('customers', hasCustomersError
+          ? { status: 'error', message: errorMsg }
+          : { status: 'success', message: 'Synced' });
+        updateStage('bins', hasBinsError
+          ? { status: 'error', message: errorMsg }
+          : { status: 'success', message: 'Synced' });
+        updateStage('settings', hasSettingsError
+          ? { status: 'error', message: errorMsg }
+          : { status: 'success', message: 'Synced' });
+      }
+
+      // Device registration — runs after data pull to get org_code
+      updateStage('device', { status: 'syncing' });
+      try {
+        const deviceResult = await syncService.registerDevice();
+        if (deviceResult.success) {
+          updateStage('device', { status: 'success', message: `Device #${deviceResult.data?.device_number || '?'}` });
+        } else {
+          updateStage('device', { status: 'error', message: deviceResult.message || 'Registration failed' });
+        }
+      } catch (devErr: any) {
+        updateStage('device', { status: 'error', message: devErr?.message || 'Registration failed' });
+      }
+    } catch (err: any) {
+      const errorMsg = err?.message || 'Failed to sync';
+      for (const key of [...dataStageKeys, 'device']) {
+        updateStage(key, { status: 'error', message: errorMsg });
       }
     }
 

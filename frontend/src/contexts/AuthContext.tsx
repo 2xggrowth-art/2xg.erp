@@ -1,9 +1,12 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { authService, User, LoginCredentials, TechnicianLoginCredentials } from '../services/auth.service';
+import { orgSettingsService, OrgSettings } from '../services/org-settings.service';
+import { clearOrgSettingsCache } from '../hooks/useOrgSettings';
 
 interface AuthContextType {
   user: User | null;
+  orgSettings: OrgSettings | null;
   login: (credentials: LoginCredentials) => Promise<boolean>;
   technicianLogin: (credentials: TechnicianLoginCredentials) => Promise<boolean>;
   logout: () => void;
@@ -16,6 +19,7 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
+  const [orgSettings, setOrgSettings] = useState<OrgSettings | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const navigate = useNavigate();
 
@@ -36,6 +40,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             const verifiedUser = await authService.verifyToken();
             console.log('AuthProvider: Token verified, user:', verifiedUser);
             setUser(verifiedUser);
+            try {
+              const settings = await orgSettingsService.getOrgSettings();
+              setOrgSettings(settings);
+            } catch (e) {
+              console.error('AuthProvider: Failed to fetch org settings:', e);
+            }
           } catch (error) {
             console.error('AuthProvider: Token verification failed:', error);
             // Token is invalid, clear storage
@@ -63,6 +73,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
       console.log('AuthContext: Login successful, user:', response.user);
       setUser(response.user);
+      try {
+        const settings = await orgSettingsService.getOrgSettings();
+        setOrgSettings(settings);
+      } catch (e) {
+        console.error('AuthProvider: Failed to fetch org settings:', e);
+      }
 
       return true;
     } catch (error: any) {
@@ -85,6 +101,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const logout = () => {
     authService.logout();
     setUser(null);
+    setOrgSettings(null);
+    clearOrgSettingsCache();
     // ProtectedRoute handles redirect based on saved loginType
   };
 
@@ -102,6 +120,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     <AuthContext.Provider
       value={{
         user,
+        orgSettings,
         login,
         technicianLogin,
         logout,

@@ -1,6 +1,7 @@
-import React, { useState, useRef, useCallback, ChangeEvent, useEffect } from 'react';
+import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Search, User, X, Plus, Edit2, ShoppingCart, Package, Trash2, Check, Printer, Clock, DollarSign, TrendingUp, MapPin, ArrowDownCircle, ArrowUpCircle, Repeat, Lock } from 'lucide-react';
+import { Lock } from 'lucide-react';
+import { useAuth } from '../contexts/AuthContext';
 import { customersService, Customer, CreateCustomerData } from '../services/customers.service';
 import { itemsService, Item } from '../services/items.service';
 import { salespersonService, Salesperson } from '../services/salesperson.service';
@@ -10,58 +11,35 @@ import { paymentsReceivedService } from '../services/payments-received.service';
 import { binLocationService } from '../services/binLocation.service';
 import { exchangesService, ExchangeItem } from '../services/exchanges.service';
 import { posCodesService } from '../services/posCodes.service';
-import SplitPaymentModal from '../components/pos/SplitPaymentModal';
-import NewDeliveryChallanForm, { DeliveryFormData } from '../components/delivery-challans/NewDeliveryChallanForm';
+import { useOrgSettings } from '../hooks/useOrgSettings';
+import { DeliveryFormData } from '../components/delivery-challans/NewDeliveryChallanForm';
 import { deliveryChallansService } from '../services/delivery-challans.service';
 import { openCashDrawer, checkPrinterStatus } from '../utils/cashDrawer';
+import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts';
 
-// Define the shape of a Cart Item
-interface BinAllocation {
-  bin_location_id: string;
-  bin_code: string;
-  location_name: string;
-  quantity: number;
-}
-
-interface AvailableBin {
-  bin_id: string;
-  bin_code: string;
-  location_name: string;
-  stock: number;
-}
-
-interface CartItem {
-  id: string;
-  item_id: string;
-  name: string;
-  sku: string;
-  tax_rate: number;
-  qty: number;
-  rate: number;
-  cost_price: number;
-  bin_allocations?: BinAllocation[];
-  available_bins?: AvailableBin[];
-  exchange_item_id?: string;
-}
-
-interface HeldCart {
-  id: string;
-  items: CartItem[];
-  customer: Customer | null;
-  timestamp: Date;
-}
-
-type TabType = 'newsale' | 'sessions';
+// POS Sub-components
+import { CartItem, HeldCart, AvailableBin, TabType } from '../components/pos/posTypes';
+import HeldCartsTabs from '../components/pos/HeldCartsTabs';
+import ProductSearch from '../components/pos/ProductSearch';
+import CartItemsList from '../components/pos/CartItemsList';
+import SessionsView from '../components/pos/SessionsView';
+import InvoicesTab from '../components/pos/InvoicesTab';
+import ReturnTab from '../components/pos/ReturnTab';
+import SessionTab from '../components/pos/SessionTab';
+import CartPanel from '../components/pos/CartPanel';
+import CartItemDetailPopup from '../components/pos/CartItemDetailPopup';
+import PosModals from '../components/pos/PosModals';
 
 const PosCreate: React.FC = () => {
   const navigate = useNavigate();
+  const { user } = useAuth();
+  const { orgSettings } = useOrgSettings();
   const [activeTab, setActiveTab] = useState<TabType>('newsale');
   const [cart, setCart] = useState<CartItem[]>([]);
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
   const [selectedSalesperson, setSelectedSalesperson] = useState<Salesperson | null>(null);
   const [showCustomerModal, setShowCustomerModal] = useState(false);
   const [showAddCustomerModal, setShowAddCustomerModal] = useState(false);
-  const [showItemModal, setShowItemModal] = useState(false);
   const [showSalespersonModal, setShowSalespersonModal] = useState(false);
   const [showManageSalespersonModal, setShowManageSalespersonModal] = useState(false);
   const [showAddSalespersonForm, setShowAddSalespersonForm] = useState(false);
@@ -86,7 +64,11 @@ const PosCreate: React.FC = () => {
     register: 'billing desk',
     opened_by: '',
     opening_balance: 0,
+    opening_note: '',
   });
+  const [previousClosureAmount, setPreviousClosureAmount] = useState<number | undefined>(undefined);
+  const closeEmployeeNameRef = useRef('');
+  const setCloseEmployeeName = (name: string) => { closeEmployeeNameRef.current = name; };
   const [closeSessionData, setCloseSessionData] = useState({
     closing_balance: 0,
     cash_in: 0,
@@ -126,6 +108,9 @@ const PosCreate: React.FC = () => {
   const [exchangeLoading, setExchangeLoading] = useState(false);
   const [exchangeSearch, setExchangeSearch] = useState('');
 
+  // Cart item detail popup
+  const [detailPopupItem, setDetailPopupItem] = useState<CartItem | null>(null);
+
   // Discount states
   const [showDiscountModal, setShowDiscountModal] = useState(false);
   const [discountType, setDiscountType] = useState<'percentage' | 'amount'>('percentage');
@@ -140,7 +125,7 @@ const PosCreate: React.FC = () => {
   const [generatedInvoice, setGeneratedInvoice] = useState<any>(null);
   const [pendingDeliveryData, setPendingDeliveryData] = useState<{ formData: DeliveryFormData; challanNumber: string } | null>(null);
 
-  // POS Code lock states — only lock when there's an active session
+  // POS Code lock states
   const [posLocked, setPosLocked] = useState(false);
   const [posCodeInput, setPosCodeInput] = useState('');
   const [posEmployeeName, setPosEmployeeName] = useState('');
@@ -160,11 +145,24 @@ const PosCreate: React.FC = () => {
   });
   const [gstTreatment, setGstTreatment] = useState<'Consumer' | 'Registered'>('Consumer');
 
+  // ─── Data Fetching ───────────────────────────────────────────────
+
+  const fetchCustomers = async () => {
+    try {
+      const response = await customersService.getAllCustomers();
+      const customersData = response.data?.data || response.data || [];
+      if (Array.isArray(customersData)) {
+        setCustomers(customersData);
+      }
+    } catch (error) {
+      console.error('Error fetching customers:', error);
+    }
+  };
+
   const fetchItems = async () => {
     try {
       setLoading(true);
       const response = await itemsService.getAllItems();
-      // Handle both possible response structures (array or object with data property)
       const itemsData = response.data?.data || response.data || [];
       if (Array.isArray(itemsData)) {
         setItems(itemsData);
@@ -179,28 +177,112 @@ const PosCreate: React.FC = () => {
     }
   };
 
+  const fetchSalespersons = () => {
+    try {
+      const allSalespersons = salespersonService.getAllSalespersons();
+      setSalespersons(allSalespersons);
+    } catch (error) {
+      console.error('Error fetching salespersons:', error);
+    }
+  };
+
+  const fetchSessions = async () => {
+    try {
+      const response = await posSessionsService.getAllSessions();
+      if (response.success) {
+        setSessions(response.data);
+        // Find the most recent closed session for "previous closure amount"
+        const closedSessions = response.data.filter((s: PosSession) => s.status === 'Closed' && s.closing_balance != null);
+        if (closedSessions.length > 0) {
+          setPreviousClosureAmount(closedSessions[0].closing_balance ?? 0);
+        }
+      }
+    } catch (err: any) {
+      console.error('Error fetching sessions:', err);
+    }
+  };
+
+  const fetchActiveSession = async () => {
+    try {
+      const response = await posSessionsService.getActiveSession();
+      if (response.success && response.data) {
+        setActiveSession(response.data);
+        setPosLocked(true);
+      }
+    } catch (err: any) {
+      console.error('Error fetching active session:', err);
+    } finally {
+      setSessionChecked(true);
+    }
+  };
+
+  const fetchExchangeItems = async () => {
+    try {
+      setExchangeLoading(true);
+      const response = await exchangesService.getAll({ status: 'listed' });
+      if (response.success) {
+        setExchangeItems(response.data || []);
+      }
+    } catch (error) {
+      console.error('Error fetching exchange items:', error);
+    } finally {
+      setExchangeLoading(false);
+    }
+  };
+
+  // ─── Effects ─────────────────────────────────────────────────────
+
   useEffect(() => {
+    fetchCustomers();
     fetchItems();
     fetchSalespersons();
     fetchSessions();
     fetchActiveSession();
 
-    // Check printer connection status and re-check every 30s
-    checkPrinterStatus().then(setPrinterConnected);
-    const printerCheck = setInterval(() => {
-      checkPrinterStatus().then(setPrinterConnected);
-    }, 30000);
-    return () => clearInterval(printerCheck);
+    checkPrinterStatus().then((connected) => {
+      setPrinterConnected(connected);
+      // Only poll if QZ Tray was found on first check; otherwise stop retrying
+      if (connected) {
+        const printerCheck = setInterval(() => {
+          checkPrinterStatus().then(setPrinterConnected);
+        }, 30000);
+        return () => clearInterval(printerCheck);
+      }
+    });
   }, []);
 
-  // Check for active session when on newsale tab (only after session check completes)
   useEffect(() => {
     if (sessionChecked && activeTab === 'newsale' && !activeSession && !showStartSessionModal) {
       setShowStartSessionModal(true);
     }
   }, [activeTab, activeSession, sessionChecked]);
 
-  // Inactivity timer — lock POS 10 min after last sale only
+  useEffect(() => {
+    if (orgSettings?.default_register) {
+      setStartSessionData(prev => ({ ...prev, register: orgSettings.default_register || prev.register }));
+    }
+  }, [orgSettings]);
+
+  useEffect(() => {
+    try {
+      const savedCarts = localStorage.getItem('pos_held_carts');
+      if (savedCarts) {
+        setHeldCarts(JSON.parse(savedCarts));
+      }
+    } catch (e) {
+      console.error('Failed to load held carts:', e);
+    }
+  }, []);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('pos_held_carts', JSON.stringify(heldCarts));
+    } catch (e) {
+      console.error('Failed to save held carts:', e);
+    }
+  }, [heldCarts]);
+
+  // Inactivity timer
   const lastSaleTimeRef = useRef<number>(Date.now());
 
   const resetInactivityTimer = useCallback(() => {
@@ -209,11 +291,7 @@ const PosCreate: React.FC = () => {
 
   useEffect(() => {
     if (posLocked) return;
-
-    // Set initial timestamp on unlock
     lastSaleTimeRef.current = Date.now();
-
-    // Check every 30 seconds if 10 min passed since last sale
     const interval = setInterval(() => {
       const elapsed = Date.now() - lastSaleTimeRef.current;
       if (elapsed >= INACTIVITY_TIMEOUT) {
@@ -222,9 +300,19 @@ const PosCreate: React.FC = () => {
         setPosCodeError('');
       }
     }, 30000);
-
     return () => { clearInterval(interval); };
   }, [posLocked]);
+
+  useEffect(() => {
+    const isPhoneNumber = /^\d{10}$/.test(customerSearch);
+    if (isPhoneNumber) {
+      setPhoneNumberFromSearch(customerSearch);
+    } else {
+      setPhoneNumberFromSearch('');
+    }
+  }, [customerSearch]);
+
+  // ─── Handlers ────────────────────────────────────────────────────
 
   const handlePosCodeVerify = async () => {
     if (!posCodeInput.trim()) {
@@ -248,54 +336,23 @@ const PosCreate: React.FC = () => {
     }
   };
 
-  const fetchSalespersons = () => {
-    try {
-      const allSalespersons = salespersonService.getAllSalespersons();
-      setSalespersons(allSalespersons);
-    } catch (error) {
-      console.error('Error fetching salespersons:', error);
-    }
-  };
-
-  const fetchSessions = async () => {
-    try {
-      const response = await posSessionsService.getAllSessions();
-      if (response.success) {
-        setSessions(response.data);
-      }
-    } catch (err: any) {
-      console.error('Error fetching sessions:', err);
-    }
-  };
-
-  const fetchActiveSession = async () => {
-    try {
-      const response = await posSessionsService.getActiveSession();
-      if (response.success && response.data) {
-        setActiveSession(response.data);
-        // Lock POS only when there's an active open session
-        setPosLocked(true);
-      }
-    } catch (err: any) {
-      console.error('Error fetching active session:', err);
-    } finally {
-      setSessionChecked(true);
-    }
-  };
-
   const handleStartSession = async () => {
     if (!startSessionData.opened_by.trim()) {
       alert('Please enter who is opening the session');
       return;
     }
-
     try {
       setSessionLoading(true);
-      const response = await posSessionsService.startSession(startSessionData);
+      const { opening_note, ...sessionPayload } = startSessionData;
+      const response = await posSessionsService.startSession(sessionPayload);
       if (response.success) {
+        // Store opening note in localStorage keyed by session ID
+        if (opening_note.trim() && response.data?.id) {
+          localStorage.setItem(`pos_session_note_${response.data.id}`, opening_note.trim());
+        }
         setActiveSession(response.data);
         setShowStartSessionModal(false);
-        setStartSessionData({ register: 'billing desk', opened_by: '', opening_balance: 0 });
+        setStartSessionData({ register: orgSettings?.default_register || 'billing desk', opened_by: '', opening_balance: 0, opening_note: '' });
         fetchSessions();
         alert('Session started successfully!');
       }
@@ -309,7 +366,6 @@ const PosCreate: React.FC = () => {
 
   const handleCloseSession = async () => {
     if (!activeSession) return;
-
     try {
       setSessionLoading(true);
       const denominationTotal = denominations.reduce((sum, d) => sum + d.note * d.count, 0);
@@ -321,6 +377,7 @@ const PosCreate: React.FC = () => {
         closing_balance: denominationTotal || closeSessionData.closing_balance,
         cash_in: activeSession.cash_in,
         cash_out: activeSession.cash_out,
+        closed_by: closeEmployeeNameRef.current || user?.name || activeSession.opened_by,
         denomination_data,
       });
       if (response.success) {
@@ -329,8 +386,8 @@ const PosCreate: React.FC = () => {
         setShowCloseSessionModal(false);
         setCloseSessionData({ closing_balance: 0, cash_in: 0, cash_out: 0 });
         setDenominations(denominations.map(d => ({ ...d, count: 0 })));
+        closeEmployeeNameRef.current = '';
         fetchSessions();
-        // Navigate to session detail page and auto-trigger print
         navigate(`/sales/pos/sessions/${closedSessionId}?print=true`);
       }
     } catch (error: any) {
@@ -364,7 +421,6 @@ const PosCreate: React.FC = () => {
     const updatedCart = cart.map((item) => {
       if (item.id === id) {
         const numericQty = parseInt(newQty) || 0;
-        // Update bin allocation quantity if single bin assigned
         if (item.bin_allocations && item.bin_allocations.length === 1) {
           return {
             ...item,
@@ -385,13 +441,19 @@ const PosCreate: React.FC = () => {
     setCustomerSearch('');
   };
 
-  const handleSelectItem = async (item: Item) => {
-    if (item.current_stock <= 0) {
-      alert('Stock is not available');
+  const handleSearchChange = (value: string) => {
+    if (!activeSession && value.length > 0) {
+      setShowStartSessionModal(true);
       return;
     }
+    setItemSearch(value);
+  };
 
-    // Fetch bin locations for this item
+  const handleSelectItem = async (item: Item) => {
+    if (!activeSession) {
+      setShowStartSessionModal(true);
+      return;
+    }
     let itemBins: AvailableBin[] = [];
     try {
       const binResponse = await binLocationService.getBinLocationsForItem(item.id);
@@ -425,31 +487,14 @@ const PosCreate: React.FC = () => {
       }] : undefined
     };
     setCart([...cart, cartItem]);
-    setShowItemModal(false);
     setItemSearch('');
   };
 
-  const fetchExchangeItems = async () => {
-    try {
-      setExchangeLoading(true);
-      const response = await exchangesService.getAll({ status: 'listed' });
-      if (response.success) {
-        setExchangeItems(response.data || []);
-      }
-    } catch (error) {
-      console.error('Error fetching exchange items:', error);
-    } finally {
-      setExchangeLoading(false);
-    }
-  };
-
   const handleSelectExchangeItem = (exchangeItem: ExchangeItem) => {
-    // Check if already in cart
     if (cart.some(c => c.exchange_item_id === exchangeItem.id)) {
       alert('This exchange item is already in the cart');
       return;
     }
-
     const cartItem: CartItem = {
       id: `cart-ex-${Date.now()}-${exchangeItem.id}`,
       item_id: '',
@@ -531,6 +576,46 @@ const PosCreate: React.FC = () => {
     setShowAddCustomerModal(true);
   };
 
+  const handleQuickAddCustomer = async (phone: string, name: string) => {
+    try {
+      const response = await customersService.createCustomer({
+        display_name: name,
+        mobile: phone,
+        email: '',
+        address: '',
+        city: '',
+        state: 'Karnataka',
+        gstin: '',
+        payment_terms: 'Due on Receipt',
+      });
+      if (response.data.success && response.data.data) {
+        const createdCustomer = response.data.data;
+        setCustomers([createdCustomer, ...customers]);
+        setSelectedCustomer(createdCustomer);
+      }
+    } catch (error) {
+      console.error('Error creating customer:', error);
+      alert('Failed to create customer');
+    }
+  };
+
+  const handleCartItemDetailApply = (updates: { serial_number?: string; rate: number; note?: string }) => {
+    if (!detailPopupItem) return;
+    setCart(cart.map(item => {
+      if (item.id === detailPopupItem.id) {
+        return { ...item, serial_number: updates.serial_number, rate: updates.rate, note: updates.note };
+      }
+      return item;
+    }));
+    setDetailPopupItem(null);
+  };
+
+  const handleCartItemDetailRemove = () => {
+    if (!detailPopupItem) return;
+    setCart(cart.filter(item => item.id !== detailPopupItem.id));
+    setDetailPopupItem(null);
+  };
+
   const handleHoldCart = () => {
     if (cart.length === 0) {
       alert('Cart is empty. Add items before holding.');
@@ -572,27 +657,6 @@ const PosCreate: React.FC = () => {
     }
   };
 
-  const filteredCustomers = customers.filter(customer =>
-    customer.customer_name?.toLowerCase().includes(customerSearch.toLowerCase()) ||
-    customer.mobile?.includes(customerSearch) ||
-    customer.email?.toLowerCase().includes(customerSearch.toLowerCase())
-  );
-
-  const filteredItems = items.filter(item =>
-    item.is_active !== false &&
-    (item.item_name?.toLowerCase().includes(itemSearch.toLowerCase()) ||
-    item.sku?.toLowerCase().includes(itemSearch.toLowerCase()) ||
-    item.barcode?.includes(itemSearch) ||
-    item.color?.toLowerCase().includes(itemSearch.toLowerCase()) ||
-    item.variant?.toLowerCase().includes(itemSearch.toLowerCase()) ||
-    item.size?.toLowerCase().includes(itemSearch.toLowerCase()))
-  );
-
-  const filteredSalespersons = salespersons.filter(salesperson =>
-    salesperson.name?.toLowerCase().includes(salespersonSearch.toLowerCase()) ||
-    salesperson.email?.toLowerCase().includes(salespersonSearch.toLowerCase())
-  );
-
   const handleSelectSalesperson = (salesperson: Salesperson) => {
     setSelectedSalesperson(salesperson);
     setShowSalespersonModal(false);
@@ -630,12 +694,10 @@ const PosCreate: React.FC = () => {
       setShowStartSessionModal(true);
       return;
     }
-
     if (cart.length === 0) {
       alert('Please add items to the cart first');
       return;
     }
-
     const missing: string[] = [];
     if (!selectedCustomer) missing.push('Customer');
     if (!selectedSalesperson) missing.push('Salesperson');
@@ -644,17 +706,12 @@ const PosCreate: React.FC = () => {
       alert(`Please select: ${missing.join(', ')}`);
       return;
     }
-
     setSelectedPaymentMode(mode);
-
-    // Initialize paid amount to total for non-credit sales
     if (mode !== 'CREDIT SALE') {
       setPaidAmount(total);
     } else {
-      setPaidAmount(0); // For credit sale, start with 0
+      setPaidAmount(0);
     }
-
-    // Cash payment doesn't need reference number
     if (mode === 'Cash') {
       handleProcessPayment(mode, '', total);
     } else {
@@ -666,14 +723,11 @@ const PosCreate: React.FC = () => {
     try {
       setProcessingPayment(true);
 
-      // Generate invoice number
       const invoiceNumberRes = await invoicesService.generateInvoiceNumber();
       const invoiceNumber = invoiceNumberRes.data?.invoice_number || `INV-${Date.now()}`;
 
-      // Calculate balance due
       const balanceDue = total - amountPaid;
 
-      // Determine invoice status based on payment
       let invoiceStatus: 'paid' | 'partially_paid' | 'sent';
       let paymentStatus: 'Paid' | 'Partially Paid' | 'Unpaid';
 
@@ -681,7 +735,6 @@ const PosCreate: React.FC = () => {
         invoiceStatus = 'paid';
         paymentStatus = 'Paid';
       } else if (mode === 'CREDIT SALE') {
-        // Credit sale is always partially paid (even if 0 paid now)
         invoiceStatus = 'partially_paid';
         paymentStatus = amountPaid > 0 ? 'Partially Paid' : 'Unpaid';
       } else if (amountPaid > 0) {
@@ -692,13 +745,11 @@ const PosCreate: React.FC = () => {
         paymentStatus = 'Unpaid';
       }
 
-      // Calculate GST from cart items (default 18% = 9% CGST + 9% SGST for intra-state)
       const cartTaxableTotal = cart.reduce((sum, item) => sum + (item.qty * item.rate), 0) - discountAmount;
-      const posGstRate = 9; // Default 9% CGST + 9% SGST
+      const posGstRate = 9;
       const posCgstAmount = (cartTaxableTotal * posGstRate) / 100;
       const posSgstAmount = (cartTaxableTotal * posGstRate) / 100;
 
-      // Prepare invoice data
       const invoiceData = {
         customer_id: selectedCustomer?.id || null,
         customer_name: selectedCustomer?.customer_name || 'Walk-in Customer',
@@ -720,7 +771,7 @@ const PosCreate: React.FC = () => {
         igst_rate: 0,
         igst_amount: 0,
         tax_amount: Number((posCgstAmount + posSgstAmount).toFixed(2)),
-        place_of_supply: 'Karnataka (29)',
+        place_of_supply: orgSettings?.place_of_supply || 'Karnataka (29)',
         supply_type: 'intra_state',
         customer_gstin: (selectedCustomer as any)?.gstin || null,
         tds_tcs_type: null,
@@ -732,7 +783,7 @@ const PosCreate: React.FC = () => {
         balance_due: balanceDue,
         status: invoiceStatus,
         payment_status: paymentStatus,
-        subject: 'POS',  // Mark this as a POS transaction
+        subject: 'POS',
         pos_session_id: activeSession?.id || null,
         customer_notes: `Payment Mode: ${mode}${refNumber ? `\nReference Number: ${refNumber}` : ''}${discountValue > 0 ? `\nDiscount: ${discountType === 'percentage' ? `${discountValue}%` : `₹${discountValue}`} (-₹${discountAmount.toFixed(2)})` : ''}${deliveryOption === 'delivery' ? '\nDelivery: Delivery' : '\nDelivery: Self Pickup'}${mode === 'CREDIT SALE' ? `\nAmount Paid: ₹${amountPaid.toFixed(2)}\nBalance Due: ₹${balanceDue.toFixed(2)}` : ''}${posEmployeeName ? `\nPOS Operator: ${posEmployeeName}` : ''}`,
         terms_and_conditions: null,
@@ -740,7 +791,7 @@ const PosCreate: React.FC = () => {
           item_id: item.item_id,
           item_name: item.name,
           account: 'Sales',
-          description: `SKU: ${item.sku}`,
+          description: `SKU: ${item.sku}${item.serial_number ? ` | S/N: ${item.serial_number}` : ''}${item.note ? ` | Note: ${item.note}` : ''}`,
           quantity: item.qty,
           unit_of_measurement: 'pcs',
           rate: item.rate,
@@ -750,11 +801,9 @@ const PosCreate: React.FC = () => {
         }))
       };
 
-      // Create invoice
       const response = await invoicesService.createInvoice(invoiceData);
 
       if (response.success) {
-        // Create payment received record for tracking
         try {
           await paymentsReceivedService.createPaymentReceived({
             customer_id: selectedCustomer?.id || undefined,
@@ -771,7 +820,6 @@ const PosCreate: React.FC = () => {
           console.error('Error creating payment received record:', payErr);
         }
 
-        // Mark exchange items in cart as sold
         for (const cartItem of cart) {
           if (cartItem.exchange_item_id) {
             try {
@@ -782,7 +830,6 @@ const PosCreate: React.FC = () => {
           }
         }
 
-        // Auto-create delivery challan if delivery was selected
         if (deliveryOption === 'delivery' && pendingDeliveryData) {
           await createDeliveryChallanFromPOS(response.data?.id, invoiceNumber, total);
         }
@@ -809,18 +856,15 @@ const PosCreate: React.FC = () => {
         setPaidAmount(0);
         resetInactivityTimer();
 
-        // Update session sales
         if (activeSession) {
           try {
             await posSessionsService.updateSessionSales(activeSession.id, total);
-            // Update local active session state
             setActiveSession(prev => prev ? { ...prev, total_sales: prev.total_sales + total } : null);
           } catch (err) {
             console.error('Error updating session sales:', err);
           }
         }
 
-        // Refresh items to update stock levels
         fetchItems();
       } else {
         throw new Error('Failed to create invoice');
@@ -837,20 +881,16 @@ const PosCreate: React.FC = () => {
     try {
       setProcessingPayment(true);
 
-      // Generate invoice number
       const invoiceNumberRes = await invoicesService.generateInvoiceNumber();
       const invoiceNumber = invoiceNumberRes.data?.invoice_number || `INV-${Date.now()}`;
 
-      // Credit Sale entries are not actual payments received - they are deferred
       const creditAmount = payments
         .filter((p: any) => p.mode === 'CREDIT SALE')
         .reduce((sum: number, p: any) => sum + p.amount, 0);
       const actualPaid = totalPaid - creditAmount;
 
-      // Calculate balance due (amount not actually received)
       const balanceDue = total - actualPaid;
 
-      // Determine invoice status based on actual payment received
       let invoiceStatus: 'paid' | 'partially_paid' | 'sent';
       let paymentStatus: 'Paid' | 'Partially Paid' | 'Unpaid';
 
@@ -858,7 +898,6 @@ const PosCreate: React.FC = () => {
         invoiceStatus = 'paid';
         paymentStatus = 'Paid';
       } else if (creditAmount > 0 || actualPaid < total) {
-        // Has credit sale component or not fully paid = partially paid
         invoiceStatus = 'partially_paid';
         paymentStatus = actualPaid > 0 ? 'Partially Paid' : 'Unpaid';
       } else {
@@ -866,12 +905,10 @@ const PosCreate: React.FC = () => {
         paymentStatus = 'Unpaid';
       }
 
-      // Build payment details string
       const paymentDetails = payments.map((p, i) =>
         `Payment ${i + 1}: ${p.mode} - ₹${p.amount.toFixed(2)}${p.reference ? ` (Ref: ${p.reference})` : ''}${p.note ? `\n  Note: ${p.note}` : ''}`
       ).join('\n');
 
-      // Prepare invoice data
       const invoiceData = {
         customer_id: selectedCustomer?.id || null,
         customer_name: selectedCustomer?.customer_name || 'Walk-in Customer',
@@ -895,7 +932,7 @@ const PosCreate: React.FC = () => {
         balance_due: balanceDue,
         status: invoiceStatus,
         payment_status: paymentStatus,
-        subject: 'POS',  // Mark this as a POS transaction
+        subject: 'POS',
         pos_session_id: activeSession?.id || null,
         customer_notes: `SPLIT PAYMENT (${payments.length} payments)\n${paymentDetails}${discountValue > 0 ? `\nDiscount: ${discountType === 'percentage' ? `${discountValue}%` : `₹${discountValue}`} (-₹${discountAmount.toFixed(2)})` : ''}${deliveryOption === 'delivery' ? '\nDelivery: Delivery' : '\nDelivery: Self Pickup'}${balanceDue > 0 ? `\n\nAmount Received: ₹${actualPaid.toFixed(2)}${creditAmount > 0 ? `\nCredit Sale: ₹${creditAmount.toFixed(2)}` : ''}\nBalance Due: ₹${balanceDue.toFixed(2)}` : ''}${posEmployeeName ? `\nPOS Operator: ${posEmployeeName}` : ''}`,
         terms_and_conditions: null,
@@ -903,7 +940,7 @@ const PosCreate: React.FC = () => {
           item_id: item.item_id,
           item_name: item.name,
           account: 'Sales',
-          description: `SKU: ${item.sku}`,
+          description: `SKU: ${item.sku}${item.serial_number ? ` | S/N: ${item.serial_number}` : ''}${item.note ? ` | Note: ${item.note}` : ''}`,
           quantity: item.qty,
           unit_of_measurement: 'pcs',
           rate: item.rate,
@@ -913,11 +950,9 @@ const PosCreate: React.FC = () => {
         }))
       };
 
-      // Create invoice
       const response = await invoicesService.createInvoice(invoiceData);
 
       if (response.success) {
-        // Create payment received records for each split payment
         for (const payment of payments) {
           try {
             await paymentsReceivedService.createPaymentReceived({
@@ -936,7 +971,6 @@ const PosCreate: React.FC = () => {
           }
         }
 
-        // Mark exchange items in cart as sold
         for (const cartItem of cart) {
           if (cartItem.exchange_item_id) {
             try {
@@ -947,7 +981,6 @@ const PosCreate: React.FC = () => {
           }
         }
 
-        // Auto-create delivery challan if delivery was selected
         if (deliveryOption === 'delivery' && pendingDeliveryData) {
           await createDeliveryChallanFromPOS(response.data?.id, invoiceNumber, total);
         }
@@ -973,18 +1006,15 @@ const PosCreate: React.FC = () => {
         setShowBillSuccess(true);
         resetInactivityTimer();
 
-        // Update session sales
         if (activeSession) {
           try {
             await posSessionsService.updateSessionSales(activeSession.id, total);
-            // Update local active session state
             setActiveSession(prev => prev ? { ...prev, total_sales: prev.total_sales + total } : null);
           } catch (err) {
             console.error('Error updating session sales:', err);
           }
         }
 
-        // Refresh items to update stock levels
         fetchItems();
       } else {
         throw new Error('Failed to create invoice');
@@ -1001,7 +1031,6 @@ const PosCreate: React.FC = () => {
     if (!pendingDeliveryData) return;
     try {
       const { formData: deliveryData, challanNumber } = pendingDeliveryData;
-      // Get product names from cart
       const productNames = cart.map(item => item.name).join(', ');
       const challanData = {
         ...deliveryData,
@@ -1026,7 +1055,6 @@ const PosCreate: React.FC = () => {
   };
 
   const handleCompleteBill = () => {
-    // Clear everything and start fresh
     setCart([]);
     setSelectedCustomer(null);
     setSelectedSalesperson(null);
@@ -1120,8 +1148,8 @@ const PosCreate: React.FC = () => {
 </style></head>
 <body>
   <div class="header">
-    <div class="company-name">BHARATH CYCLE HUB</div>
-    <div class="company-sub">Your Trusted Cycling Partner</div>
+    <div class="company-name">${orgSettings?.company_name || ''}</div>
+    <div class="company-sub">${orgSettings?.tagline || ''}</div>
     <div class="bill-title">TAX INVOICE</div>
   </div>
 
@@ -1166,7 +1194,7 @@ const PosCreate: React.FC = () => {
 
   <div class="footer">
     <p class="thank-you">Thank you for your purchase!</p>
-    <p>Visit us again at Bharath Cycle Hub</p>
+    <p>Visit us again at ${orgSettings?.company_name || 'our store'}</p>
     ${activeSession ? `<p>Session: ${activeSession.session_number} | Register: ${activeSession.register}</p>` : ''}
   </div>
 
@@ -1176,7 +1204,6 @@ const PosCreate: React.FC = () => {
     printWindow.document.write(printContent);
     printWindow.document.close();
 
-    // Auto-open cash drawer (if QZ Tray is running on the POS machine)
     openCashDrawer();
   };
 
@@ -1203,14 +1230,28 @@ const PosCreate: React.FC = () => {
     }
   };
 
-  useEffect(() => {
-    const isPhoneNumber = /^\d{10}$/.test(customerSearch);
-    if (isPhoneNumber) {
-      setPhoneNumberFromSearch(customerSearch);
-    } else {
-      setPhoneNumberFromSearch('');
-    }
-  }, [customerSearch]);
+  // ─── Computed Values ─────────────────────────────────────────────
+
+  const filteredCustomers = customers.filter(customer =>
+    customer.customer_name?.toLowerCase().includes(customerSearch.toLowerCase()) ||
+    customer.mobile?.includes(customerSearch) ||
+    customer.email?.toLowerCase().includes(customerSearch.toLowerCase())
+  );
+
+  const filteredItems = items.filter(item =>
+    item.is_active !== false &&
+    (item.item_name?.toLowerCase().includes(itemSearch.toLowerCase()) ||
+    item.sku?.toLowerCase().includes(itemSearch.toLowerCase()) ||
+    item.barcode?.includes(itemSearch) ||
+    item.color?.toLowerCase().includes(itemSearch.toLowerCase()) ||
+    item.variant?.toLowerCase().includes(itemSearch.toLowerCase()) ||
+    item.size?.toLowerCase().includes(itemSearch.toLowerCase()))
+  );
+
+  const filteredSalespersons = salespersons.filter(salesperson =>
+    salesperson.name?.toLowerCase().includes(salespersonSearch.toLowerCase()) ||
+    salesperson.email?.toLowerCase().includes(salespersonSearch.toLowerCase())
+  );
 
   const subtotal = cart.reduce((acc, item) => acc + (item.qty * item.rate), 0);
   const discountAmount = discountType === 'percentage'
@@ -1219,10 +1260,66 @@ const PosCreate: React.FC = () => {
   const total = Math.max(0, subtotal - discountAmount);
   const totalQty = cart.reduce((acc, item) => acc + item.qty, 0);
 
+  // ─── Keyboard Shortcuts ─────────────────────────────────────────
+
+  // Determine if any modal is open (to handle Escape)
+  const anyModalOpen = showCustomerModal || showAddCustomerModal || showSalespersonModal ||
+    showManageSalespersonModal || showPaymentModal || showSplitPaymentModal || showBillSuccess ||
+    showDeliveryChallanModal || showCashMovementModal || showExchangeModal || showStartSessionModal ||
+    showCloseSessionModal || showDiscountModal || !!detailPopupItem;
+
+  const closeAllModals = () => {
+    setShowCustomerModal(false); setShowAddCustomerModal(false);
+    setShowSalespersonModal(false); setShowManageSalespersonModal(false);
+    setShowPaymentModal(false); setShowSplitPaymentModal(false);
+    setShowDeliveryChallanModal(false); setShowCashMovementModal(false);
+    setShowExchangeModal(false); setShowStartSessionModal(false);
+    setShowCloseSessionModal(false); setShowDiscountModal(false);
+    setDetailPopupItem(null);
+    setCustomerSearch(''); setSalespersonSearch(''); setExchangeSearch('');
+    setReferenceNumber('');
+  };
+
+  useKeyboardShortcuts({
+    onCashPayment: () => handlePaymentClick('Cash'),
+    onHDFCPayment: () => handlePaymentClick('HDFC'),
+    onICICIPayment: () => handlePaymentClick('ICICI'),
+    onCreditSale: () => handlePaymentClick('CREDIT SALE'),
+    onHoldCart: handleHoldCart,
+    onClearCart: handleClearCart,
+    onExchangeItems: () => { setShowExchangeModal(true); fetchExchangeItems(); },
+    onCustomerSelect: () => {
+      if (selectedCustomer) {
+        setShowCustomerModal(true);
+      } else {
+        const searchEl = document.querySelector<HTMLInputElement>('input[placeholder*="phone or name"]');
+        searchEl?.focus();
+      }
+    },
+    onFocusSearch: () => {
+      const searchEl = document.querySelector<HTMLInputElement>('input[placeholder*="scan an item"]');
+      searchEl?.focus();
+    },
+    onOpenCashDrawer: () => openCashDrawer(),
+    onSplitPayment: () => {
+      const missing: string[] = [];
+      if (!selectedCustomer) missing.push('Customer');
+      if (!selectedSalesperson) missing.push('Salesperson');
+      if (!deliveryOption) missing.push('Delivery Option');
+      if (missing.length > 0) { alert(`Please select: ${missing.join(', ')}`); return; }
+      setShowSplitPaymentModal(true);
+    },
+    onEscape: anyModalOpen ? closeAllModals : undefined,
+    onCtrlF: () => {
+      const searchEl = document.querySelector<HTMLInputElement>('input[placeholder*="scan an item"]');
+      searchEl?.focus();
+    },
+  }, !posLocked && activeTab === 'newsale');
+
+  // ─── Render ──────────────────────────────────────────────────────
+
   return (
     <>
-      {/* Print is handled via window.open() in handlePrintBill */}
-
       {/* POS Lock Overlay */}
       {posLocked && (
         <div className="fixed inset-0 bg-gray-900 bg-opacity-80 flex items-center justify-center z-[100]">
@@ -1266,1767 +1363,231 @@ const PosCreate: React.FC = () => {
       <div className="flex bg-gray-50 text-gray-800 font-sans overflow-hidden -m-6" style={{ height: 'calc(100% + 48px)' }}>
         {/* Left Section: Product Entry */}
         <div className="flex-grow flex flex-col border-r border-gray-200 bg-white">
-          {/* Header Tabs - Held Carts and Sessions */}
-          <div className="flex bg-gray-100 text-xs border-b border-gray-200 overflow-x-auto">
-            {/* Current Active Tab */}
-            <div
-              className={`px-4 py-2.5 flex items-center gap-2 cursor-pointer ${activeTab === 'newsale' && !activeHeldCartId
-                  ? 'bg-white border-t-2 border-blue-500'
-                  : 'border-r border-gray-200'
-                }`}
-              onClick={() => setActiveTab('newsale')}
-            >
-              <Plus size={12} className={activeTab === 'newsale' && !activeHeldCartId ? "text-blue-500" : "text-gray-500"} />
-              <span className={activeTab === 'newsale' && !activeHeldCartId ? "font-medium" : "text-gray-600"}>Sale</span>
-              {activeTab === 'newsale' && !activeHeldCartId && cart.length > 0 && (
-                <span className="ml-1 px-1.5 py-0.5 bg-blue-500 text-white rounded-full text-[10px]">{cart.length}</span>
-              )}
-            </div>
-
-            {/* Held Cart Tabs */}
-            {heldCarts.map((heldCart) => (
-              <div
-                key={heldCart.id}
-                onClick={() => handleRecallCart(heldCart)}
-                className={`px-4 py-2.5 flex items-center gap-2 border-r border-gray-200 cursor-pointer hover:bg-white transition-colors ${activeHeldCartId === heldCart.id ? 'bg-white border-t-2 border-blue-500' : 'opacity-60 hover:opacity-100'
-                  }`}
-              >
-                <ShoppingCart size={12} className="text-gray-500" />
-                <span className="font-medium">
-                  {heldCart.customer?.customer_name || 'Guest'} ({heldCart.items.length})
-                </span>
-                <X
-                  size={12}
-                  className="ml-1 cursor-pointer hover:text-red-500"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleDeleteHeldCart(heldCart.id);
-                  }}
-                />
-              </div>
-            ))}
-
-            {/* Sessions Tab */}
-            <div
-              onClick={() => setActiveTab('sessions')}
-              className={`px-4 py-2.5 flex items-center gap-2 border-r border-gray-200 cursor-pointer hover:bg-white transition-colors ${activeTab === 'sessions' ? 'bg-white border-t-2 border-blue-500' : 'opacity-60 hover:opacity-100'
-                }`}
-            >
-              <Clock size={12} className="text-gray-500" />
-              <span className="font-medium">Sessions</span>
-            </div>
-
-            {/* Session Status Indicator */}
-            <div className="ml-auto flex items-center gap-2 px-4">
-              {activeSession ? (
-                <div className="flex items-center gap-2">
-                  <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
-                  <span className="text-xs text-green-700 font-medium">
-                    Session: {activeSession.session_number}
-                  </span>
-                  <button
-                    onClick={() => { setCashMovementType('in'); setCashMovementAmount(0); setShowCashMovementModal(true); }}
-                    className="ml-2 px-2 py-1 text-xs font-medium text-green-700 bg-green-50 border border-green-200 rounded hover:bg-green-100 transition-colors flex items-center gap-1"
-                  >
-                    <ArrowDownCircle size={12} />
-                    Cash In
-                  </button>
-                  <button
-                    onClick={() => { setCashMovementType('out'); setCashMovementAmount(0); setShowCashMovementModal(true); }}
-                    className="px-2 py-1 text-xs font-medium text-orange-700 bg-orange-50 border border-orange-200 rounded hover:bg-orange-100 transition-colors flex items-center gap-1"
-                  >
-                    <ArrowUpCircle size={12} />
-                    Cash Out
-                  </button>
-                  <button
-                    onClick={() => setShowCloseSessionModal(true)}
-                    className="px-3 py-1 text-xs font-medium text-red-700 bg-red-50 border border-red-200 rounded hover:bg-red-100 transition-colors"
-                  >
-                    End Session
-                  </button>
-                </div>
-              ) : (
-                <div className="flex items-center gap-2">
-                  <span className="w-2 h-2 bg-red-500 rounded-full"></span>
-                  <span className="text-xs text-red-700 font-medium">No Active Session</span>
-                  <button
-                    onClick={() => setShowStartSessionModal(true)}
-                    className="ml-2 px-3 py-1 text-xs font-medium text-green-700 bg-green-50 border border-green-200 rounded hover:bg-green-100 transition-colors"
-                  >
-                    Start Session
-                  </button>
-                </div>
-              )}
-            </div>
-          </div>
+          <HeldCartsTabs
+            activeTab={activeTab}
+            activeHeldCartId={activeHeldCartId}
+            heldCarts={heldCarts}
+            cart={cart}
+            activeSession={activeSession}
+            onTabChange={setActiveTab}
+            onRecallCart={handleRecallCart}
+            onDeleteHeldCart={handleDeleteHeldCart}
+            onCashIn={() => { setCashMovementType('in'); setCashMovementAmount(0); setShowCashMovementModal(true); }}
+            onCashOut={() => { setCashMovementType('out'); setCashMovementAmount(0); setShowCashMovementModal(true); }}
+            onEndSession={() => setShowCloseSessionModal(true)}
+            onStartSession={() => setShowStartSessionModal(true)}
+            formatCurrency={formatCurrency}
+          />
 
           {activeTab === 'newsale' ? (
             <>
-
-              {/* Item Search Input - Inline */}
-              <div className="px-6 py-3 border-b border-gray-200 bg-white relative z-20">
-                <div className="flex items-center gap-3">
-                  <div className="relative flex-1">
-                    <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-                    <input
-                      type="text"
-                      placeholder="Type here or scan an item to add [F10]"
-                      value={itemSearch}
-                      onChange={(e) => setItemSearch(e.target.value)}
-                    className="w-full pl-10 pr-4 py-2.5 bg-gray-50 border border-gray-300 rounded-lg text-sm text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  />
-                  </div>
-                  {/* Printer Status Indicator */}
-                  <div className={`flex items-center gap-1.5 px-3 py-2 rounded-lg border text-xs font-medium whitespace-nowrap ${printerConnected ? 'bg-green-50 border-green-200 text-green-700' : 'bg-red-50 border-red-200 text-red-600'}`}
-                    title={printerConnected ? 'Printer connected' : 'Printer not connected'}
-                  >
-                    <span className={`w-2 h-2 rounded-full ${printerConnected ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`}></span>
-                    <Printer size={14} />
-                  </div>
-                </div>
-
-                {/* Inline Dropdown Results */}
-                {itemSearch && (
-                  <div className="absolute top-full left-0 right-0 bg-white border border-gray-200 shadow-xl rounded-b-lg max-h-[400px] overflow-y-auto z-50 mx-6 mt-1">
-                    {filteredItems.length === 0 ? (
-                      <div className="text-center py-6 text-gray-400">
-                        <p className="text-sm">No items found</p>
-                      </div>
-                    ) : (
-                      <div className="p-2 space-y-1">
-                        {filteredItems.map((item) => (
-                          <div
-                            key={item.id}
-                            onClick={() => handleSelectItem(item)}
-                            className="p-3 hover:bg-blue-50 border border-transparent hover:border-blue-200 rounded-lg cursor-pointer transition-colors flex justify-between items-center group"
-                          >
-                            <div>
-                              <div className="font-semibold text-gray-800 text-sm group-hover:text-blue-700">{item.item_name}</div>
-                              {(item.color || item.variant || item.size) && (
-                                <div className="text-xs text-gray-500 mt-0.5">
-                                  {[item.color, item.variant, item.size].filter(Boolean).join(' | ')}
-                                </div>
-                              )}
-                              <div className="text-xs text-gray-400 mt-0.5">
-                                SKU: {item.sku} {item.barcode ? `| Barcode: ${item.barcode}` : ''}
-                              </div>
-                            </div>
-                            <div className="text-right">
-                              <div className="font-bold text-gray-900 group-hover:text-blue-700">₹{item.unit_price.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</div>
-                              <div className="text-xs text-gray-500">
-                                Stock: <span className={item.current_stock > 0 ? 'text-green-600 font-medium' : 'text-red-500'}>{item.current_stock}</span>
-                              </div>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-
-              {/* Table Header */}
-              {cart.length > 0 && (
-                <div className="grid grid-cols-12 gap-4 px-6 py-3 text-xs font-semibold uppercase tracking-wide text-gray-600 border-b border-gray-200 bg-gray-50">
-                  <div className="col-span-1">S.NO.</div>
-                  <div className="col-span-5">NAME</div>
-                  <div className="col-span-1 text-center">QTY.</div>
-                  <div className="col-span-2 text-right">RATE</div>
-                  <div className="col-span-2 text-right">AMOUNT</div>
-                  <div className="col-span-1"></div>
-                </div>
-              )}
-
-              {/* Cart Items or Empty State */}
-              <div className="flex-grow overflow-y-auto">
-                {cart.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center h-full text-gray-400">
-                    <div className="relative mb-6">
-                      <ShoppingCart size={80} strokeWidth={1.5} className="text-gray-300" />
-                      <Plus size={24} className="absolute -top-2 -right-2 text-gray-400" />
-                    </div>
-                    <h3 className="text-lg font-semibold mb-2 text-gray-500">Yet to add items to the cart!</h3>
-                    <p className="text-sm text-gray-400">Search or scan items to add them to your cart</p>
-                  </div>
-                ) : (
-                  <>
-                    {cart.map((item, index) => (
-                      <div key={item.id} className="grid grid-cols-12 gap-4 px-6 py-4 items-center border-b border-gray-100 hover:bg-gray-50 transition-colors">
-                        <div className="col-span-1 text-sm text-gray-600">{index + 1}</div>
-                        <div className="col-span-5">
-                          <div className="font-semibold text-sm text-gray-800">{item.name}</div>
-                          <div className="text-xs text-gray-500 mt-1">
-                            {item.exchange_item_id ? (
-                              <span className="px-1.5 py-0.5 bg-orange-100 text-orange-700 rounded text-[10px] font-medium">2ND HAND EXCHANGE</span>
-                            ) : (
-                              <>SKU: {item.sku} | Tax: {item.tax_rate}%</>
-                            )}
-                          </div>
-                          {item.available_bins && item.available_bins.length > 0 && (
-                            <div className="flex items-center gap-1 mt-1">
-                              <MapPin size={10} className="text-blue-500" />
-                              {item.available_bins.length === 1 ? (
-                                <span className="text-xs text-blue-600">{item.available_bins[0].bin_code}</span>
-                              ) : (
-                                <select
-                                  value={item.bin_allocations?.[0]?.bin_location_id || ''}
-                                  onChange={(e) => handleBinChange(item.id, e.target.value)}
-                                  className="text-xs text-blue-600 bg-transparent border border-blue-200 rounded px-1 py-0.5 focus:outline-none focus:ring-1 focus:ring-blue-400"
-                                >
-                                  <option value="">Select Bin</option>
-                                  {item.available_bins.map(b => (
-                                    <option key={b.bin_id} value={b.bin_id}>
-                                      {b.bin_code} - {b.location_name}{b.stock > 0 ? ` (${b.stock} pcs)` : ''}
-                                    </option>
-                                  ))}
-                                </select>
-                              )}
-                            </div>
-                          )}
-                        </div>
-                        <div className="col-span-1 text-center">
-                          <input
-                            type="number"
-                            min="1"
-                            value={item.qty}
-                            onChange={(e: ChangeEvent<HTMLInputElement>) => handleQtyChange(item.id, e.target.value)}
-                            disabled={!!item.exchange_item_id}
-                            className={`w-16 bg-gray-50 border border-gray-300 rounded px-2 py-1 text-center text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent ${item.exchange_item_id ? 'opacity-60 cursor-not-allowed' : ''}`}
-                          />
-                        </div>
-                        <div className="col-span-2 text-right">
-                          <div className="flex items-center justify-end bg-gray-50 rounded border border-gray-300 focus-within:border-blue-500 focus-within:ring-2 focus-within:ring-blue-500/20 transition-all px-2">
-                            <span className="text-xs text-gray-500 mr-1">₹</span>
-                            <input
-                              type="number"
-                              value={item.rate || ''}
-                              onChange={(e: ChangeEvent<HTMLInputElement>) => handleRateChange(item.id, e.target.value)}
-                              className="w-full bg-transparent border-none focus:ring-0 text-right text-sm text-gray-800 p-1 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                              placeholder="0.00"
-                            />
-                          </div>
-                        </div>
-                        <div className="col-span-2 text-right text-sm font-semibold text-gray-800">
-                          ₹{(item.qty * item.rate).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-                        </div>
-                        <div className="col-span-1 text-right">
-                          <button
-                            onClick={() => handleRemoveItem(item.id)}
-                            className="text-gray-400 hover:text-red-500 transition-colors"
-                          >
-                            <Trash2 size={16} />
-                          </button>
-                        </div>
-                      </div>
-                    ))}
-                  </>
-                )}
-              </div>
-
-              {/* Footer Actions */}
-              <div className="px-4 py-2 bg-gray-50 border-t border-gray-200 flex gap-2">
-                <button
-                  onClick={handleClearCart}
-                  className="px-4 py-2 bg-red-50 border border-red-300 hover:bg-red-100 text-red-700 rounded-lg text-xs font-medium flex items-center gap-2 transition-colors"
-                >
-                  <X size={14} /> Clear All [F6]
-                </button>
-                <button
-                  onClick={handleHoldCart}
-                  disabled={cart.length === 0}
-                  className="px-4 py-2 bg-white border border-gray-300 hover:bg-gray-100 text-gray-700 rounded-lg text-xs font-medium flex items-center gap-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  <Package size={14} /> Hold Cart [F7]
-                </button>
-                <button
-                  onClick={() => { setShowExchangeModal(true); fetchExchangeItems(); }}
-                  className="px-4 py-2 bg-orange-50 border border-orange-300 hover:bg-orange-100 text-orange-700 rounded-lg text-xs font-medium flex items-center gap-2 transition-colors"
-                >
-                  <Repeat size={14} /> Exchange Items [F8]
-                </button>
-              </div>
+              <ProductSearch
+                itemSearch={itemSearch}
+                onSearchChange={handleSearchChange}
+                filteredItems={filteredItems}
+                onSelectItem={handleSelectItem}
+                printerConnected={printerConnected}
+              />
+              <CartItemsList
+                cart={cart}
+                onQtyChange={handleQtyChange}
+                onRateChange={handleRateChange}
+                onBinChange={handleBinChange}
+                onRemoveItem={handleRemoveItem}
+                onClearCart={handleClearCart}
+                onHoldCart={handleHoldCart}
+                onExchangeItems={() => { setShowExchangeModal(true); fetchExchangeItems(); }}
+                onItemClick={setDetailPopupItem}
+              />
             </>
+          ) : activeTab === 'invoices' ? (
+            <InvoicesTab sessionId={activeSession?.id} />
+          ) : activeTab === 'returns' ? (
+            <ReturnTab activeSessionId={activeSession?.id} />
+          ) : activeTab === 'session-detail' ? (
+            <SessionTab sessionId={activeSession?.id} activeSession={activeSession} formatCurrency={formatCurrency} />
           ) : (
-            /* Sessions View */
-            <div className="flex-1 overflow-auto p-6">
-              {/* Sessions Header */}
-              <div className="flex justify-between items-center mb-4">
-                <div>
-                  <h2 className="text-xl font-bold text-gray-800">POS Sessions</h2>
-                  <p className="text-sm text-gray-500 mt-1">Manage your point of sale sessions</p>
-                </div>
-                {!activeSession && (
-                  <button
-                    onClick={() => setShowStartSessionModal(true)}
-                    className="px-4 py-2 bg-green-600 text-white rounded-lg text-sm font-medium hover:bg-green-700 transition-colors flex items-center gap-2"
-                  >
-                    <Plus size={16} />
-                    Start New Session
-                  </button>
-                )}
-              </div>
-
-              <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
-                <table className="w-full">
-                  <thead className="bg-gray-50 border-b border-gray-200">
-                    <tr>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Session #
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Register
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Opened By
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Opened At
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Closed At
-                      </th>
-                      <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Total Sales
-                      </th>
-                      <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Status
-                      </th>
-                      <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Actions
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-200">
-                    {sessions.length === 0 ? (
-                      <tr>
-                        <td colSpan={8} className="px-6 py-12 text-center">
-                          <div className="flex flex-col items-center justify-center text-gray-400">
-                            <Clock className="w-12 h-12 mb-3" />
-                            <p className="text-lg font-medium">No sessions found</p>
-                            <p className="text-sm mt-1">Start a new session to begin</p>
-                            <button
-                              onClick={() => setShowStartSessionModal(true)}
-                              className="mt-4 px-6 py-2.5 bg-green-600 text-white rounded-lg text-sm font-medium hover:bg-green-700 transition-colors"
-                            >
-                              Start Session
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    ) : (
-                      sessions.map((session) => (
-                        <tr
-                          key={session.id}
-                          className="hover:bg-gray-50 transition-colors cursor-pointer"
-                          onClick={() => navigate(`/sales/pos/sessions/${session.id}`)}
-                        >
-                          <td className="px-6 py-4 text-sm font-medium text-blue-600 hover:underline">
-                            {session.session_number}
-                          </td>
-                          <td className="px-6 py-4 text-sm text-gray-900">
-                            {session.register}
-                          </td>
-                          <td className="px-6 py-4 text-sm text-gray-900">
-                            {session.opened_by}
-                          </td>
-                          <td className="px-6 py-4 text-sm text-gray-600">
-                            {new Date(session.opened_at).toLocaleString('en-IN', {
-                              day: '2-digit',
-                              month: 'short',
-                              year: 'numeric',
-                              hour: '2-digit',
-                              minute: '2-digit'
-                            })}
-                          </td>
-                          <td className="px-6 py-4 text-sm text-gray-600">
-                            {session.closed_at
-                              ? new Date(session.closed_at).toLocaleString('en-IN', {
-                                day: '2-digit',
-                                month: 'short',
-                                year: 'numeric',
-                                hour: '2-digit',
-                                minute: '2-digit'
-                              })
-                              : '-'}
-                          </td>
-                          <td className="px-6 py-4 text-sm text-gray-900 text-right font-semibold">
-                            {formatCurrency(session.total_sales)}
-                          </td>
-                          <td className="px-6 py-4 text-center">
-                            <span
-                              className={`px-3 py-1 rounded-full text-xs font-medium ${session.status === 'In-Progress'
-                                  ? 'bg-green-100 text-green-700'
-                                  : 'bg-gray-100 text-gray-700'
-                                }`}
-                            >
-                              {session.status}
-                            </span>
-                          </td>
-                          <td className="px-6 py-4 text-center">
-                            {session.status === 'In-Progress' ? (
-                              <div className="flex items-center justify-center gap-2">
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    setActiveSession(session);
-                                    setShowCloseSessionModal(true);
-                                  }}
-                                  className="px-3 py-1.5 text-xs font-medium text-red-700 bg-red-50 border border-red-200 rounded-md hover:bg-red-100 transition-colors"
-                                  title="Close Session"
-                                >
-                                  Close Session
-                                </button>
-                              </div>
-                            ) : (
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  navigate(`/sales/pos/sessions/${session.id}`);
-                                }}
-                                className="px-3 py-1.5 text-xs font-medium text-gray-700 bg-gray-50 border border-gray-200 rounded-md hover:bg-gray-100 transition-colors"
-                                title="View Details"
-                              >
-                                View Details
-                              </button>
-                            )}
-                          </td>
-                        </tr>
-                      ))
-                    )}
-                  </tbody>
-                </table>
-
-                {/* Session Summary Stats */}
-                {sessions.length > 0 && (
-                  <div className="border-t border-gray-200 bg-gray-50 p-6">
-                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
-                        <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
-                            <Clock className="w-5 h-5 text-blue-600" />
-                          </div>
-                          <div>
-                            <div className="text-sm text-gray-600">Total Sessions</div>
-                            <div className="text-xl font-bold text-gray-800">{sessions.length}</div>
-                          </div>
-                        </div>
-                      </div>
-                      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
-                        <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center">
-                            <TrendingUp className="w-5 h-5 text-green-600" />
-                          </div>
-                          <div>
-                            <div className="text-sm text-gray-600">Active Sessions</div>
-                            <div className="text-xl font-bold text-green-600">
-                              {sessions.filter(s => s.status === 'In-Progress').length}
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
-                        <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 bg-gray-100 rounded-lg flex items-center justify-center">
-                            <Clock className="w-5 h-5 text-gray-600" />
-                          </div>
-                          <div>
-                            <div className="text-sm text-gray-600">Closed Sessions</div>
-                            <div className="text-xl font-bold text-gray-600">
-                              {sessions.filter(s => s.status === 'Closed').length}
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
-                        <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center">
-                            <DollarSign className="w-5 h-5 text-purple-600" />
-                          </div>
-                          <div>
-                            <div className="text-sm text-gray-600">Total Revenue</div>
-                            <div className="text-xl font-bold text-purple-600">
-                              {formatCurrency(sessions.reduce((sum, s) => sum + s.total_sales, 0))}
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
+            <SessionsView
+              sessions={sessions}
+              activeSession={activeSession}
+              onStartSession={() => setShowStartSessionModal(true)}
+              onCloseSession={(session) => { setActiveSession(session); setShowCloseSessionModal(true); }}
+              onViewSession={(sessionId) => navigate(`/sales/pos/sessions/${sessionId}`)}
+              formatCurrency={formatCurrency}
+            />
           )}
         </div>
 
         {/* Right Sidebar */}
-        <div className="w-[420px] flex flex-col bg-white border-l border-gray-200 overflow-hidden">
-          <div className="p-4 space-y-3 overflow-y-auto flex-1 min-h-0">
-            {/* Current POS Operator */}
-            {posEmployeeName && (
-              <div className="flex items-center justify-between px-3 py-2 bg-purple-50 border border-purple-200 rounded-lg">
-                <div className="flex items-center gap-2">
-                  <Lock size={14} className="text-purple-600" />
-                  <span className="text-xs text-purple-700 font-medium">Operator: {posEmployeeName}</span>
-                </div>
-                <button
-                  onClick={() => { setPosLocked(true); setPosCodeInput(''); }}
-                  className="text-xs text-purple-600 hover:text-purple-800 font-medium"
-                >
-                  Switch
-                </button>
-              </div>
-            )}
-
-            {selectedCustomer ? (
-              <div className="flex justify-between items-start p-4 bg-blue-50 border border-blue-200 rounded-lg">
-                <div className="flex gap-3">
-                  <div className="p-2 bg-blue-100 rounded-full text-blue-600">
-                    <User size={18} />
-                  </div>
-                  <div>
-                    <div className="text-sm font-bold text-blue-700">
-                      {selectedCustomer.customer_name?.toUpperCase()}
-                    </div>
-                    {selectedCustomer.mobile && (
-                      <div className="text-xs text-gray-600 mt-1">{selectedCustomer.mobile}</div>
-                    )}
-                    {selectedCustomer.current_balance && selectedCustomer.current_balance > 0 && (
-                      <div className="text-xs text-orange-600 mt-1 font-medium">
-                        Outstanding: ₹{selectedCustomer.current_balance.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-                      </div>
-                    )}
-                  </div>
-                </div>
-                <div className="flex gap-2 text-gray-500">
-                  <Edit2 size={14} className="cursor-pointer hover:text-blue-600 transition-colors" />
-                  <X size={14} className="cursor-pointer hover:text-red-600 transition-colors" onClick={() => setSelectedCustomer(null)} />
-                </div>
-              </div>
-            ) : (
-              <button
-                onClick={() => setShowCustomerModal(true)}
-                className="w-full py-3 px-4 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium flex items-center justify-center gap-2 transition-colors"
-              >
-                <User size={16} /> Customer [F9]
-              </button>
-            )}
-
-            <div className="h-px bg-gray-200"></div>
-
-            {selectedSalesperson && (
-              <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
-                <div className="flex justify-between items-start">
-                  <div>
-                    <div className="text-xs text-gray-600 mb-1">Salesperson</div>
-                    <div className="text-sm font-bold text-green-700">
-                      {selectedSalesperson.name}
-                    </div>
-                    <div className="text-xs text-gray-600 mt-1">{selectedSalesperson.email}</div>
-                  </div>
-                  <X
-                    size={14}
-                    className="cursor-pointer hover:text-red-600 transition-colors text-gray-500"
-                    onClick={() => setSelectedSalesperson(null)}
-                  />
-                </div>
-              </div>
-            )}
-
-            <div className="space-y-2 text-sm font-medium text-gray-600">
-              <button
-                onClick={() => setShowDiscountModal(true)}
-                className={`w-full text-left px-4 py-2.5 rounded-lg hover:bg-gray-100 transition-colors ${discountValue > 0 ? 'bg-green-50 text-green-700 border border-green-200' : ''}`}
-              >
-                {discountValue > 0
-                  ? `Discount: ${discountType === 'percentage' ? `${discountValue}%` : `₹${discountValue}`} (-₹${discountAmount.toFixed(2)})`
-                  : 'Discount [Alt+Shift+P]'}
-              </button>
-              <div className="relative">
-                <button
-                  onClick={() => setShowDeliveryDropdown(!showDeliveryDropdown)}
-                  className={`w-full text-left px-4 py-2.5 rounded-lg hover:bg-gray-100 transition-colors ${deliveryOption === 'delivery' ? 'bg-blue-50 text-blue-700 border border-blue-200' : deliveryOption === 'self_pickup' ? 'bg-green-50 text-green-700 border border-green-200' : ''}`}
-                >
-                  {deliveryOption === 'delivery' ? 'Delivery: Delivery' : deliveryOption === 'self_pickup' ? 'Delivery: Self Pickup' : 'Delivery [Alt+Shift+D]'}
-                </button>
-                {showDeliveryDropdown && (
-                  <div className="absolute left-0 right-0 top-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg z-10">
-                    <button
-                      onClick={() => { setDeliveryOption('self_pickup'); setShowDeliveryDropdown(false); }}
-                      className={`w-full text-left px-4 py-2.5 hover:bg-gray-100 transition-colors text-sm ${deliveryOption === 'self_pickup' ? 'bg-blue-50 text-blue-700 font-semibold' : ''}`}
-                    >
-                      Self Pickup
-                    </button>
-                    <button
-                      onClick={() => { setDeliveryOption('delivery'); setShowDeliveryDropdown(false); setShowDeliveryChallanModal(true); }}
-                      className={`w-full text-left px-4 py-2.5 hover:bg-gray-100 transition-colors text-sm ${deliveryOption === 'delivery' ? 'bg-blue-50 text-blue-700 font-semibold' : ''}`}
-                    >
-                      Delivery
-                    </button>
-                  </div>
-                )}
-              </div>
-              <button
-                onClick={() => setShowSalespersonModal(true)}
-                className="w-full text-left px-4 py-2.5 rounded-lg hover:bg-gray-100 transition-colors"
-              >
-                Salesperson [Shift+F10]
-              </button>
-            </div>
-          </div>
-
-          <div className="mt-auto p-4 bg-gray-50 border-t border-gray-200 flex-shrink-0">
-            <div className="mb-3">
-              <div className="flex justify-between items-center text-sm text-gray-500 mb-1">
-                <span>Subtotal ({cart.length} items, {totalQty} qty)</span>
-                <span>₹{subtotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
-              </div>
-              {discountValue > 0 && (
-                <div className="flex justify-between items-center text-sm text-green-600 mb-1">
-                  <span>Discount ({discountType === 'percentage' ? `${discountValue}%` : `₹${discountValue}`})</span>
-                  <span>-₹{discountAmount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
-                </div>
-              )}
-              <div className="flex justify-between items-end mt-1">
-                <div className="text-lg font-bold text-gray-800">Total</div>
-                <div className="text-2xl font-bold text-gray-900">₹{total.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</div>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-2">
-              <button
-                onClick={() => handlePaymentClick('Cash')}
-                disabled={cart.length === 0 || processingPayment}
-                className="col-span-2 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg text-sm uppercase transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {processingPayment ? 'Processing...' : 'Cash [F1]'}
-              </button>
-              <button
-                onClick={() => handlePaymentClick('HDFC')}
-                disabled={cart.length === 0 || processingPayment}
-                className="py-2.5 bg-white border border-gray-300 hover:bg-gray-100 text-gray-700 rounded-lg text-xs font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                HDFC BANK [F2]
-              </button>
-              <button
-                onClick={() => handlePaymentClick('ICICI')}
-                disabled={cart.length === 0 || processingPayment}
-                className="py-2.5 bg-white border border-gray-300 hover:bg-gray-100 text-gray-700 rounded-lg text-xs font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                ICICI BANK [F3]
-              </button>
-              <button
-                onClick={() => handlePaymentClick('BAJAJ/ICICI')}
-                disabled={cart.length === 0 || processingPayment}
-                className="py-2.5 bg-white border border-gray-300 hover:bg-gray-100 text-gray-700 rounded-lg text-xs font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                BAJAJ / ICICI BANK
-              </button>
-              <button
-                onClick={() => handlePaymentClick('CREDIT SALE')}
-                disabled={cart.length === 0 || processingPayment}
-                className="py-2.5 bg-white border border-gray-300 hover:bg-gray-100 text-gray-700 rounded-lg text-xs font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                Credit Sale [F4]
-              </button>
-              <button
-                onClick={() => handlePaymentClick('D/B CREDIT CARD / EM')}
-                disabled={cart.length === 0 || processingPayment}
-                className="py-2.5 bg-white border border-gray-300 hover:bg-gray-100 text-gray-700 rounded-lg text-xs font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                D/B CREDIT CARD / EM
-              </button>
-              <button
-                onClick={() => {
-                  const missing: string[] = [];
-                  if (!selectedCustomer) missing.push('Customer');
-                  if (!selectedSalesperson) missing.push('Salesperson');
-                  if (!deliveryOption) missing.push('Delivery Option');
-                  if (missing.length > 0) {
-                    alert(`Please select: ${missing.join(', ')}`);
-                    return;
-                  }
-                  setShowSplitPaymentModal(true);
-                }}
-                disabled={cart.length === 0 || processingPayment}
-                className="py-2.5 bg-white border border-gray-300 hover:bg-gray-100 text-gray-700 rounded-lg text-xs font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                More... [F12]
-              </button>
-            </div>
-          </div>
-        </div>
-
-        {/* Customer Search Modal */}
-        {showCustomerModal && (
-          <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-            <div className="bg-white rounded-xl w-[550px] max-h-[650px] flex flex-col shadow-2xl">
-              <div className="flex justify-between items-center p-5 border-b border-gray-200">
-                <h2 className="text-xl font-bold text-gray-800">Select Customer</h2>
-                <button onClick={() => { setShowCustomerModal(false); setCustomerSearch(''); }}>
-                  <X size={22} className="text-gray-400 hover:text-gray-600 cursor-pointer transition-colors" />
-                </button>
-              </div>
-              <div className="p-5 border-b border-gray-200">
-                <div className="relative">
-                  <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-                  <input
-                    type="text"
-                    placeholder="Search by name, mobile, or email..."
-                    value={customerSearch}
-                    onChange={(e) => setCustomerSearch(e.target.value)}
-                    className="w-full bg-gray-50 border border-gray-300 rounded-lg pl-10 pr-4 py-2.5 text-sm text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    autoFocus
-                  />
-                </div>
-              </div>
-              <div className="flex-grow overflow-y-auto p-3">
-                {filteredCustomers.length === 0 ? (
-                  <div className="text-center py-12 text-gray-400">
-                    <User size={48} className="mx-auto mb-3 text-gray-300" />
-                    <p className="text-sm mb-4">No customers found</p>
-                    {phoneNumberFromSearch && (
-                      <p className="text-xs text-blue-600">Searched number: {phoneNumberFromSearch}</p>
-                    )}
-                  </div>
-                ) : (
-                  <div className="space-y-2">
-                    {filteredCustomers.map((customer) => (
-                      <div
-                        key={customer.id}
-                        onClick={() => handleSelectCustomer(customer)}
-                        className="p-4 hover:bg-blue-50 border border-gray-200 hover:border-blue-300 rounded-lg cursor-pointer transition-colors"
-                      >
-                        <div className="font-semibold text-gray-800 text-sm">{customer.customer_name}</div>
-                        <div className="text-xs text-gray-500 mt-1.5 space-y-0.5">
-                          {customer.mobile && <div>Mobile: {customer.mobile}</div>}
-                          {customer.email && <div>Email: {customer.email}</div>}
-                        </div>
-                        {customer.current_balance && customer.current_balance > 0 && (
-                          <div className="text-xs text-orange-600 mt-2 font-medium">
-                            Outstanding: ₹{customer.current_balance.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-                          </div>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-              <div className="p-5 border-t border-gray-200">
-                <button
-                  onClick={handleOpenAddCustomerWithPhone}
-                  className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg text-sm transition-colors flex items-center justify-center gap-2"
-                >
-                  <Plus size={18} /> Add New Customer
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Salesperson Search Modal */}
-        {showSalespersonModal && (
-          <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-            <div className="bg-white rounded-xl w-[550px] max-h-[650px] flex flex-col shadow-2xl">
-              <div className="flex justify-between items-center p-5 border-b border-gray-200">
-                <h2 className="text-xl font-bold text-gray-800">Select Salesperson</h2>
-                <button onClick={() => { setShowSalespersonModal(false); setSalespersonSearch(''); }}>
-                  <X size={22} className="text-gray-400 hover:text-gray-600 cursor-pointer transition-colors" />
-                </button>
-              </div>
-              <div className="p-5 border-b border-gray-200">
-                <div className="relative">
-                  <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-                  <input
-                    type="text"
-                    placeholder="Search by name or email..."
-                    value={salespersonSearch}
-                    onChange={(e) => setSalespersonSearch(e.target.value)}
-                    className="w-full bg-gray-50 border border-gray-300 rounded-lg pl-10 pr-4 py-2.5 text-sm text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    autoFocus
-                  />
-                </div>
-              </div>
-              <div className="flex-grow overflow-y-auto p-3">
-                {filteredSalespersons.length === 0 ? (
-                  <div className="text-center py-12 text-gray-400">
-                    <User size={48} className="mx-auto mb-3 text-gray-300" />
-                    <p className="text-sm mb-4">No salesperson found</p>
-                  </div>
-                ) : (
-                  <div className="space-y-2">
-                    {filteredSalespersons.map((salesperson) => (
-                      <div
-                        key={salesperson.id}
-                        onClick={() => handleSelectSalesperson(salesperson)}
-                        className="p-4 hover:bg-green-50 border border-gray-200 hover:border-green-300 rounded-lg cursor-pointer transition-colors"
-                      >
-                        <div className="font-semibold text-gray-800 text-sm">{salesperson.name}</div>
-                        <div className="text-xs text-gray-500 mt-1.5">
-                          Email: {salesperson.email}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-              <div className="p-5 border-t border-gray-200">
-                <button
-                  onClick={() => {
-                    setShowSalespersonModal(false);
-                    setShowManageSalespersonModal(true);
-                  }}
-                  className="w-full py-3 bg-green-600 hover:bg-green-700 text-white font-bold rounded-lg text-sm transition-colors flex items-center justify-center gap-2"
-                >
-                  <Plus size={18} /> Manage Salesperson
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Manage Salesperson Modal */}
-        {showManageSalespersonModal && (
-          <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-            <div className="bg-white rounded-xl w-[650px] max-h-[90vh] overflow-y-auto shadow-2xl">
-              <div className="flex justify-between items-center p-6 border-b border-gray-200 sticky top-0 bg-white z-10 rounded-t-xl">
-                <h2 className="text-2xl font-bold text-gray-800">Manage Salespersons</h2>
-                <button onClick={() => { setShowManageSalespersonModal(false); setShowAddSalespersonForm(false); setNewSalesperson({ name: '', email: '' }); }}>
-                  <X size={22} className="text-gray-400 hover:text-gray-600 cursor-pointer transition-colors" />
-                </button>
-              </div>
-
-              <div className="p-6">
-                {!showAddSalespersonForm ? (
-                  <>
-                    <div className="mb-4">
-                      <button
-                        onClick={() => setShowAddSalespersonForm(true)}
-                        className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg text-sm transition-colors flex items-center justify-center gap-2"
-                      >
-                        <Plus size={18} /> Add New Salesperson
-                      </button>
-                    </div>
-
-                    <div className="space-y-2">
-                      <h3 className="text-sm font-bold text-gray-700 mb-3 uppercase tracking-wide">All Salespersons</h3>
-                      {salespersons.length === 0 ? (
-                        <div className="text-center py-8 text-gray-400">
-                          <User size={48} className="mx-auto mb-3 text-gray-300" />
-                          <p className="text-sm">No salespersons added yet</p>
-                        </div>
-                      ) : (
-                        salespersons.map((sp) => (
-                          <div key={sp.id} className="flex justify-between items-center p-4 border border-gray-200 rounded-lg hover:bg-gray-50">
-                            <div>
-                              <div className="font-semibold text-gray-800">{sp.name}</div>
-                              <div className="text-sm text-gray-500">{sp.email}</div>
-                            </div>
-                            <button
-                              onClick={() => handleDeleteSalesperson(sp.id)}
-                              className="p-2 text-red-500 hover:bg-red-50 rounded transition-colors"
-                            >
-                              <Trash2 size={16} />
-                            </button>
-                          </div>
-                        ))
-                      )}
-                    </div>
-                  </>
-                ) : (
-                  <div className="space-y-4">
-                    <h3 className="text-sm font-bold text-gray-700 mb-4 uppercase tracking-wide">Add New Salesperson</h3>
-
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Name <span className="text-red-500">*</span>
-                      </label>
-                      <input
-                        type="text"
-                        required
-                        placeholder="e.g. John Doe"
-                        value={newSalesperson.name}
-                        onChange={(e) => setNewSalesperson({ ...newSalesperson, name: e.target.value })}
-                        className="w-full bg-white border border-gray-300 rounded-lg px-4 py-2.5 text-sm text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Email <span className="text-red-500">*</span>
-                      </label>
-                      <input
-                        type="email"
-                        required
-                        placeholder="e.g. john@example.com"
-                        value={newSalesperson.email}
-                        onChange={(e) => setNewSalesperson({ ...newSalesperson, email: e.target.value })}
-                        className="w-full bg-white border border-gray-300 rounded-lg px-4 py-2.5 text-sm text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      />
-                    </div>
-
-                    <div className="flex gap-3 pt-5 border-t border-gray-200">
-                      <button
-                        onClick={() => { setShowAddSalespersonForm(false); setNewSalesperson({ name: '', email: '' }); }}
-                        className="flex-1 px-6 py-2.5 bg-white border border-gray-300 hover:bg-gray-100 text-gray-700 rounded-lg text-sm font-medium transition-colors"
-                      >
-                        Cancel
-                      </button>
-                      <button
-                        onClick={handleAddSalesperson}
-                        className="flex-1 px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg text-sm transition-colors shadow-sm"
-                      >
-                        Save
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Payment Reference Modal */}
-        {showPaymentModal && (
-          <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-            <div className="bg-white rounded-xl w-[500px] shadow-2xl">
-              <div className="flex justify-between items-center p-6 border-b border-gray-200">
-                <h2 className="text-xl font-bold text-gray-800">Payment Details - {selectedPaymentMode}</h2>
-                <button onClick={() => { setShowPaymentModal(false); setReferenceNumber(''); }}>
-                  <X size={22} className="text-gray-400 hover:text-gray-600 cursor-pointer transition-colors" />
-                </button>
-              </div>
-
-              <div className="p-6">
-                <div className="mb-6">
-                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
-                    <div className="flex justify-between items-center mb-2">
-                      <span className="text-sm font-medium text-gray-600">Customer:</span>
-                      <span className="text-sm font-bold text-gray-800">
-                        {selectedCustomer?.customer_name || 'Walk-in Customer'}
-                      </span>
-                    </div>
-                    {selectedCustomer?.mobile && (
-                      <div className="flex justify-between items-center">
-                        <span className="text-sm font-medium text-gray-600">Mobile:</span>
-                        <span className="text-sm font-bold text-gray-800">{selectedCustomer.mobile}</span>
-                      </div>
-                    )}
-                    <div className="flex justify-between items-center mt-3 pt-3 border-t border-blue-200">
-                      <span className="text-base font-medium text-gray-700">Total Amount:</span>
-                      <span className="text-2xl font-bold text-blue-600">
-                        ₹{total.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-                      </span>
-                    </div>
-                  </div>
-
-                  {selectedPaymentMode === 'CREDIT SALE' ? (
-                    <>
-                      <div className="mb-4">
-                        <label className="block text-sm font-medium text-gray-700 mb-2">
-                          Paid Amount
-                        </label>
-                        <div className="relative">
-                          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500">₹</span>
-                          <input
-                            type="number"
-                            min="0"
-                            max={total}
-                            step="0.01"
-                            placeholder="Enter amount paid"
-                            value={paidAmount || ''}
-                            onChange={(e) => setPaidAmount(parseFloat(e.target.value) || 0)}
-                            className="w-full bg-white border border-gray-300 rounded-lg pl-8 pr-4 py-3 text-sm text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                            autoFocus
-                          />
-                        </div>
-                        <p className="text-xs text-gray-500 mt-1">
-                          Enter the amount paid now (can be 0 for full credit)
-                        </p>
-                      </div>
-
-                      <div className="mb-4">
-                        <label className="block text-sm font-medium text-gray-700 mb-2">
-                          Remaining Amount
-                        </label>
-                        <div className="bg-orange-50 border border-orange-200 rounded-lg px-4 py-3">
-                          <div className="flex justify-between items-center">
-                            <span className="text-sm text-gray-600">Balance Due:</span>
-                            <span className="text-xl font-bold text-orange-600">
-                              ₹{(total - (paidAmount || 0)).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-                            </span>
-                          </div>
-                        </div>
-                      </div>
-
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">
-                          Reference Number (Optional)
-                        </label>
-                        <input
-                          type="text"
-                          placeholder="Enter transaction reference (if any)"
-                          value={referenceNumber}
-                          onChange={(e) => setReferenceNumber(e.target.value)}
-                          className="w-full bg-white border border-gray-300 rounded-lg px-4 py-3 text-sm text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                        />
-                      </div>
-                    </>
-                  ) : (
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Reference Number {selectedPaymentMode !== 'Cash' && <span className="text-red-500">*</span>}
-                      </label>
-                      <input
-                        type="text"
-                        placeholder="Enter transaction reference number"
-                        value={referenceNumber}
-                        onChange={(e) => setReferenceNumber(e.target.value)}
-                        className="w-full bg-white border border-gray-300 rounded-lg px-4 py-3 text-sm text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                        autoFocus
-                      />
-                      <p className="text-xs text-gray-500 mt-1">
-                        Enter the bank transaction reference or approval code
-                      </p>
-                    </div>
-                  )}
-                </div>
-
-                <div className="flex gap-3">
-                  <button
-                    onClick={() => { setShowPaymentModal(false); setReferenceNumber(''); }}
-                    disabled={processingPayment}
-                    className="flex-1 px-6 py-3 bg-white border border-gray-300 hover:bg-gray-100 text-gray-700 rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    onClick={() => handleProcessPayment(selectedPaymentMode, referenceNumber, paidAmount)}
-                    disabled={processingPayment || (!referenceNumber && selectedPaymentMode !== 'Cash' && selectedPaymentMode !== 'CREDIT SALE')}
-                    className="flex-1 px-6 py-3 bg-green-600 hover:bg-green-700 text-white font-bold rounded-lg text-sm transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    {processingPayment ? 'Processing...' : 'Complete Payment'}
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Bill Success Modal */}
-        {showBillSuccess && generatedInvoice && (
-          <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-            <div className="bg-white rounded-xl w-[650px] max-h-[90vh] overflow-y-auto shadow-2xl">
-              <div className="flex flex-col items-center p-8 border-b border-gray-200 bg-gradient-to-br from-green-50 to-blue-50">
-                <div className="w-16 h-16 bg-green-500 rounded-full flex items-center justify-center mb-4 animate-bounce">
-                  <Check size={32} className="text-white" />
-                </div>
-                <h2 className="text-2xl font-bold text-gray-800 mb-2">Bill Created Successfully!</h2>
-                <p className="text-gray-600">Invoice #{generatedInvoice.invoice_number}</p>
-              </div>
-
-              <div className="p-6">
-                {/* Customer & Payment Details */}
-                <div className="grid grid-cols-2 gap-4 mb-6">
-                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                    <h3 className="text-xs font-bold text-gray-600 mb-2 uppercase">Customer Details</h3>
-                    <p className="text-sm font-bold text-gray-800">{generatedInvoice.customer_name}</p>
-                    {selectedCustomer?.mobile && (
-                      <p className="text-xs text-gray-600 mt-1">{selectedCustomer.mobile}</p>
-                    )}
-                    {selectedCustomer?.email && (
-                      <p className="text-xs text-gray-600">{selectedCustomer.email}</p>
-                    )}
-                  </div>
-
-                  <div className="bg-green-50 border border-green-200 rounded-lg p-4">
-                    <h3 className="text-xs font-bold text-gray-600 mb-2 uppercase">Payment Details</h3>
-                    <p className="text-sm font-bold text-green-700">{generatedInvoice.paymentMode}</p>
-                    {generatedInvoice.referenceNumber && (
-                      <p className="text-xs text-gray-600 mt-1">Ref: {generatedInvoice.referenceNumber}</p>
-                    )}
-                    <p className="text-xs text-gray-600">{generatedInvoice.createdAt}</p>
-                  </div>
-                </div>
-
-                {/* Salesperson Details */}
-                {generatedInvoice.salesperson_name && (
-                  <div className="bg-purple-50 border border-purple-200 rounded-lg p-4 mb-6">
-                    <h3 className="text-xs font-bold text-gray-600 mb-1 uppercase">Salesperson</h3>
-                    <p className="text-sm font-bold text-purple-700">{generatedInvoice.salesperson_name}</p>
-                  </div>
-                )}
-
-                {/* Items Table */}
-                <div className="mb-6">
-                  <h3 className="text-sm font-bold text-gray-700 mb-3 uppercase">Items</h3>
-                  <div className="border border-gray-200 rounded-lg overflow-hidden">
-                    <table className="w-full text-sm">
-                      <thead className="bg-gray-50">
-                        <tr>
-                          <th className="px-3 py-2 text-left text-xs font-semibold text-gray-600">ITEM</th>
-                          <th className="px-3 py-2 text-center text-xs font-semibold text-gray-600">QTY</th>
-                          <th className="px-3 py-2 text-right text-xs font-semibold text-gray-600">RATE</th>
-                          <th className="px-3 py-2 text-right text-xs font-semibold text-gray-600">AMOUNT</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-gray-200">
-                        {generatedInvoice.items.map((item: any, index: number) => (
-                          <tr key={index} className="hover:bg-gray-50">
-                            <td className="px-3 py-2 text-gray-800">{item.item_name}</td>
-                            <td className="px-3 py-2 text-center text-gray-600">{item.quantity}</td>
-                            <td className="px-3 py-2 text-right text-gray-600">
-                              ₹{item.rate.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-                            </td>
-                            <td className="px-3 py-2 text-right font-semibold text-gray-800">
-                              ₹{item.amount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-
-                {/* Total */}
-                <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 mb-6">
-                  <div className="flex justify-between items-center mb-3">
-                    <span className="text-lg font-bold text-gray-700">Total Amount:</span>
-                    <span className="text-3xl font-bold text-green-600">
-                      ₹{generatedInvoice.total_amount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-                    </span>
-                  </div>
-                  {generatedInvoice.paymentMode === 'CREDIT SALE' && generatedInvoice.balanceDue > 0 && (
-                    <>
-                      <div className="border-t border-gray-300 pt-3 mt-3 space-y-2">
-                        <div className="flex justify-between items-center">
-                          <span className="text-sm text-gray-600">Amount Paid:</span>
-                          <span className="text-lg font-semibold text-green-600">
-                            ₹{generatedInvoice.amountPaid.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-                          </span>
-                        </div>
-                        <div className="flex justify-between items-center">
-                          <span className="text-sm text-gray-600">Balance Due:</span>
-                          <span className="text-lg font-semibold text-orange-600">
-                            ₹{generatedInvoice.balanceDue.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-                          </span>
-                        </div>
-                      </div>
-                      <div className="mt-3 pt-3 border-t border-gray-300">
-                        <div className="bg-orange-100 border border-orange-300 rounded px-3 py-2 text-center">
-                          <span className="text-sm font-bold text-orange-700">CREDIT SALE - PAYMENT PENDING</span>
-                        </div>
-                      </div>
-                    </>
-                  )}
-                </div>
-
-                {/* Action Buttons */}
-                <div className="flex gap-3">
-                  <button
-                    onClick={handlePrintBill}
-                    className="flex-1 px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg text-sm transition-colors shadow-sm flex items-center justify-center gap-2"
-                  >
-                    <Printer size={18} /> Print Bill
-                  </button>
-                  <button
-                    onClick={handleCompleteBill}
-                    className="flex-1 px-6 py-3 bg-green-600 hover:bg-green-700 text-white font-bold rounded-lg text-sm transition-colors shadow-sm"
-                  >
-                    New Sale
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Add Customer Modal */}
-        {showAddCustomerModal && (
-          <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-            <div className="bg-white rounded-xl w-[650px] max-h-[90vh] overflow-y-auto shadow-2xl">
-              <div className="flex justify-between items-center p-6 border-b border-gray-200 sticky top-0 bg-white z-10 rounded-t-xl">
-                <h2 className="text-2xl font-bold text-gray-800">Add Customer</h2>
-                <button onClick={() => { setShowAddCustomerModal(false); setPhoneNumberFromSearch(''); setGstTreatment('Consumer'); }}>
-                  <X size={22} className="text-gray-400 hover:text-gray-600 cursor-pointer transition-colors" />
-                </button>
-              </div>
-              <form onSubmit={handleCreateCustomer} className="p-6">
-                <div className="mb-6">
-                  <h3 className="text-sm font-bold text-gray-700 mb-4 uppercase tracking-wide">Personal Details</h3>
-                  <div className="space-y-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Customer Name <span className="text-red-500">*</span>
-                      </label>
-                      <input
-                        type="text"
-                        required
-                        placeholder="e.g. John Smith"
-                        value={newCustomer.display_name}
-                        onChange={(e) => setNewCustomer({ ...newCustomer, display_name: e.target.value })}
-                        className="w-full bg-white border border-gray-300 rounded-lg px-4 py-2.5 text-sm text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Mobile Number <span className="text-red-500">*</span>
-                      </label>
-                      <input
-                        type="tel"
-                        required
-                        placeholder="e.g. 9999999999"
-                        value={newCustomer.mobile}
-                        onChange={(e) => setNewCustomer({ ...newCustomer, mobile: e.target.value })}
-                        className="w-full bg-white border border-gray-300 rounded-lg px-4 py-2.5 text-sm text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">E-mail</label>
-                      <input
-                        type="email"
-                        placeholder="e.g. customername@domain.com"
-                        value={newCustomer.email}
-                        onChange={(e) => setNewCustomer({ ...newCustomer, email: e.target.value })}
-                        className="w-full bg-white border border-gray-300 rounded-lg px-4 py-2.5 text-sm text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      />
-                    </div>
-                  </div>
-                </div>
-                <div className="mb-6">
-                  <h3 className="text-sm font-bold text-gray-700 mb-4 uppercase tracking-wide">Address</h3>
-                  <div className="space-y-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">Address Line 1</label>
-                      <input
-                        type="text"
-                        placeholder="#House/Apartment no., Street name"
-                        value={newCustomer.address}
-                        onChange={(e) => setNewCustomer({ ...newCustomer, address: e.target.value })}
-                        className="w-full bg-white border border-gray-300 rounded-lg px-4 py-2.5 text-sm text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      />
-                    </div>
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">City</label>
-                        <input
-                          type="text"
-                          placeholder="Area name"
-                          value={newCustomer.city}
-                          onChange={(e) => setNewCustomer({ ...newCustomer, city: e.target.value })}
-                          className="w-full bg-white border border-gray-300 rounded-lg px-4 py-2.5 text-sm text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">State</label>
-                        <select
-                          value={newCustomer.state}
-                          onChange={(e) => setNewCustomer({ ...newCustomer, state: e.target.value })}
-                          className="w-full bg-white border border-gray-300 rounded-lg px-4 py-2.5 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                        >
-                          <option value="Karnataka">Karnataka</option>
-                          <option value="Tamil Nadu">Tamil Nadu</option>
-                          <option value="Maharashtra">Maharashtra</option>
-                          <option value="Delhi">Delhi</option>
-                          <option value="Kerala">Kerala</option>
-                          <option value="Gujarat">Gujarat</option>
-                        </select>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-                <div className="mb-6">
-                  <h3 className="text-sm font-bold text-gray-700 mb-4 uppercase tracking-wide">Tax Details</h3>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      GST Treatment <span className="text-red-500">*</span>
-                    </label>
-                    <select
-                      required
-                      value={gstTreatment}
-                      onChange={(e) => {
-                        const value = e.target.value as 'Consumer' | 'Registered';
-                        setGstTreatment(value);
-                        if (value === 'Consumer') {
-                          setNewCustomer({ ...newCustomer, gstin: '', company_name: '' });
-                        }
-                      }}
-                      className="w-full bg-white border border-gray-300 rounded-lg px-4 py-2.5 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    >
-                      <option value="Consumer">Consumer</option>
-                      <option value="Registered">Registered Business - Regular</option>
-                    </select>
-                  </div>
-                </div>
-                <div className="flex justify-end gap-3 pt-5 border-t border-gray-200">
-                  <button
-                    type="button"
-                    onClick={() => { setShowAddCustomerModal(false); setPhoneNumberFromSearch(''); setGstTreatment('Consumer'); }}
-                    className="px-6 py-2.5 bg-white border border-gray-300 hover:bg-gray-100 text-gray-700 rounded-lg text-sm font-medium transition-colors"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    disabled={loading}
-                    className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
-                  >
-                    {loading ? 'Saving...' : 'Save'}
-                  </button>
-                </div>
-              </form>
-            </div>
-          </div>
-        )}
-
-        {/* Split Payment Modal */}
-        <SplitPaymentModal
-          isOpen={showSplitPaymentModal}
-          onClose={() => setShowSplitPaymentModal(false)}
-          totalAmount={total}
-          customerName={selectedCustomer?.customer_name || 'Walk-in Customer'}
-          customerMobile={selectedCustomer?.mobile}
-          onComplete={handleSplitPaymentComplete}
+        <CartPanel
+          cart={cart}
+          subtotal={subtotal}
+          total={total}
+          totalQty={totalQty}
+          discountType={discountType}
+          discountValue={discountValue}
+          discountAmount={discountAmount}
+          selectedCustomer={selectedCustomer}
+          selectedSalesperson={selectedSalesperson}
+          posEmployeeName={posEmployeeName}
+          deliveryOption={deliveryOption}
+          processingPayment={processingPayment}
+          showDeliveryDropdown={showDeliveryDropdown}
+          customers={customers}
+          onCustomerClick={() => setShowCustomerModal(true)}
+          onClearCustomer={() => setSelectedCustomer(null)}
+          onSelectCustomer={handleSelectCustomer}
+          onQuickAddCustomer={handleQuickAddCustomer}
+          onSalespersonClick={() => setShowSalespersonModal(true)}
+          onClearSalesperson={() => setSelectedSalesperson(null)}
+          onDiscountClick={() => setShowDiscountModal(true)}
+          onDeliveryToggle={() => setShowDeliveryDropdown(!showDeliveryDropdown)}
+          onDeliverySelect={(option) => { setDeliveryOption(option); setShowDeliveryDropdown(false); }}
+          onPaymentClick={handlePaymentClick}
+          onSplitPayment={() => {
+            const missing: string[] = [];
+            if (!selectedCustomer) missing.push('Customer');
+            if (!selectedSalesperson) missing.push('Salesperson');
+            if (!deliveryOption) missing.push('Delivery Option');
+            if (missing.length > 0) {
+              alert(`Please select: ${missing.join(', ')}`);
+              return;
+            }
+            setShowSplitPaymentModal(true);
+          }}
+          onLockPos={() => { setPosLocked(true); setPosCodeInput(''); }}
+          onShowDeliveryChallanModal={() => setShowDeliveryChallanModal(true)}
         />
-
-        {/* Delivery Challan Modal */}
-        {showDeliveryChallanModal && (
-          <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-            <div className="bg-white rounded-xl w-[700px] max-h-[90vh] overflow-y-auto shadow-2xl p-6">
-              <NewDeliveryChallanForm
-                isModal
-                isPosMode
-                onClose={() => setShowDeliveryChallanModal(false)}
-                onSuccess={() => setShowDeliveryChallanModal(false)}
-                onSaveDeliveryData={handleSaveDeliveryData}
-              />
-            </div>
-          </div>
-        )}
-
-        {/* Cash Movement Modal */}
-        {showCashMovementModal && activeSession && (
-          <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-            <div className="bg-white rounded-xl w-[400px] shadow-2xl">
-              <div className="flex justify-between items-center p-5 border-b border-gray-200">
-                <h3 className="text-lg font-semibold text-gray-800">
-                  {cashMovementType === 'in' ? 'Cash In' : 'Cash Out'}
-                </h3>
-                <button onClick={() => setShowCashMovementModal(false)} className="text-gray-400 hover:text-gray-600">
-                  <X size={20} />
-                </button>
-              </div>
-              <div className="p-5">
-                <div className="mb-4 text-sm text-gray-600">
-                  <div className="flex justify-between mb-1">
-                    <span>Current Cash In:</span>
-                    <span className="font-medium text-green-600">₹{activeSession.cash_in.toFixed(2)}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>Current Cash Out:</span>
-                    <span className="font-medium text-orange-600">₹{activeSession.cash_out.toFixed(2)}</span>
-                  </div>
-                </div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Amount (₹)</label>
-                <input
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  value={cashMovementAmount || ''}
-                  onChange={(e) => setCashMovementAmount(parseFloat(e.target.value) || 0)}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg text-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  placeholder="Enter amount"
-                  autoFocus
-                />
-              </div>
-              <div className="flex justify-end gap-3 p-5 border-t border-gray-200">
-                <button
-                  onClick={() => setShowCashMovementModal(false)}
-                  className="px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleCashMovement}
-                  disabled={cashMovementLoading || cashMovementAmount <= 0}
-                  className={`px-4 py-2 rounded-lg text-white transition ${
-                    cashMovementType === 'in'
-                      ? 'bg-green-600 hover:bg-green-700'
-                      : 'bg-orange-600 hover:bg-orange-700'
-                  } disabled:opacity-50`}
-                >
-                  {cashMovementLoading ? 'Processing...' : `Record Cash ${cashMovementType === 'in' ? 'In' : 'Out'}`}
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Exchange Items Modal */}
-        {showExchangeModal && (
-          <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-            <div className="bg-white rounded-xl w-[600px] max-h-[700px] flex flex-col shadow-2xl">
-              <div className="flex justify-between items-center p-5 border-b border-gray-200">
-                <div>
-                  <h2 className="text-xl font-bold text-gray-800">Exchange Items</h2>
-                  <p className="text-xs text-gray-500 mt-1">Select listed 2nd hand items to add to cart</p>
-                </div>
-                <button onClick={() => { setShowExchangeModal(false); setExchangeSearch(''); }}>
-                  <X size={22} className="text-gray-400 hover:text-gray-600 cursor-pointer transition-colors" />
-                </button>
-              </div>
-              <div className="p-5 border-b border-gray-200">
-                <div className="relative">
-                  <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-                  <input
-                    type="text"
-                    placeholder="Search exchange items by name..."
-                    value={exchangeSearch}
-                    onChange={(e) => setExchangeSearch(e.target.value)}
-                    className="w-full bg-gray-50 border border-gray-300 rounded-lg pl-10 pr-4 py-2.5 text-sm text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    autoFocus
-                  />
-                </div>
-              </div>
-              <div className="flex-grow overflow-y-auto p-3">
-                {exchangeLoading ? (
-                  <div className="flex items-center justify-center py-12">
-                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-orange-600" />
-                  </div>
-                ) : exchangeItems.filter(ei =>
-                  ei.item_name.toLowerCase().includes(exchangeSearch.toLowerCase()) ||
-                  (ei.customer_name || '').toLowerCase().includes(exchangeSearch.toLowerCase())
-                ).length === 0 ? (
-                  <div className="text-center py-12 text-gray-400">
-                    <Repeat size={48} className="mx-auto mb-3 text-gray-300" />
-                    <p className="text-sm mb-1">No listed exchange items found</p>
-                    <p className="text-xs text-gray-400">Items must be marked as "Listed" in the Exchanges page first</p>
-                  </div>
-                ) : (
-                  <div className="space-y-2">
-                    {exchangeItems
-                      .filter(ei =>
-                        ei.item_name.toLowerCase().includes(exchangeSearch.toLowerCase()) ||
-                        (ei.customer_name || '').toLowerCase().includes(exchangeSearch.toLowerCase())
-                      )
-                      .map((exchangeItem) => {
-                        const alreadyInCart = cart.some(c => c.exchange_item_id === exchangeItem.id);
-                        return (
-                          <div
-                            key={exchangeItem.id}
-                            onClick={() => !alreadyInCart && handleSelectExchangeItem(exchangeItem)}
-                            className={`p-4 border rounded-lg transition-colors flex justify-between items-center ${
-                              alreadyInCart
-                                ? 'border-gray-200 bg-gray-50 cursor-not-allowed opacity-60'
-                                : 'border-gray-200 hover:border-orange-300 hover:bg-orange-50 cursor-pointer'
-                            }`}
-                          >
-                            <div>
-                              <div className="font-semibold text-gray-800 text-sm">{exchangeItem.item_name}</div>
-                              <div className="flex items-center gap-2 mt-1">
-                                <span className={`px-1.5 py-0.5 text-[10px] font-medium rounded-full ${
-                                  exchangeItem.condition === 'good' ? 'bg-green-100 text-green-700' :
-                                  exchangeItem.condition === 'ok' ? 'bg-yellow-100 text-yellow-700' :
-                                  'bg-red-100 text-red-700'
-                                }`}>
-                                  {exchangeItem.condition.toUpperCase()}
-                                </span>
-                                {exchangeItem.customer_name && (
-                                  <span className="text-xs text-gray-500">From: {exchangeItem.customer_name}</span>
-                                )}
-                              </div>
-                              {alreadyInCart && (
-                                <div className="text-xs text-blue-600 mt-1 font-medium">Already in cart</div>
-                              )}
-                            </div>
-                            <div className="text-right">
-                              <div className="font-bold text-gray-900">
-                                {exchangeItem.estimated_price != null
-                                  ? `₹${exchangeItem.estimated_price.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`
-                                  : '₹0.00'}
-                              </div>
-                              <div className="text-[10px] text-orange-600 font-medium mt-0.5">EXCHANGE</div>
-                            </div>
-                          </div>
-                        );
-                      })}
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Start Session Modal */}
-        {showStartSessionModal && (
-          <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-            <div className="bg-white rounded-xl w-[450px] shadow-2xl">
-              <div className="flex justify-between items-center p-5 border-b border-gray-200">
-                <h2 className="text-xl font-bold text-gray-800">Start New Session</h2>
-                <button onClick={() => setShowStartSessionModal(false)}>
-                  <X size={22} className="text-gray-400 hover:text-gray-600 cursor-pointer transition-colors" />
-                </button>
-              </div>
-              <div className="p-6 space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Register Name
-                  </label>
-                  <input
-                    type="text"
-                    value={startSessionData.register}
-                    onChange={(e) => setStartSessionData({ ...startSessionData, register: e.target.value })}
-                    className="w-full bg-gray-50 border border-gray-300 rounded-lg px-4 py-2.5 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    placeholder="billing desk"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Opened By <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    value={startSessionData.opened_by}
-                    onChange={(e) => setStartSessionData({ ...startSessionData, opened_by: e.target.value })}
-                    className="w-full bg-gray-50 border border-gray-300 rounded-lg px-4 py-2.5 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    placeholder="Enter your name"
-                    autoFocus
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Opening Cash Balance
-                  </label>
-                  <div className="flex items-center bg-gray-50 rounded-lg border border-gray-300 focus-within:ring-2 focus-within:ring-blue-500 focus-within:border-transparent px-4">
-                    <span className="text-gray-500">₹</span>
-                    <input
-                      type="number"
-                      value={startSessionData.opening_balance}
-                      onChange={(e) => setStartSessionData({ ...startSessionData, opening_balance: parseFloat(e.target.value) || 0 })}
-                      className="w-full bg-transparent border-none px-2 py-2.5 text-sm text-gray-800 focus:outline-none focus:ring-0"
-                      placeholder="0.00"
-                    />
-                  </div>
-                </div>
-              </div>
-              <div className="p-5 border-t border-gray-200 flex gap-3">
-                <button
-                  onClick={() => setShowStartSessionModal(false)}
-                  disabled={sessionLoading}
-                  className="flex-1 py-2.5 border border-gray-300 text-gray-700 rounded-lg text-sm font-medium hover:bg-gray-100 transition-colors disabled:opacity-50"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleStartSession}
-                  disabled={sessionLoading || !startSessionData.opened_by.trim()}
-                  className="flex-1 py-2.5 bg-green-600 text-white rounded-lg text-sm font-medium hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {sessionLoading ? 'Starting...' : 'Start Session'}
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Close Session Modal */}
-        {showCloseSessionModal && activeSession && (
-          <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 overflow-y-auto py-4">
-            <div className="bg-white rounded-xl w-[550px] shadow-2xl max-h-[90vh] overflow-y-auto">
-              <div className="flex justify-between items-center p-5 border-b border-gray-200 sticky top-0 bg-white z-10">
-                <h2 className="text-xl font-bold text-gray-800">Close Session</h2>
-                <button onClick={() => setShowCloseSessionModal(false)}>
-                  <X size={22} className="text-gray-400 hover:text-gray-600 cursor-pointer transition-colors" />
-                </button>
-              </div>
-              <div className="p-6 space-y-4">
-                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                  <div className="grid grid-cols-2 gap-4 text-sm">
-                    <div>
-                      <span className="text-gray-600">Session:</span>
-                      <span className="ml-2 font-semibold text-gray-800">{activeSession.session_number}</span>
-                    </div>
-                    <div>
-                      <span className="text-gray-600">Register:</span>
-                      <span className="ml-2 font-semibold text-gray-800">{activeSession.register}</span>
-                    </div>
-                    <div>
-                      <span className="text-gray-600">Opened By:</span>
-                      <span className="ml-2 font-semibold text-gray-800">{activeSession.opened_by}</span>
-                    </div>
-                    <div>
-                      <span className="text-gray-600">Total Sales:</span>
-                      <span className="ml-2 font-semibold text-green-600">{formatCurrency(activeSession.total_sales)}</span>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Opening Balance
-                    </label>
-                    <div className="flex items-center bg-gray-100 rounded-lg px-4 py-2.5">
-                      <span className="text-gray-500">₹</span>
-                      <span className="ml-2 text-gray-700">{activeSession.opening_balance.toFixed(2)}</span>
-                    </div>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Cash In
-                    </label>
-                    <div className="flex items-center bg-gray-100 rounded-lg px-4 py-2.5">
-                      <span className="text-gray-500">₹</span>
-                      <span className="ml-2 text-gray-700">{activeSession.cash_in.toFixed(2)}</span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Denomination Grid */}
-                <div>
-                  <label className="block text-sm font-bold text-gray-800 mb-3">
-                    Cash Denomination Count
-                  </label>
-                  <div className="border border-gray-200 rounded-lg overflow-hidden">
-                    <div className="grid grid-cols-3 bg-gray-100 px-4 py-2 text-xs font-semibold text-gray-600 uppercase">
-                      <span>Note</span>
-                      <span className="text-center">Count</span>
-                      <span className="text-right">Total</span>
-                    </div>
-                    {denominations.map((d, idx) => (
-                      <div key={d.note} className={`grid grid-cols-3 items-center px-4 py-2 ${idx % 2 === 0 ? 'bg-white' : 'bg-gray-50'}`}>
-                        <span className="text-sm font-medium text-gray-700">₹{d.note.toFixed(2)}</span>
-                        <div className="flex justify-center">
-                          <input
-                            type="number"
-                            min="0"
-                            value={d.count || ''}
-                            onChange={(e) => {
-                              const newDenominations = [...denominations];
-                              newDenominations[idx].count = parseInt(e.target.value) || 0;
-                              setDenominations(newDenominations);
-                            }}
-                            className="w-20 text-center border border-gray-300 rounded px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
-                            placeholder="0"
-                          />
-                        </div>
-                        <span className="text-sm font-semibold text-gray-800 text-right">
-                          ₹{(d.note * d.count).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-                        </span>
-                      </div>
-                    ))}
-                    <div className="grid grid-cols-3 items-center px-4 py-3 bg-blue-50 border-t-2 border-blue-200">
-                      <span className="text-sm font-bold text-gray-800">Total</span>
-                      <span></span>
-                      <span className="text-sm font-bold text-blue-700 text-right">
-                        ₹{denominations.reduce((sum, d) => sum + d.note * d.count, 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
-                  <p className="text-sm text-yellow-800">
-                    <strong>Note:</strong> Once closed, this session cannot be reopened. All sales have been recorded.
-                  </p>
-                </div>
-              </div>
-              <div className="p-5 border-t border-gray-200 flex gap-3">
-                <button
-                  onClick={() => setShowCloseSessionModal(false)}
-                  disabled={sessionLoading}
-                  className="flex-1 py-2.5 border border-gray-300 text-gray-700 rounded-lg text-sm font-medium hover:bg-gray-100 transition-colors disabled:opacity-50"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleCloseSession}
-                  disabled={sessionLoading}
-                  className="flex-1 py-2.5 bg-red-600 text-white rounded-lg text-sm font-medium hover:bg-red-700 transition-colors disabled:opacity-50"
-                >
-                  {sessionLoading ? 'Closing...' : 'Close Session'}
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
       </div>
 
-      {/* Discount Modal */}
-      {showDiscountModal && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl w-[400px] shadow-2xl">
-            <div className="flex justify-between items-center p-5 border-b border-gray-200">
-              <h3 className="text-lg font-semibold text-gray-800">Apply Discount</h3>
-              <button onClick={() => setShowDiscountModal(false)} className="text-gray-400 hover:text-gray-600">
-                <X size={20} />
-              </button>
-            </div>
-            <div className="p-5">
-              <div className="text-sm text-gray-500 mb-4">
-                Subtotal: ₹{subtotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-              </div>
-              <div className="flex gap-2 mb-4">
-                <button
-                  onClick={() => setDiscountType('percentage')}
-                  className={`flex-1 py-2.5 rounded-lg text-sm font-semibold transition-colors ${discountType === 'percentage' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
-                >
-                  Percentage (%)
-                </button>
-                <button
-                  onClick={() => setDiscountType('amount')}
-                  className={`flex-1 py-2.5 rounded-lg text-sm font-semibold transition-colors ${discountType === 'amount' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
-                >
-                  Amount (₹)
-                </button>
-              </div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                {discountType === 'percentage' ? 'Discount %' : 'Discount Amount (₹)'}
-              </label>
-              <input
-                type="number"
-                min="0"
-                max={discountType === 'percentage' ? 100 : subtotal}
-                step="0.01"
-                value={discountValue || ''}
-                onChange={(e) => {
-                  let val = parseFloat(e.target.value) || 0;
-                  if (discountType === 'percentage' && val > 100) val = 100;
-                  if (discountType === 'amount' && val > subtotal) val = subtotal;
-                  setDiscountValue(val);
-                }}
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg text-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                placeholder={discountType === 'percentage' ? 'Enter percentage' : 'Enter amount'}
-                autoFocus
-              />
-              {discountValue > 0 && (
-                <div className="mt-3 p-3 bg-green-50 rounded-lg text-sm">
-                  <div className="flex justify-between text-gray-600">
-                    <span>Discount:</span>
-                    <span className="text-green-700 font-medium">-₹{(discountType === 'percentage' ? (subtotal * discountValue / 100) : discountValue).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
-                  </div>
-                  <div className="flex justify-between font-semibold text-gray-800 mt-1">
-                    <span>New Total:</span>
-                    <span>₹{Math.max(0, subtotal - (discountType === 'percentage' ? (subtotal * discountValue / 100) : discountValue)).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
-                  </div>
-                </div>
-              )}
-            </div>
-            <div className="flex justify-end gap-3 p-5 border-t border-gray-200">
-              <button
-                onClick={() => { setDiscountValue(0); setShowDiscountModal(false); }}
-                className="px-4 py-2.5 border border-gray-300 text-gray-700 rounded-lg text-sm font-medium hover:bg-gray-100 transition-colors"
-              >
-                Remove Discount
-              </button>
-              <button
-                onClick={() => setShowDiscountModal(false)}
-                className="px-4 py-2.5 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors"
-              >
-                Apply
-              </button>
-            </div>
-          </div>
-        </div>
+      {/* All Modals */}
+      <PosModals
+        // Customer Search Modal
+        showCustomerModal={showCustomerModal}
+        customerSearch={customerSearch}
+        filteredCustomers={filteredCustomers}
+        phoneNumberFromSearch={phoneNumberFromSearch}
+        onCustomerSearchChange={setCustomerSearch}
+        onSelectCustomer={handleSelectCustomer}
+        onCloseCustomerModal={() => { setShowCustomerModal(false); setCustomerSearch(''); }}
+        onOpenAddCustomerWithPhone={handleOpenAddCustomerWithPhone}
+
+        // Salesperson Search Modal
+        showSalespersonModal={showSalespersonModal}
+        salespersonSearch={salespersonSearch}
+        filteredSalespersons={filteredSalespersons}
+        onSalespersonSearchChange={setSalespersonSearch}
+        onSelectSalesperson={handleSelectSalesperson}
+        onCloseSalespersonModal={() => { setShowSalespersonModal(false); setSalespersonSearch(''); }}
+        onOpenManageSalesperson={() => { setShowSalespersonModal(false); setShowManageSalespersonModal(true); }}
+
+        // Manage Salesperson Modal
+        showManageSalespersonModal={showManageSalespersonModal}
+        showAddSalespersonForm={showAddSalespersonForm}
+        salespersons={salespersons}
+        newSalesperson={newSalesperson}
+        onNewSalespersonChange={setNewSalesperson}
+        onShowAddSalespersonForm={setShowAddSalespersonForm}
+        onAddSalesperson={handleAddSalesperson}
+        onDeleteSalesperson={handleDeleteSalesperson}
+        onCloseManageSalespersonModal={() => { setShowManageSalespersonModal(false); setShowAddSalespersonForm(false); setNewSalesperson({ name: '', email: '' }); }}
+
+        // Payment Reference Modal
+        showPaymentModal={showPaymentModal}
+        selectedPaymentMode={selectedPaymentMode}
+        referenceNumber={referenceNumber}
+        paidAmount={paidAmount}
+        total={total}
+        selectedCustomer={selectedCustomer}
+        processingPayment={processingPayment}
+        onReferenceNumberChange={setReferenceNumber}
+        onPaidAmountChange={setPaidAmount}
+        onProcessPayment={handleProcessPayment}
+        onClosePaymentModal={() => { setShowPaymentModal(false); setReferenceNumber(''); }}
+
+        // Bill Success Modal
+        showBillSuccess={showBillSuccess}
+        generatedInvoice={generatedInvoice}
+        onPrintBill={handlePrintBill}
+        onCompleteBill={handleCompleteBill}
+
+        // Add Customer Modal
+        showAddCustomerModal={showAddCustomerModal}
+        newCustomer={newCustomer}
+        gstTreatment={gstTreatment}
+        loading={loading}
+        onNewCustomerChange={setNewCustomer}
+        onGstTreatmentChange={setGstTreatment}
+        onCreateCustomer={handleCreateCustomer}
+        onCloseAddCustomerModal={() => { setShowAddCustomerModal(false); setPhoneNumberFromSearch(''); setGstTreatment('Consumer'); }}
+
+        // Delivery Challan Modal
+        showDeliveryChallanModal={showDeliveryChallanModal}
+        onSaveDeliveryData={handleSaveDeliveryData}
+        onCloseDeliveryChallanModal={() => setShowDeliveryChallanModal(false)}
+
+        // Cash Movement Modal
+        showCashMovementModal={showCashMovementModal}
+        activeSession={activeSession}
+        cashMovementType={cashMovementType}
+        cashMovementAmount={cashMovementAmount}
+        cashMovementLoading={cashMovementLoading}
+        onCashMovementAmountChange={setCashMovementAmount}
+        onCashMovement={handleCashMovement}
+        onCloseCashMovementModal={() => setShowCashMovementModal(false)}
+
+        // Exchange Items Modal
+        showExchangeModal={showExchangeModal}
+        exchangeItems={exchangeItems}
+        exchangeSearch={exchangeSearch}
+        exchangeLoading={exchangeLoading}
+        cart={cart}
+        onExchangeSearchChange={setExchangeSearch}
+        onSelectExchangeItem={handleSelectExchangeItem}
+        onCloseExchangeModal={() => { setShowExchangeModal(false); setExchangeSearch(''); }}
+
+        // Start Session Modal
+        showStartSessionModal={showStartSessionModal}
+        startSessionData={startSessionData}
+        sessionLoading={sessionLoading}
+        onStartSessionDataChange={setStartSessionData}
+        onStartSession={handleStartSession}
+        onCloseStartSessionModal={() => setShowStartSessionModal(false)}
+
+        // Close Session Modal
+        showCloseSessionModal={showCloseSessionModal}
+        denominations={denominations}
+        onDenominationsChange={setDenominations}
+        onCloseSession={handleCloseSession}
+        onCloseCloseSessionModal={() => setShowCloseSessionModal(false)}
+        formatCurrency={formatCurrency}
+        previousClosureAmount={previousClosureAmount}
+        onCloseEmployeeVerified={setCloseEmployeeName}
+
+        // Split Payment Modal
+        showSplitPaymentModal={showSplitPaymentModal}
+        onCloseSplitPaymentModal={() => setShowSplitPaymentModal(false)}
+        onSplitPaymentComplete={handleSplitPaymentComplete}
+
+        // Discount Modal
+        showDiscountModal={showDiscountModal}
+        discountType={discountType}
+        discountValue={discountValue}
+        subtotal={subtotal}
+        onDiscountTypeChange={setDiscountType}
+        onDiscountValueChange={setDiscountValue}
+        onCloseDiscountModal={() => setShowDiscountModal(false)}
+        onRemoveDiscount={() => { setDiscountValue(0); setShowDiscountModal(false); }}
+      />
+
+      {/* Cart Item Detail Popup */}
+      {detailPopupItem && (
+        <CartItemDetailPopup
+          item={detailPopupItem}
+          onApply={handleCartItemDetailApply}
+          onRemove={handleCartItemDetailRemove}
+          onClose={() => setDetailPopupItem(null)}
+        />
       )}
     </>
   );

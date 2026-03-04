@@ -11,8 +11,8 @@ if (!JWT_SECRET) {
 }
 
 // Helper function to generate JWT token
-const generateToken = (userId: string, email: string, role: string): string => {
-  const payload = { userId, email, role };
+const generateToken = (userId: string, email: string, role: string, organizationId?: string): string => {
+  const payload = { userId, email, role, organizationId };
   const expiresIn = process.env.JWT_EXPIRES_IN?.trim() || '7d';
   // @ts-ignore - Type issue with jsonwebtoken SignOptions
   return jwt.sign(payload, JWT_SECRET, { expiresIn });
@@ -87,8 +87,15 @@ router.post('/technician-login', async (req: Request, res: Response) => {
       .update({ last_login: new Date().toISOString() })
       .eq('id', user.id);
 
+    // Get organization_id
+    const { data: techOrgData } = await supabaseAdmin
+      .from('organizations')
+      .select('id')
+      .limit(1)
+      .single();
+
     // Generate JWT token
-    const token = generateToken(user.id, user.email || user.phone, user.role);
+    const token = generateToken(user.id, user.email || user.phone, user.role, techOrgData?.id);
 
     res.json({
       success: true,
@@ -102,7 +109,8 @@ router.post('/technician-login', async (req: Request, res: Response) => {
           phone: user.phone,
           department: user.department,
           status: user.status,
-          buildline_role: user.buildline_role
+          buildline_role: user.buildline_role,
+          organization_id: techOrgData?.id
         }
       }
     });
@@ -168,8 +176,15 @@ router.post('/login', async (req: Request, res: Response) => {
       .update({ last_login: new Date().toISOString() })
       .eq('id', user.id);
 
+    // Get organization_id
+    const { data: loginOrgData } = await supabaseAdmin
+      .from('organizations')
+      .select('id')
+      .limit(1)
+      .single();
+
     // Generate JWT token
-    const token = generateToken(user.id, user.email, user.role);
+    const token = generateToken(user.id, user.email, user.role, loginOrgData?.id);
 
     // Return user data (without password hash)
     res.json({
@@ -183,7 +198,8 @@ router.post('/login', async (req: Request, res: Response) => {
           role: user.role,
           phone: user.phone,
           department: user.department,
-          status: user.status
+          status: user.status,
+          organization_id: loginOrgData?.id
         }
       }
     });
@@ -355,9 +371,16 @@ router.get('/verify', async (req: Request, res: Response) => {
       });
     }
 
+    // Get organization_id
+    const { data: verifyOrgData } = await supabaseAdmin
+      .from('organizations')
+      .select('id')
+      .limit(1)
+      .single();
+
     res.json({
       success: true,
-      data: { user }
+      data: { user: { ...user, organization_id: verifyOrgData?.id } }
     });
   } catch (error: any) {
     if (error.name === 'JsonWebTokenError' || error.name === 'TokenExpiredError') {

@@ -5,6 +5,7 @@ export interface PosSession {
   session_number: string;
   register: string;
   opened_by: string;
+  closed_by?: string;
   opened_at: string;
   closed_at?: string;
   status: 'In-Progress' | 'Closed';
@@ -32,6 +33,7 @@ export interface CloseSessionData {
   closing_balance: number;
   cash_in: number;
   cash_out: number;
+  closed_by?: string;
   denomination_data?: DenominationEntry[];
 }
 

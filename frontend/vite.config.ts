@@ -49,6 +49,16 @@ export default defineConfig({
   ],
   server: {
     port: 3001,
-    open: true
+    open: true,
+    proxy: {
+      '/api': {
+        target: 'https://api.erp.2xg.in',
+        changeOrigin: true,
+        secure: true,
+        headers: {
+          Origin: 'https://erp.2xg.in',
+        },
+      },
+    },
   }
 })

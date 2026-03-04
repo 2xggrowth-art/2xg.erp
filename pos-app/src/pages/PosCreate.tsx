@@ -21,6 +21,7 @@ import InvoicesTab from '../components/pos/InvoicesTab';
 import ReturnTab from '../components/pos/ReturnTab';
 import SessionTab from '../components/pos/SessionTab';
 import CartPanel from '../components/pos/CartPanel';
+import CartItemDetailPopup from '../components/pos/CartItemDetailPopup';
 import PosModals from '../components/pos/PosModals';
 import PosBinPicker from '../components/pos/PosBinPicker';
 
@@ -46,7 +47,7 @@ interface GeneratedInvoice {
   cgst_amount: number;
   sgst_rate: number;
   sgst_amount: number;
-  sub_total: number;
+  subtotal: number;
   total_amount: number;
   amount_paid: number;
   balance_due: number;
@@ -159,6 +160,9 @@ const PosCreate: React.FC = () => {
   const [selectedPaymentMode, setSelectedPaymentMode] = useState<PaymentMode>('');
   const [referenceNumber, setReferenceNumber] = useState('');
   const [paidAmount, setPaidAmount] = useState<number>(0);
+
+  // Cart item detail popup
+  const [detailPopupItem, setDetailPopupItem] = useState<CartItem | null>(null);
 
   // Discount
   const [showDiscountModal, setShowDiscountModal] = useState(false);
@@ -432,6 +436,7 @@ const PosCreate: React.FC = () => {
         closing_balance: denominationTotal || closeSessionData.closing_balance,
         cash_in: activeSession.cash_in,
         cash_out: activeSession.cash_out,
+        closed_by: posEmployeeName || activeSession.opened_by,
         denomination_data,
       });
 
@@ -494,11 +499,6 @@ const PosCreate: React.FC = () => {
   };
 
   const handleSelectItem = async (item: Item) => {
-    if (item.current_stock <= 0) {
-      alert('Stock is not available');
-      return;
-    }
-
     let itemBins: AvailableBin[] = [];
     try {
       const binResponse = await binLocationService.getBinLocationsForItem(item.id);
@@ -631,6 +631,46 @@ const PosCreate: React.FC = () => {
     });
     setShowCustomerModal(false);
     setShowAddCustomerModal(true);
+  };
+
+  const handleQuickAddCustomer = async (phone: string, name: string) => {
+    try {
+      const response = await customersService.createCustomer({
+        display_name: name,
+        mobile: phone,
+        email: '',
+        address: '',
+        city: '',
+        state: 'Karnataka',
+        gstin: '',
+        payment_terms: 'Due on Receipt',
+      });
+      if (response.data) {
+        const createdCustomer = response.data;
+        setCustomers([createdCustomer, ...customers]);
+        setSelectedCustomer(createdCustomer);
+      }
+    } catch (error) {
+      console.error('Error creating customer:', error);
+      alert('Failed to create customer');
+    }
+  };
+
+  const handleCartItemDetailApply = (updates: { serial_number?: string; rate: number; note?: string }) => {
+    if (!detailPopupItem) return;
+    setCart(prev => prev.map(item => {
+      if (item.id === detailPopupItem.id) {
+        return { ...item, serial_number: updates.serial_number, rate: updates.rate, note: updates.note };
+      }
+      return item;
+    }));
+    setDetailPopupItem(null);
+  };
+
+  const handleCartItemDetailRemove = () => {
+    if (!detailPopupItem) return;
+    setCart(prev => prev.filter(item => item.id !== detailPopupItem.id));
+    setDetailPopupItem(null);
   };
 
   const handleHoldCart = () => {
@@ -782,7 +822,7 @@ const PosCreate: React.FC = () => {
       tds_tcs_type: null,
       tds_tcs_rate: 0,
       adjustment: 0,
-      sub_total: subtotal,
+      subtotal: subtotal,
       total_amount: total,
       amount_paid: amountPaid,
       balance_due: balanceDue,
@@ -796,7 +836,7 @@ const PosCreate: React.FC = () => {
         item_id: item.item_id,
         item_name: item.name,
         account: 'Sales',
-        description: `SKU: ${item.sku}`,
+        description: `SKU: ${item.sku}${item.serial_number ? ` | S/N: ${item.serial_number}` : ''}${item.note ? ` | Note: ${item.note}` : ''}`,
         quantity: item.qty,
         unit_of_measurement: 'pcs',
         rate: item.rate,
@@ -1001,7 +1041,7 @@ const PosCreate: React.FC = () => {
     const itemsCount = inv.items.reduce((sum, i) => sum + i.quantity, 0);
 
     const discountLine = inv.discount_value > 0
-      ? `<div class="total-row"><span class="total-label">Discount${inv.discount_type === 'percentage' ? ` (${inv.discount_value}%)` : ''}</span><span class="total-value">-₹${(inv.discount_type === 'percentage' ? (inv.sub_total * inv.discount_value / 100) : inv.discount_value).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span></div>`
+      ? `<div class="total-row"><span class="total-label">Discount${inv.discount_type === 'percentage' ? ` (${inv.discount_value}%)` : ''}</span><span class="total-value">-₹${(inv.discount_type === 'percentage' ? (inv.subtotal * inv.discount_value / 100) : inv.discount_value).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span></div>`
       : '';
 
     const cgstLine = inv.cgst_amount > 0
@@ -1124,7 +1164,7 @@ const PosCreate: React.FC = () => {
   <div class="separator"></div>
 
   <div class="totals-section">
-    <div class="total-row"><span class="total-label">Sub Total (${itemsCount} items)</span><span class="total-value">₹${inv.sub_total.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span></div>
+    <div class="total-row"><span class="total-label">Sub Total (${itemsCount} items)</span><span class="total-value">₹${inv.subtotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span></div>
     ${discountLine}
     ${cgstLine}
     ${sgstLine}
@@ -1248,7 +1288,7 @@ const PosCreate: React.FC = () => {
   const anyModalOpen = showCustomerModal || showAddCustomerModal || showSalespersonModal ||
     showManageSalespersonModal || showPaymentModal || showSplitPaymentModal || showBillSuccess ||
     showCashMovementModal || showStartSessionModal || showCloseSessionModal || showDiscountModal ||
-    showBinPicker;
+    showBinPicker || !!detailPopupItem;
 
   const closeAllModals = () => {
     setShowCustomerModal(false);
@@ -1263,6 +1303,7 @@ const PosCreate: React.FC = () => {
     setShowDiscountModal(false);
     setShowBinPicker(false);
     setShowDeliveryDropdown(false);
+    setDetailPopupItem(null);
     setCustomerSearch('');
     setSalespersonSearch('');
     setReferenceNumber('');
@@ -1284,7 +1325,14 @@ const PosCreate: React.FC = () => {
       // Exchange items not available in standalone POS app
       alert('Exchange items not available in this version');
     },
-    onCustomerSelect: () => setShowCustomerModal(true),
+    onCustomerSelect: () => {
+      if (selectedCustomer) {
+        setShowCustomerModal(true);
+      } else {
+        const searchEl = document.querySelector<HTMLInputElement>('input[placeholder*="phone or name"]');
+        searchEl?.focus();
+      }
+    },
     onFocusSearch: focusSearchBar,
     onOpenCashDrawer: () => {
       printerService.openCashDrawer().catch(() => {
@@ -1392,6 +1440,7 @@ const PosCreate: React.FC = () => {
                 onClearCart={handleClearCart}
                 onHoldCart={handleHoldCart}
                 onExchangeItems={() => alert('Exchange items not available in this version')}
+                onItemClick={setDetailPopupItem}
               />
             </>
           ) : activeTab === 'invoices' ? (
@@ -1427,8 +1476,11 @@ const PosCreate: React.FC = () => {
           deliveryOption={deliveryOption}
           processingPayment={processingPayment}
           showDeliveryDropdown={showDeliveryDropdown}
+          customers={customers}
           onCustomerClick={() => setShowCustomerModal(true)}
           onClearCustomer={() => setSelectedCustomer(null)}
+          onSelectCustomer={handleSelectCustomer}
+          onQuickAddCustomer={handleQuickAddCustomer}
           onSalespersonClick={() => setShowSalespersonModal(true)}
           onClearSalesperson={() => setSelectedSalesperson(null)}
           onDiscountClick={() => setShowDiscountModal(true)}
@@ -1608,6 +1660,16 @@ const PosCreate: React.FC = () => {
           localStorage.setItem('paper_size', paperSize);
         }}
       />
+
+      {/* Cart Item Detail Popup */}
+      {detailPopupItem && (
+        <CartItemDetailPopup
+          item={detailPopupItem}
+          onApply={handleCartItemDetailApply}
+          onRemove={handleCartItemDetailRemove}
+          onClose={() => setDetailPopupItem(null)}
+        />
+      )}
 
       {/* Bin Picker Modal */}
       {binPickerItem && (

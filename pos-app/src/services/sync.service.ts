@@ -33,6 +33,10 @@ export const syncService = {
     return result.data || { isOnline: navigator.onLine, lastPull: null, lastPush: null, pendingCount: 0 };
   },
 
+  async registerDevice(): Promise<{ success: boolean; message: string; data?: any }> {
+    return await ipc().registerDevice();
+  },
+
   async getQueue(): Promise<SyncQueueItem[]> {
     const result = await ipc().getSyncQueue();
     return result.success ? result.data : [];

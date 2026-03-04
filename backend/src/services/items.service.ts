@@ -740,6 +740,13 @@ export class ItemsService {
         variant,
         size,
         preferred_vendor_id,
+        category_id,
+        subcategory_id,
+        item_type,
+        barcode,
+        hsn_code,
+        tax_rate,
+        image_url,
         product_categories (name)
       `)
       .order('created_at', { ascending: false });

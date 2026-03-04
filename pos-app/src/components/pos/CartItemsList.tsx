@@ -11,6 +11,7 @@ interface CartItemsListProps {
   onClearCart: () => void;
   onHoldCart: () => void;
   onExchangeItems: () => void;
+  onItemClick?: (item: CartItem) => void;
 }
 
 const CartItemsList: React.FC<CartItemsListProps> = ({
@@ -22,6 +23,7 @@ const CartItemsList: React.FC<CartItemsListProps> = ({
   onClearCart,
   onHoldCart,
   onExchangeItems,
+  onItemClick,
 }) => {
   return (
     <>
@@ -53,7 +55,8 @@ const CartItemsList: React.FC<CartItemsListProps> = ({
             {cart.map((item, index) => (
               <div
                 key={item.id}
-                className="grid grid-cols-12 gap-4 px-6 py-4 items-center border-b border-gray-100 dark:border-gray-700/50 hover:bg-gray-50 dark:hover:bg-gray-800/30 transition-colors"
+                className="grid grid-cols-12 gap-4 px-6 py-4 items-center border-b border-gray-100 dark:border-gray-700/50 hover:bg-gray-50 dark:hover:bg-gray-800/30 transition-colors cursor-pointer"
+                onClick={() => onItemClick?.(item)}
               >
                 <div className="col-span-1 text-sm text-gray-600 dark:text-gray-400">{index + 1}</div>
                 <div className="col-span-5">
@@ -67,6 +70,12 @@ const CartItemsList: React.FC<CartItemsListProps> = ({
                       <>SKU: {item.sku} | Tax: {item.tax_rate}%</>
                     )}
                   </div>
+                  {item.serial_number && (
+                    <div className="text-xs text-purple-600 dark:text-purple-400 mt-0.5">S/N: {item.serial_number}</div>
+                  )}
+                  {item.note && (
+                    <div className="text-xs text-gray-400 dark:text-gray-500 mt-0.5 italic truncate max-w-[200px]">{item.note}</div>
+                  )}
                   {item.available_bins && item.available_bins.length > 0 && (
                     <div className="flex items-center gap-1 mt-1">
                       <MapPin size={10} className="text-blue-500 dark:text-blue-400" />
@@ -90,7 +99,7 @@ const CartItemsList: React.FC<CartItemsListProps> = ({
                     </div>
                   )}
                 </div>
-                <div className="col-span-1 text-center">
+                <div className="col-span-1 text-center" onClick={(e) => e.stopPropagation()}>
                   <input
                     type="number"
                     min="1"
@@ -102,7 +111,7 @@ const CartItemsList: React.FC<CartItemsListProps> = ({
                     }`}
                   />
                 </div>
-                <div className="col-span-2 text-right">
+                <div className="col-span-2 text-right" onClick={(e) => e.stopPropagation()}>
                   <div className="flex items-center justify-end bg-gray-50 dark:bg-gray-700 rounded border border-gray-300 dark:border-gray-600 focus-within:border-blue-500 focus-within:ring-2 focus-within:ring-blue-500/20 transition-all px-2">
                     <span className="text-xs text-gray-500 dark:text-gray-400 mr-1">₹</span>
                     <input
@@ -117,7 +126,7 @@ const CartItemsList: React.FC<CartItemsListProps> = ({
                 <div className="col-span-2 text-right text-sm font-semibold text-gray-800 dark:text-gray-200">
                   ₹{(item.qty * item.rate).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                 </div>
-                <div className="col-span-1 text-right">
+                <div className="col-span-1 text-right" onClick={(e) => e.stopPropagation()}>
                   <button
                     onClick={() => onRemoveItem(item.id)}
                     className="text-gray-400 dark:text-gray-500 hover:text-red-500 dark:hover:text-red-400 transition-colors"

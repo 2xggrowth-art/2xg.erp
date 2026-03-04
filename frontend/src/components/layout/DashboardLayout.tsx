@@ -1,6 +1,7 @@
 import { useState, ReactNode } from 'react';
 import Sidebar from './Sidebar';
 import Header from './Header';
+import { useTheme } from '../../hooks/useTheme';
 
 interface DashboardLayoutProps {
   children: ReactNode;
@@ -8,6 +9,7 @@ interface DashboardLayoutProps {
 
 const DashboardLayout = ({ children }: DashboardLayoutProps) => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  useTheme();
 
   return (
     <div className="h-screen overflow-hidden bg-slate-100">

@@ -15,7 +15,8 @@ const App: React.FC = () => {
     const checkSetup = async () => {
       try {
         if (window.electronAPI) {
-          const setupCompleted = await window.electronAPI.getAppSetting('setup_completed');
+          const result = await window.electronAPI.getAppSetting('setup_completed');
+          const setupCompleted = result?.data ?? result;
           setView(setupCompleted === 'true' ? 'pos' : 'setup');
         } else {
           // Running in browser (dev mode without electron)

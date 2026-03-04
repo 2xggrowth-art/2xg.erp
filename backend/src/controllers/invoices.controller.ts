@@ -55,7 +55,7 @@ export class InvoicesController {
         });
       }
 
-      const invoice = await this.invoicesService.createInvoice(req.body);
+      const invoice = await this.invoicesService.createInvoice(req.body, (req as any).user?.organizationId);
       res.status(201).json({
         success: true,
         data: invoice,

@@ -1,5 +1,5 @@
-import React from 'react';
-import { User, X, Edit2, Lock } from 'lucide-react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
+import { User, X, Edit2, Lock, Search, UserPlus } from 'lucide-react';
 import { Customer } from '../../services/customers.service';
 import { Salesperson } from '../../services/salesperson.service';
 import { CartItem } from './posTypes';
@@ -18,8 +18,11 @@ interface CartPanelProps {
   deliveryOption: 'self_pickup' | 'delivery' | null;
   processingPayment: boolean;
   showDeliveryDropdown: boolean;
+  customers: Customer[];
   onCustomerClick: () => void;
   onClearCustomer: () => void;
+  onSelectCustomer: (customer: Customer) => void;
+  onQuickAddCustomer: (phone: string, name: string) => void;
   onSalespersonClick: () => void;
   onClearSalesperson: () => void;
   onDiscountClick: () => void;
@@ -45,8 +48,11 @@ const CartPanel: React.FC<CartPanelProps> = ({
   deliveryOption,
   processingPayment,
   showDeliveryDropdown,
+  customers,
   onCustomerClick,
   onClearCustomer,
+  onSelectCustomer,
+  onQuickAddCustomer,
   onSalespersonClick,
   onClearSalesperson,
   onDiscountClick,
@@ -57,6 +63,54 @@ const CartPanel: React.FC<CartPanelProps> = ({
   onLockPos,
   onShowDeliveryChallanModal,
 }) => {
+  const [customerSearchText, setCustomerSearchText] = useState('');
+  const [quickAddName, setQuickAddName] = useState('');
+  const [showSearchResults, setShowSearchResults] = useState(false);
+  const searchInputRef = useRef<HTMLInputElement>(null);
+  const searchContainerRef = useRef<HTMLDivElement>(null);
+
+  const isPhoneNumber = /^\d{10}$/.test(customerSearchText.trim());
+
+  const searchResults = customerSearchText.trim().length >= 2
+    ? customers.filter(c =>
+        c.customer_name?.toLowerCase().includes(customerSearchText.toLowerCase()) ||
+        c.mobile?.includes(customerSearchText) ||
+        c.phone?.includes(customerSearchText)
+      ).slice(0, 5)
+    : [];
+
+  const noMatchForPhone = isPhoneNumber && searchResults.length === 0;
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (searchContainerRef.current && !searchContainerRef.current.contains(e.target as Node)) {
+        setShowSearchResults(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const handleSearchChange = (value: string) => {
+    setCustomerSearchText(value);
+    setShowSearchResults(true);
+    setQuickAddName('');
+  };
+
+  const handleSelectFromSearch = (customer: Customer) => {
+    onSelectCustomer(customer);
+    setCustomerSearchText('');
+    setShowSearchResults(false);
+    setQuickAddName('');
+  };
+
+  const handleQuickAdd = useCallback(() => {
+    if (!quickAddName.trim() || !isPhoneNumber) return;
+    onQuickAddCustomer(customerSearchText.trim(), quickAddName.trim());
+    setCustomerSearchText('');
+    setQuickAddName('');
+    setShowSearchResults(false);
+  }, [quickAddName, isPhoneNumber, customerSearchText, onQuickAddCustomer]);
   return (
     <div className="w-[420px] flex flex-col bg-white dark:bg-gray-800 border-l border-gray-200 dark:border-gray-700 overflow-hidden">
       <div className="p-4 space-y-3 overflow-y-auto flex-1 min-h-0">
@@ -88,8 +142,8 @@ const CartPanel: React.FC<CartPanelProps> = ({
                 <div className="text-sm font-bold text-blue-700 dark:text-blue-300">
                   {selectedCustomer.customer_name?.toUpperCase()}
                 </div>
-                {selectedCustomer.mobile && (
-                  <div className="text-xs text-gray-600 dark:text-gray-400 mt-1">{selectedCustomer.mobile}</div>
+                {(selectedCustomer.mobile || selectedCustomer.phone) && (
+                  <div className="text-xs text-gray-600 dark:text-gray-400 mt-1">{selectedCustomer.mobile || selectedCustomer.phone}</div>
                 )}
                 {selectedCustomer.current_balance && selectedCustomer.current_balance > 0 && (
                   <div className="text-xs text-orange-600 dark:text-orange-400 mt-1 font-medium">
@@ -99,7 +153,7 @@ const CartPanel: React.FC<CartPanelProps> = ({
               </div>
             </div>
             <div className="flex gap-2 text-gray-500 dark:text-gray-400">
-              <Edit2 size={14} className="cursor-pointer hover:text-blue-600 dark:hover:text-blue-400 transition-colors" />
+              <Edit2 size={14} className="cursor-pointer hover:text-blue-600 dark:hover:text-blue-400 transition-colors" onClick={onCustomerClick} />
               <X
                 size={14}
                 className="cursor-pointer hover:text-red-600 dark:hover:text-red-400 transition-colors"
@@ -108,12 +162,66 @@ const CartPanel: React.FC<CartPanelProps> = ({
             </div>
           </div>
         ) : (
-          <button
-            onClick={onCustomerClick}
-            className="w-full py-3 px-4 bg-blue-600 hover:bg-blue-700 dark:bg-blue-700 dark:hover:bg-blue-600 text-white rounded-lg text-sm font-medium flex items-center justify-center gap-2 transition-colors"
-          >
-            <User size={16} /> Customer [F9]
-          </button>
+          <div ref={searchContainerRef} className="relative">
+            <div className="relative">
+              <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 dark:text-gray-500" />
+              <input
+                ref={searchInputRef}
+                type="text"
+                value={customerSearchText}
+                onChange={(e) => handleSearchChange(e.target.value)}
+                onFocus={() => setShowSearchResults(true)}
+                placeholder="Search by phone or name [F9]"
+                className="w-full pl-9 pr-4 py-2.5 bg-blue-50 dark:bg-blue-900/20 border border-blue-300 dark:border-blue-700 rounded-lg text-sm text-gray-800 dark:text-gray-200 placeholder-blue-400 dark:placeholder-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              />
+            </div>
+
+            {showSearchResults && customerSearchText.trim().length >= 2 && (
+              <div className="absolute left-0 right-0 top-full mt-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg z-30 max-h-[200px] overflow-y-auto">
+                {searchResults.length > 0 ? (
+                  searchResults.map((customer) => (
+                    <div
+                      key={customer.id}
+                      onClick={() => handleSelectFromSearch(customer)}
+                      className="px-3 py-2 hover:bg-blue-50 dark:hover:bg-blue-900/30 cursor-pointer border-b border-gray-100 dark:border-gray-700 last:border-b-0"
+                    >
+                      <div className="text-sm font-medium text-gray-800 dark:text-gray-200">{customer.customer_name}</div>
+                      <div className="text-xs text-gray-500 dark:text-gray-400">{customer.mobile || customer.phone}</div>
+                    </div>
+                  ))
+                ) : !noMatchForPhone ? (
+                  <div className="px-3 py-3 text-xs text-gray-400 dark:text-gray-500 text-center">No customers found</div>
+                ) : null}
+
+                {noMatchForPhone && (
+                  <div className="px-3 py-3 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50">
+                    <div className="flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400 mb-2">
+                      <UserPlus size={12} />
+                      <span>{customerSearchText} — Not found. Add new:</span>
+                    </div>
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        value={quickAddName}
+                        onChange={(e) => setQuickAddName(e.target.value)}
+                        onKeyDown={(e) => { if (e.key === 'Enter') handleQuickAdd(); }}
+                        placeholder="Customer name"
+                        autoFocus
+                        className="flex-1 px-2.5 py-1.5 border border-gray-300 dark:border-gray-600 rounded text-sm bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-200 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                      />
+                      <button
+                        onClick={handleQuickAdd}
+                        disabled={!quickAddName.trim()}
+                        className="px-3 py-1.5 bg-blue-600 dark:bg-blue-700 text-white rounded text-xs font-medium hover:bg-blue-700 dark:hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                      >
+                        Save
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
         )}
 
         <div className="h-px bg-gray-200 dark:bg-gray-700"></div>

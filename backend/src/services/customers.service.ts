@@ -201,6 +201,28 @@ export class CustomersService {
   }
 
   /**
+   * Get customer outstanding balance
+   * Sums balance_due from invoices where customer_id matches and balance_due > 0
+   */
+  async getCustomerOutstanding(customerId: string) {
+    const { data, error } = await supabaseAdmin
+      .from('invoices')
+      .select('balance_due')
+      .eq('customer_id', customerId)
+      .gt('balance_due', 0);
+
+    if (error) throw error;
+
+    const invoices = data || [];
+    const outstanding = invoices.reduce((sum, inv) => sum + (Number(inv.balance_due) || 0), 0);
+
+    return {
+      outstanding: Math.round(outstanding * 100) / 100,
+      unpaid_invoices: invoices.length,
+    };
+  }
+
+  /**
    * Delete a customer (hard delete since there's no is_active column)
    * Test #57: Block delete if customer has invoices or payments
    */

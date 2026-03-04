@@ -48,7 +48,7 @@ export class PosSessionsController {
         register,
         opened_by,
         opening_balance: opening_balance || 0,
-      });
+      }, (req as any).user?.organizationId);
 
       res.status(201).json({
         success: true,
@@ -70,12 +70,13 @@ export class PosSessionsController {
   async closeSession(req: Request, res: Response) {
     try {
       const { id } = req.params;
-      const { closing_balance, cash_in, cash_out, denomination_data } = req.body;
+      const { closing_balance, cash_in, cash_out, denomination_data, closed_by } = req.body;
 
       const session = await posSessionsService.closeSession(id, {
         closing_balance: closing_balance || 0,
         cash_in: cash_in || 0,
         cash_out: cash_out || 0,
+        closed_by: closed_by || undefined,
         denomination_data: denomination_data || [],
       });
 
@@ -143,6 +144,27 @@ export class PosSessionsController {
       res.status(500).json({
         success: false,
         error: error.message || 'Failed to fetch session',
+      });
+    }
+  }
+
+  /**
+   * Get session summary (sales breakdown by payment mode)
+   */
+  async getSessionSummary(req: Request, res: Response) {
+    try {
+      const { id } = req.params;
+      const summary = await posSessionsService.getSessionSummary(id);
+
+      res.json({
+        success: true,
+        data: summary,
+      });
+    } catch (error: any) {
+      console.error('Error fetching session summary:', error);
+      res.status(500).json({
+        success: false,
+        error: error.message || 'Failed to fetch session summary',
       });
     }
   }
@@ -220,7 +242,7 @@ export class PosSessionsController {
    */
   async generateSessionNumber(req: Request, res: Response) {
     try {
-      const sessionNumber = await posSessionsService.generateSessionNumber();
+      const sessionNumber = await posSessionsService.generateSessionNumber((req as any).user?.organizationId);
       res.json({
         success: true,
         data: { session_number: sessionNumber },

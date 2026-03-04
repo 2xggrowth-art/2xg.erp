@@ -37,6 +37,9 @@ export interface ElectronAPI {
   // Sync
   syncPull: () => Promise<any>;
   syncPush: () => Promise<any>;
+  syncFull: () => Promise<any>;
+  registerDevice: () => Promise<any>;
+  syncLogin: (url: string, email: string, password: string) => Promise<any>;
   getSyncStatus: () => Promise<any>;
   getSyncQueue: () => Promise<any>;
 

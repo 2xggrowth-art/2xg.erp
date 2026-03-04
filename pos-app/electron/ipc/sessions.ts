@@ -39,7 +39,7 @@ export function registerSessionHandlers(ipcMain: IpcMain): void {
 
         // Generate session number
         const orgSettings = db
-          .prepare(`SELECT session_prefix FROM org_settings LIMIT 1`)
+          .prepare(`SELECT session_prefix FROM org_settings ORDER BY synced_at DESC NULLS LAST LIMIT 1`)
           .get() as { session_prefix?: string } | undefined;
 
         const prefix = orgSettings?.session_prefix || 'POS1-S';
@@ -111,6 +111,7 @@ export function registerSessionHandlers(ipcMain: IpcMain): void {
         closing_balance: number;
         cash_in: number;
         cash_out: number;
+        closed_by?: string;
         denomination_data?: any[];
       }
     ) => {
@@ -127,6 +128,7 @@ export function registerSessionHandlers(ipcMain: IpcMain): void {
            SET status = 'Closed',
                closed_at = ?,
                closing_balance = ?,
+               closed_by = ?,
                cash_in = ?,
                cash_out = ?,
                denomination_data = ?,
@@ -135,6 +137,7 @@ export function registerSessionHandlers(ipcMain: IpcMain): void {
         ).run(
           now,
           data.closing_balance,
+          data.closed_by || null,
           data.cash_in,
           data.cash_out,
           denominationJson,
@@ -142,11 +145,19 @@ export function registerSessionHandlers(ipcMain: IpcMain): void {
           id
         );
 
-        // Add to sync queue
+        // Add to sync queue with payload so sync engine can push closed_by
+        const syncPayload = JSON.stringify({
+          closing_balance: data.closing_balance,
+          cash_in: data.cash_in,
+          cash_out: data.cash_out,
+          closed_by: data.closed_by || null,
+          denomination_data: data.denomination_data || [],
+        });
+
         db.prepare(
-          `INSERT INTO _sync_queue (table_name, record_id, operation, status, created_at)
-           VALUES ('pos_sessions', ?, 'UPDATE', 'pending', ?)`
-        ).run(id, now);
+          `INSERT INTO _sync_queue (table_name, record_id, operation, payload, status, created_at)
+           VALUES ('pos_sessions', ?, 'UPDATE', ?, 'pending', ?)`
+        ).run(id, syncPayload, now);
 
         const updated = db
           .prepare(`SELECT * FROM pos_sessions WHERE id = ?`)
@@ -288,7 +299,7 @@ export function registerSessionHandlers(ipcMain: IpcMain): void {
       const db = getDb();
 
       const orgSettings = db
-        .prepare(`SELECT session_prefix FROM org_settings LIMIT 1`)
+        .prepare(`SELECT session_prefix FROM org_settings ORDER BY synced_at DESC NULLS LAST LIMIT 1`)
         .get() as { session_prefix?: string } | undefined;
 
       const prefix = orgSettings?.session_prefix || 'POS1-S';

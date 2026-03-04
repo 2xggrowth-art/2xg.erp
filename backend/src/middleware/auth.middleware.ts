@@ -68,6 +68,7 @@ export interface AuthenticatedRequest extends Request {
     userId: string;
     email: string;
     role: string;
+    organizationId?: string;
     buildlineRole?: string;
     isMobile?: boolean;
     employeeName?: string;
@@ -123,11 +124,19 @@ export const authMiddleware = async (
         });
       }
 
+      // Get organization_id
+      const { data: mobileOrgData } = await supabaseAdmin
+        .from('organizations')
+        .select('id')
+        .limit(1)
+        .single();
+
       // Attach mobile user info to request (map to compatible format)
       req.user = {
         userId: mobileUser.id,
         email: mobileUser.phone_number, // Use phone as identifier
         role: 'mobile_user',
+        organizationId: mobileOrgData?.id || undefined,
         isMobile: true,
         employeeName: mobileUser.employee_name,
         branch: mobileUser.branch
@@ -177,6 +186,14 @@ export const authMiddleware = async (
       });
     }
 
+    // Get organization_id
+    const { data: orgData } = await supabaseAdmin
+      .from('organizations')
+      .select('id')
+      .limit(1)
+      .single();
+    const organizationId = orgData?.id || undefined;
+
     // Attach user info to request
     // Test #98: Override token's role with live DB role to ensure role changes take effect immediately
     const liveRole = decoded.role; // default to token role
@@ -187,12 +204,12 @@ export const authMiddleware = async (
         .eq('id', decoded.userId)
         .single();
       if (roleCheck && roleCheck.role) {
-        req.user = { ...decoded, role: roleCheck.role, buildlineRole };
+        req.user = { ...decoded, role: roleCheck.role, buildlineRole, organizationId };
       } else {
-        req.user = { ...decoded, buildlineRole };
+        req.user = { ...decoded, buildlineRole, organizationId };
       }
     } catch {
-      req.user = { ...decoded, buildlineRole };
+      req.user = { ...decoded, buildlineRole, organizationId };
     }
     next();
   } catch (error: any) {

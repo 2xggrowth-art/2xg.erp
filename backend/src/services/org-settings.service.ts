@@ -25,6 +25,7 @@ export interface OrgSettings {
   bank_ifsc?: string;
   bank_branch?: string;
   bank_account_type?: string;
+  org_code?: string;
   invoice_prefix?: string;
   session_prefix?: string;
   default_notes?: string;

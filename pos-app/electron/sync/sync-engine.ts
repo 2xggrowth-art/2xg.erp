@@ -147,9 +147,9 @@ export async function pullFromCloud(): Promise<SyncResult> {
           address_line1, address_line2, city, state, state_code, postal_code,
           phone, email, website, gstin, pan, logo_url,
           bank_name, bank_account_name, bank_account_number, bank_ifsc,
-          invoice_prefix, session_prefix, default_register, place_of_supply, default_notes,
+          org_code, invoice_prefix, session_prefix, default_register, place_of_supply, default_notes,
           theme_color, synced_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
         ON CONFLICT(id) DO UPDATE SET
           company_name=excluded.company_name, tagline=excluded.tagline,
           address_line1=excluded.address_line1, address_line2=excluded.address_line2,
@@ -158,7 +158,8 @@ export async function pullFromCloud(): Promise<SyncResult> {
           website=excluded.website, gstin=excluded.gstin, pan=excluded.pan,
           logo_url=excluded.logo_url, bank_name=excluded.bank_name,
           bank_account_name=excluded.bank_account_name, bank_account_number=excluded.bank_account_number,
-          bank_ifsc=excluded.bank_ifsc, invoice_prefix=excluded.invoice_prefix,
+          bank_ifsc=excluded.bank_ifsc, org_code=excluded.org_code,
+          invoice_prefix=excluded.invoice_prefix,
           session_prefix=excluded.session_prefix, default_register=excluded.default_register,
           place_of_supply=excluded.place_of_supply, default_notes=excluded.default_notes,
           theme_color=excluded.theme_color, synced_at=datetime('now')
@@ -170,11 +171,18 @@ export async function pullFromCloud(): Promise<SyncResult> {
         settings.website || null, settings.gstin || null, settings.pan || null,
         settings.logo_url || null, settings.bank_name || null,
         settings.bank_account_name || null, settings.bank_account_number || null,
-        settings.bank_ifsc || null, settings.invoice_prefix || 'INV-',
+        settings.bank_ifsc || null, settings.org_code || null,
+        settings.invoice_prefix || 'INV-',
         settings.session_prefix || 'SE1-', settings.default_register || 'billing desk',
         settings.place_of_supply || null, settings.default_notes || null,
         settings.theme_color || '#2563EB'
       );
+
+      // Remove demo org settings — real cloud data takes over
+      if (settings.id !== 'org-default') {
+        db.prepare(`DELETE FROM org_settings WHERE id = 'org-default'`).run();
+      }
+
       pulled++;
     }
   } catch (error: any) {
@@ -185,20 +193,23 @@ export async function pullFromCloud(): Promise<SyncResult> {
   try {
     const response = await api.get('/pos-codes');
     const codes = response.data?.data || [];
-    if (Array.isArray(codes)) {
-      const upsert = db.prepare(`
-        INSERT INTO pos_codes (id, code, employee_name, is_active, synced_at)
-        VALUES (?, ?, ?, ?, datetime('now'))
-        ON CONFLICT(id) DO UPDATE SET
-          code=excluded.code, employee_name=excluded.employee_name,
-          is_active=excluded.is_active, synced_at=datetime('now')
-      `);
-      const runAll = db.transaction((rows: any[]) => {
+    if (Array.isArray(codes) && codes.length > 0) {
+      const deleteThenInsert = db.transaction((rows: any[]) => {
+        // Clear all synced POS codes, then re-insert from cloud
+        db.prepare(`DELETE FROM pos_codes WHERE synced_at IS NOT NULL`).run();
+        const insert = db.prepare(`
+          INSERT OR REPLACE INTO pos_codes (id, code, employee_name, is_active, synced_at)
+          VALUES (?, ?, ?, ?, datetime('now'))
+        `);
         for (const c of rows) {
-          upsert.run(c.id, c.code, c.employee_name, c.is_active ? 1 : 0);
+          insert.run(c.id, c.code, c.employee_name, c.is_active ? 1 : 0);
         }
       });
-      runAll(codes);
+      deleteThenInsert(codes);
+
+      // Remove demo POS code — real cloud codes take over
+      db.prepare(`DELETE FROM pos_codes WHERE id = 'poscode-demo' AND synced_at IS NULL`).run();
+
       pulled += codes.length;
     }
   } catch (error: any) {
@@ -273,6 +284,67 @@ export async function pushToCloud(): Promise<SyncResult> {
     ON CONFLICT(key) DO UPDATE SET value = datetime('now')`).run();
 
   return { success: errors.length === 0, pulled: 0, pushed, errors };
+}
+
+// ─── Device Registration ──────────────────────────────────────────────
+
+export async function registerDevice(): Promise<{ success: boolean; device_number: number | null; error?: string }> {
+  const api = getApiClient();
+  if (!api) {
+    return { success: false, device_number: null, error: 'No cloud connection configured' };
+  }
+
+  const db = getDb();
+
+  try {
+    // Get a device name (use hostname or a stored name)
+    const os = require('os');
+    const deviceName = db.prepare(`SELECT value FROM app_settings WHERE key = 'device_name'`).get() as { value: string } | undefined;
+    const name = deviceName?.value || `POS-${os.hostname()}`;
+
+    // Call the backend register-device endpoint
+    const response = await api.post('/registers/register-device', { name });
+    const register = response.data?.data;
+
+    if (!register || register.device_number == null) {
+      return { success: false, device_number: null, error: 'No device number returned' };
+    }
+
+    // Store device_number in app_settings
+    db.prepare(
+      `INSERT INTO app_settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value`
+    ).run('device_number', String(register.device_number));
+
+    // Store device name
+    db.prepare(
+      `INSERT INTO app_settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value`
+    ).run('device_name', name);
+
+    // Build device-specific prefixes using org_code from local org_settings
+    const orgSettings = db.prepare(
+      `SELECT org_code FROM org_settings ORDER BY synced_at DESC NULLS LAST LIMIT 1`
+    ).get() as { org_code: string | null } | undefined;
+
+    const orgCode = orgSettings?.org_code;
+    if (orgCode) {
+      const invoicePrefix = `${orgCode}-POS${register.device_number}-INV-`;
+      const sessionPrefix = `${orgCode}-POS${register.device_number}-S`;
+
+      // Update local org_settings with device-specific prefixes
+      db.prepare(
+        `UPDATE org_settings SET invoice_prefix = ?, session_prefix = ? WHERE id = (SELECT id FROM org_settings ORDER BY synced_at DESC NULLS LAST LIMIT 1)`
+      ).run(invoicePrefix, sessionPrefix);
+
+      console.log(`[Sync] Device registered: #${register.device_number}, invoice_prefix=${invoicePrefix}, session_prefix=${sessionPrefix}`);
+    } else {
+      console.log(`[Sync] Device registered: #${register.device_number} (no org_code set — prefixes unchanged)`);
+    }
+
+    return { success: true, device_number: register.device_number };
+  } catch (error: any) {
+    console.error('[Sync] Device registration failed:', error.message);
+    return { success: false, device_number: null, error: error.message };
+  }
 }
 
 // ─── Full Sync ─────────────────────────────────────────────────────────

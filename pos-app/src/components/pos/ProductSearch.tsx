@@ -80,7 +80,7 @@ const ProductSearch: React.FC<ProductSearchProps> = ({
                     <div className="font-bold text-gray-900 dark:text-gray-100 group-hover:text-blue-700 dark:group-hover:text-blue-400">
                       ₹{item.unit_price.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                     </div>
-                    <div className="text-xs text-gray-500 dark:text-gray-400">
+                    <div className="text-xs text-gray-500 dark:text-gray-400 flex items-center justify-end gap-1.5">
                       Stock:{' '}
                       <span
                         className={
@@ -91,6 +91,9 @@ const ProductSearch: React.FC<ProductSearchProps> = ({
                       >
                         {item.current_stock}
                       </span>
+                      {item.current_stock <= 0 && (
+                        <span className="px-1.5 py-0.5 bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-400 rounded text-[10px] font-bold uppercase">Out of Stock</span>
+                      )}
                     </div>
                   </div>
                 </div>

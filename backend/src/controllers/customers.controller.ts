@@ -59,6 +59,16 @@ export const updateCustomer = async (req: Request, res: Response) => {
   }
 };
 
+export const getCustomerOutstanding = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const outstanding = await customersService.getCustomerOutstanding(id);
+    res.json({ success: true, data: outstanding });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+};
+
 export const deleteCustomer = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;

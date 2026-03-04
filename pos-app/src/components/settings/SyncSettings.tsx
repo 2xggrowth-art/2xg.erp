@@ -71,19 +71,30 @@ const SyncSettings: React.FC = () => {
     setSaving(true);
     setSaved(false);
     try {
-      await Promise.all([
-        window.electronAPI.setAppSetting('cloud_url', cloudUrl.trim()),
-        window.electronAPI.setAppSetting('cloud_email', email.trim()),
-        window.electronAPI.setAppSetting('sync_interval', syncInterval),
-      ]);
-      if (password) {
-        await window.electronAPI.setAppSetting('cloud_password', password);
+      await window.electronAPI.setAppSetting('sync_interval', syncInterval);
+
+      // If email + password provided, re-authenticate to get a fresh JWT token
+      if (cloudUrl.trim() && email.trim() && password) {
+        const baseUrl = cloudUrl.trim().replace(/\/+$/, '');
+        const loginResult = await window.electronAPI.syncLogin(baseUrl, email.trim(), password);
+
+        if (loginResult.success) {
+          await window.electronAPI.setAppSetting('cloud_mode', 'online');
+          setSaved(true);
+          setPassword('');
+        } else {
+          setPullResult({ success: false, message: `Login failed: ${loginResult.error}` });
+        }
+      } else {
+        // Just save URL and email without re-auth
+        await window.electronAPI.setAppSetting('cloud_url', cloudUrl.trim());
+        await window.electronAPI.setAppSetting('cloud_email', email.trim());
+        if (cloudUrl.trim()) {
+          await window.electronAPI.setAppSetting('cloud_mode', 'online');
+        }
+        setSaved(true);
       }
-      if (cloudUrl.trim()) {
-        await window.electronAPI.setAppSetting('cloud_mode', 'online');
-      }
-      setSaved(true);
-      setTimeout(() => setSaved(false), 3000);
+      if (saved) setTimeout(() => setSaved(false), 3000);
     } catch (err) {
       console.error('Failed to save sync settings:', err);
     } finally {

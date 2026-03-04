@@ -7,6 +7,7 @@ const router = Router();
 // GET routes
 router.get('/', customersController.getAllCustomers);
 router.get('/summary', customersController.getCustomersSummary);
+router.get('/:id/outstanding', customersController.getCustomerOutstanding);
 router.get('/:id', customersController.getCustomerById);
 
 // POST routes

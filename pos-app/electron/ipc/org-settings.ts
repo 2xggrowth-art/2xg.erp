@@ -9,8 +9,9 @@ export function registerOrgSettingsHandlers(ipcMain: IpcMain): void {
     try {
       const db = getDb();
 
+      // Prefer synced (real) org settings over seed data
       const row = db
-        .prepare(`SELECT * FROM org_settings LIMIT 1`)
+        .prepare(`SELECT * FROM org_settings ORDER BY synced_at DESC NULLS LAST LIMIT 1`)
         .get();
 
       return { success: true, data: row || null };

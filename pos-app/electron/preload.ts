@@ -102,6 +102,15 @@ const electronAPI = {
   getSyncQueue: () =>
     ipcRenderer.invoke('sync:getQueue'),
 
+  syncLogin: (url: string, email: string, password: string) =>
+    ipcRenderer.invoke('sync:login', url, email, password),
+
+  syncFull: () =>
+    ipcRenderer.invoke('sync:full'),
+
+  registerDevice: () =>
+    ipcRenderer.invoke('sync:register-device'),
+
   // -----------------------------------------------------------------------
   // Printer
   // -----------------------------------------------------------------------

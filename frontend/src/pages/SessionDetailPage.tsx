@@ -4,6 +4,7 @@ import { ArrowLeft, Calendar, Clock, DollarSign, TrendingUp, TrendingDown, Print
 import { invoicesService } from '../services/invoices.service';
 import { posSessionsService } from '../services/pos-sessions.service';
 import { openCashDrawer } from '../utils/cashDrawer';
+import { useOrgSettings } from '../hooks/useOrgSettings';
 
 interface InvoiceItem {
   id: string;
@@ -44,6 +45,7 @@ interface PosSession {
   session_number: string;
   register: string;
   opened_by: string;
+  closed_by?: string;
   opened_at: string;
   closed_at?: string;
   status: 'In-Progress' | 'Closed';
@@ -73,6 +75,7 @@ type TabType = 'overview' | 'invoices' | 'cash-activity';
 const SessionDetailPage = () => {
   const { sessionId } = useParams<{ sessionId: string }>();
   const navigate = useNavigate();
+  const { orgSettings } = useOrgSettings();
   const [searchParams, setSearchParams] = useSearchParams();
   const [activeTab, setActiveTab] = useState<TabType>('overview');
   const [session, setSession] = useState<PosSession | null>(null);
@@ -176,6 +179,7 @@ const SessionDetailPage = () => {
         session_number: dbSession.session_number,
         register: dbSession.register,
         opened_by: dbSession.opened_by,
+        closed_by: dbSession.closed_by,
         opened_at: dbSession.opened_at,
         closed_at: dbSession.closed_at,
         status: dbSession.status,
@@ -340,7 +344,7 @@ const SessionDetailPage = () => {
       </head>
       <body>
         <div class="header">
-          <div class="company-name">BHARATH CYCLE HUB</div>
+          <div class="company-name">${orgSettings?.company_name || ''}</div>
           <div class="report-title">Session Report</div>
         </div>
 
@@ -354,7 +358,7 @@ const SessionDetailPage = () => {
             <span class="value">: ${session.register}</span>
           </div>
           <div class="row">
-            <span class="label">User</span>
+            <span class="label">Opened by</span>
             <span class="value">: ${session.opened_by}</span>
           </div>
           <div class="row">
@@ -362,6 +366,10 @@ const SessionDetailPage = () => {
             <span class="value">: ${formatDateTime(session.opened_at)}</span>
           </div>
           ${session.closed_at ? `
+          <div class="row">
+            <span class="label">Closed by</span>
+            <span class="value">: ${session.closed_by || session.opened_by}</span>
+          </div>
           <div class="row">
             <span class="label">Closed on</span>
             <span class="value">: ${formatDateTime(session.closed_at)}</span>
@@ -559,7 +567,7 @@ const SessionDetailPage = () => {
                   <span>Closed on</span>
                 </div>
                 <p className="text-sm font-semibold text-gray-800">
-                  {formatDateTime(session.closed_at)} by {session.opened_by}
+                  {formatDateTime(session.closed_at)} by {session.closed_by || session.opened_by}
                 </p>
               </div>
             )}
@@ -792,7 +800,7 @@ const SessionDetailPage = () => {
                   <div>
                     <div className="text-sm text-gray-600 mb-2">Closed on:</div>
                     <div className="text-sm font-semibold text-gray-800">
-                      {formatDateTime(session.closed_at)} by {session.opened_by}
+                      {formatDateTime(session.closed_at)} by {session.closed_by || session.opened_by}
                     </div>
                   </div>
                 )}

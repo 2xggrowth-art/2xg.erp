@@ -1,7 +1,9 @@
 import { supabaseAdmin as supabase } from '../config/supabase';
 import { BatchesService } from './batches.service';
+import { OrgSettingsService } from './org-settings.service';
 
 const batchesService = new BatchesService();
+const orgSettingsService = new OrgSettingsService();
 
 export interface BinAllocation {
   bin_location_id: string;
@@ -77,35 +79,45 @@ export class InvoicesService {
     return uuidRegex.test(uuid);
   }
   /**
-   * Generate a new invoice number
+   * Generate a new invoice number using org_settings.invoice_prefix
    */
-  async generateInvoiceNumber(): Promise<string> {
+  async generateInvoiceNumber(orgId?: string): Promise<string> {
     try {
-      // Get the latest invoice number
-      const { data: latestInvoice, error } = await supabase
+      // Get invoice prefix from org settings (fallback to 'INV-')
+      let prefix = 'INV-';
+      const settings = await orgSettingsService.getOrgSettingsWithFallback(orgId);
+      if (settings?.invoice_prefix) {
+        prefix = settings.invoice_prefix;
+      }
+
+      // Fetch recent invoices to find the highest number with this prefix
+      const { data, error } = await supabase
         .from('invoices')
         .select('invoice_number')
+        .not('invoice_number', 'is', null)
         .order('created_at', { ascending: false })
-        .limit(1)
-        .single();
+        .limit(100);
 
-      if (error && error.code !== 'PGRST116') {
-        // PGRST116 means no rows found, which is okay
-        throw error;
+      if (error) throw error;
+
+      if (!data || data.length === 0) {
+        return `${prefix}0001`;
       }
 
-      if (!latestInvoice) {
-        return 'INV-0001';
+      // Find the highest invoice number matching prefix+NNNN format
+      const escapedPrefix = prefix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const prefixRegex = new RegExp(`^${escapedPrefix}(\\d+)$`);
+      let maxNum = 0;
+      for (const inv of data) {
+        const match = inv.invoice_number?.match(prefixRegex);
+        if (match) {
+          const num = parseInt(match[1]);
+          if (num > maxNum) maxNum = num;
+        }
       }
 
-      // Extract number from invoice_number (e.g., "INV-0001" -> 1)
-      const match = latestInvoice.invoice_number.match(/INV-(\d+)/);
-      if (match) {
-        const nextNumber = parseInt(match[1]) + 1;
-        return `INV-${nextNumber.toString().padStart(4, '0')}`;
-      }
-
-      return 'INV-0001';
+      const nextNum = maxNum + 1;
+      return `${prefix}${nextNum.toString().padStart(4, '0')}`;
     } catch (error) {
       console.error('Error generating invoice number:', error);
       throw error;
@@ -115,13 +127,13 @@ export class InvoicesService {
   /**
    * Create a new invoice with items
    */
-  async createInvoice(data: CreateInvoiceData) {
+  async createInvoice(data: CreateInvoiceData, organizationId?: string) {
     try {
       console.log('InvoicesService: Creating invoice with data:', JSON.stringify(data, null, 2));
 
       // Generate invoice number if not provided
       if (!data.invoice_number) {
-        data.invoice_number = await this.generateInvoiceNumber();
+        data.invoice_number = await this.generateInvoiceNumber(organizationId);
       }
 
       // Validate required fields
@@ -258,9 +270,16 @@ export class InvoicesService {
       // Extract items from the data
       const { items, ...invoiceData } = data;
 
-      // Get or create default organization_id
-      // For now, we'll use a default UUID. In production, this should come from the authenticated user's organization
-      const defaultOrgId = '00000000-0000-0000-0000-000000000001';
+      // Get organization_id from parameter or look up
+      let defaultOrgId = organizationId;
+      if (!defaultOrgId) {
+        const { data: org } = await supabase
+          .from('organizations')
+          .select('id')
+          .limit(1)
+          .single();
+        defaultOrgId = org?.id || '00000000-0000-0000-0000-000000000001';
+      }
 
       // Validate and clean UUID fields - only use valid UUIDs, otherwise set to null
       const customerId = this.isValidUUID(invoiceData.customer_id) ? invoiceData.customer_id : null;
@@ -402,11 +421,11 @@ export class InvoicesService {
           }
         }
 
-        // Update stock for each item
+        // Update stock atomically for each item
         for (const item of items) {
           if (item.item_id && this.isValidUUID(item.item_id)) {
             try {
-              // Get current stock
+              const quantity = Number(item.quantity) || 0;
               const { data: currentItem, error: fetchError } = await supabase
                 .from('items')
                 .select('current_stock')
@@ -419,18 +438,34 @@ export class InvoicesService {
               }
 
               if (currentItem) {
-                const quantity = Number(item.quantity) || 0;
                 const currentStock = Number(currentItem.current_stock) || 0;
                 const newStock = currentStock - quantity;
 
-                // Update stock
-                const { error: updateError } = await supabase
+                // Use .eq on both id AND current_stock to ensure atomic update
+                const { data: updated, error: updateError } = await supabase
                   .from('items')
                   .update({ current_stock: newStock })
-                  .eq('id', item.item_id);
+                  .eq('id', item.item_id)
+                  .eq('current_stock', currentStock)
+                  .select('current_stock')
+                  .single();
 
                 if (updateError) {
-                  console.error(`InvoicesService: Error updating stock for item ${item.item_id}:`, updateError);
+                  // Race condition detected - retry once
+                  console.warn(`InvoicesService: Stock race condition for item ${item.item_id}, retrying...`);
+                  const { data: retryItem } = await supabase
+                    .from('items')
+                    .select('current_stock')
+                    .eq('id', item.item_id)
+                    .single();
+
+                  if (retryItem) {
+                    const retryStock = Number(retryItem.current_stock) || 0;
+                    await supabase
+                      .from('items')
+                      .update({ current_stock: retryStock - quantity })
+                      .eq('id', item.item_id);
+                  }
                 } else {
                   console.log(`InvoicesService: Updated stock for item ${item.item_id}: ${currentStock} -> ${newStock}`);
                 }

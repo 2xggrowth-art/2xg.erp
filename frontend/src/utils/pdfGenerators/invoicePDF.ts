@@ -75,25 +75,25 @@ interface CompanyInfo {
 }
 
 // Company information
-const getCompanyInfo = (): CompanyInfo => ({
-  name: 'BHARAT CYCLE HUB',
-  tagline: 'Defined By Service & Expertise',
-  address: 'Main Road, Chikka Bommasandra, Yelahanka',
-  addressLine2: 'Bengaluru, Karnataka 560065',
-  city: 'bangalore',
-  state: 'Karnataka',
-  postalCode: '560065',
-  country: 'India',
-  phone: '9380097119',
-  email: 'inventory.bharathcyclehub@gmail.com',
-  website: 'Bharathcyclehub.com',
-  gstin: '29AMVPI3949R1ZQ',
-  bankName: 'HDFC',
-  accountHolder: 'BHARAT CYCLE HUB',
-  accountNumber: '50200078092592',
-  ifscCode: 'HDFC0000371',
-  branchName: 'YELAHANKA',
-  accountType: 'CURRENT'
+const getCompanyInfo = (orgSettings?: any): CompanyInfo => ({
+  name: orgSettings?.company_name || '',
+  tagline: orgSettings?.tagline || '',
+  address: orgSettings?.address_line1 || '',
+  addressLine2: orgSettings?.address_line2 || '',
+  city: orgSettings?.city || '',
+  state: orgSettings?.state || '',
+  postalCode: orgSettings?.postal_code || '',
+  country: orgSettings?.country || 'India',
+  phone: orgSettings?.phone || '',
+  email: orgSettings?.email || '',
+  website: orgSettings?.website || '',
+  gstin: orgSettings?.gstin || '',
+  bankName: orgSettings?.bank_name || '',
+  accountHolder: orgSettings?.bank_account_name || '',
+  accountNumber: orgSettings?.bank_account_number || '',
+  ifscCode: orgSettings?.bank_ifsc || '',
+  branchName: orgSettings?.bank_branch || '',
+  accountType: orgSettings?.bank_account_type || ''
 });
 
 const formatDate = (dateString: string): string => {
@@ -120,9 +120,9 @@ const LW = 0.3;      // line width for borders
 /**
  * Generate a professional GST Tax Invoice PDF with proper bordered sections
  */
-export const generateInvoicePDF = (invoice: InvoicePDFData): jsPDF => {
+export const generateInvoicePDF = (invoice: InvoicePDFData, orgSettings?: any): jsPDF => {
   const doc = new jsPDF();
-  const company = getCompanyInfo();
+  const company = getCompanyInfo(orgSettings);
   const PW = doc.internal.pageSize.width;   // page width
   const CW = PW - ML - MR;                 // content width
   const RE = PW - MR;                      // right edge
@@ -221,7 +221,7 @@ export const generateInvoicePDF = (invoice: InvoicePDFData): jsPDF => {
   doc.setFont('helvetica', 'bold');
   doc.text('Place Of Supply', rLabelX, dy);
   doc.setFont('helvetica', 'normal');
-  doc.text(`: ${invoice.place_of_supply || 'Karnataka (29)'}`, rValX, dy);
+  doc.text(`: ${invoice.place_of_supply || orgSettings?.place_of_supply || 'Karnataka (29)'}`, rValX, dy);
   dy += rowH;
 
   // Row 2: Invoice Date | Sales person
@@ -539,7 +539,7 @@ export const generateInvoicePDF = (invoice: InvoicePDFData): jsPDF => {
   ly += wordsLines.length * 4 + 3;
 
   // Notes
-  const notesText = invoice.notes || 'PLEASE CHECKOUT BHARATHCYCLEHUB.COM FOR MORE DETAILS.';
+  const notesText = invoice.notes || orgSettings?.default_notes || '';
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(9);
   doc.text('Notes', lLabelX, ly);
@@ -623,8 +623,8 @@ export const generateInvoicePDF = (invoice: InvoicePDFData): jsPDF => {
 /**
  * Download invoice as PDF file
  */
-export const downloadInvoicePDF = (invoice: InvoicePDFData): void => {
-  const doc = generateInvoicePDF(invoice);
+export const downloadInvoicePDF = (invoice: InvoicePDFData, orgSettings?: any): void => {
+  const doc = generateInvoicePDF(invoice, orgSettings);
   const fileName = `Invoice_${invoice.invoice_number.replace(/[\/\\]/g, '_')}.pdf`;
   doc.save(fileName);
 };
@@ -632,8 +632,8 @@ export const downloadInvoicePDF = (invoice: InvoicePDFData): void => {
 /**
  * Open invoice PDF in new browser tab
  */
-export const openInvoicePDFInNewTab = (invoice: InvoicePDFData): void => {
-  const doc = generateInvoicePDF(invoice);
+export const openInvoicePDFInNewTab = (invoice: InvoicePDFData, orgSettings?: any): void => {
+  const doc = generateInvoicePDF(invoice, orgSettings);
   const pdfBlob = doc.output('blob');
   const pdfUrl = URL.createObjectURL(pdfBlob);
   window.open(pdfUrl, '_blank');
@@ -643,8 +643,8 @@ export const openInvoicePDFInNewTab = (invoice: InvoicePDFData): void => {
 /**
  * Print invoice PDF - opens in new tab for reliable printing
  */
-export const printInvoicePDF = (invoice: InvoicePDFData): void => {
-  const doc = generateInvoicePDF(invoice);
+export const printInvoicePDF = (invoice: InvoicePDFData, orgSettings?: any): void => {
+  const doc = generateInvoicePDF(invoice, orgSettings);
   const pdfBlob = doc.output('blob');
   const pdfUrl = URL.createObjectURL(pdfBlob);
   const printWindow = window.open(pdfUrl, '_blank');

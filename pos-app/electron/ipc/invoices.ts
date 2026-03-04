@@ -12,6 +12,8 @@ interface InvoiceItemInput {
   hsn_code?: string;
   bin_location_id?: string;
   bin_allocations?: Array<{ bin_location_id: string; quantity: number }>;
+  serial_number?: string;
+  note?: string;
 }
 
 interface InvoiceInput {
@@ -54,7 +56,7 @@ export function registerInvoiceHandlers(ipcMain: IpcMain): void {
       // 1. Generate invoice number
       // -----------------------------------------------------------------------
       const orgSettings = db
-        .prepare(`SELECT invoice_prefix FROM org_settings LIMIT 1`)
+        .prepare(`SELECT invoice_prefix FROM org_settings ORDER BY synced_at DESC NULLS LAST LIMIT 1`)
         .get() as { invoice_prefix?: string } | undefined;
 
       const prefix = orgSettings?.invoice_prefix || 'POS1-INV';

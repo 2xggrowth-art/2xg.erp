@@ -1,4 +1,7 @@
 import { supabaseAdmin as supabase } from '../config/supabase';
+import { OrgSettingsService } from './org-settings.service';
+
+const orgSettingsService = new OrgSettingsService();
 
 export interface CreateSessionData {
   register: string;
@@ -16,6 +19,7 @@ export interface CloseSessionData {
   closing_balance: number;
   cash_in: number;
   cash_out: number;
+  closed_by?: string;
   denomination_data?: DenominationEntry[];
 }
 
@@ -24,6 +28,7 @@ export interface PosSession {
   session_number: string;
   register: string;
   opened_by: string;
+  closed_by?: string;
   opened_at: string;
   closed_at?: string;
   status: 'In-Progress' | 'Closed';
@@ -39,8 +44,17 @@ export class PosSessionsService {
   /**
    * Generate a new session number
    */
-  async generateSessionNumber(): Promise<string> {
+  async generateSessionNumber(orgId?: string): Promise<string> {
     try {
+      // Get session prefix from org settings
+      let prefix = 'SE1-';
+      if (orgId) {
+        const settings = await orgSettingsService.getOrgSettings(orgId);
+        if (settings?.session_prefix) {
+          prefix = settings.session_prefix;
+        }
+      }
+
       const { data, error } = await supabase
         .from('pos_sessions')
         .select('session_number')
@@ -51,13 +65,15 @@ export class PosSessionsService {
       if (error) throw error;
 
       if (!data || data.length === 0) {
-        return 'SE1-001';
+        return `${prefix}001`;
       }
 
-      // Find the highest session number matching SE1-XXX format
+      // Find the highest session number matching prefix+XXX format
+      const escapedPrefix = prefix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const prefixRegex = new RegExp(`^${escapedPrefix}(\\d+)$`);
       let maxNum = 0;
       for (const s of data) {
-        const match = s.session_number?.match(/^SE1-(\d+)$/);
+        const match = s.session_number?.match(prefixRegex);
         if (match) {
           const num = parseInt(match[1]);
           if (num > maxNum) maxNum = num;
@@ -65,7 +81,7 @@ export class PosSessionsService {
       }
 
       const nextNum = maxNum + 1;
-      return `SE1-${nextNum.toString().padStart(3, '0')}`;
+      return `${prefix}${nextNum.toString().padStart(3, '0')}`;
     } catch (error) {
       console.error('Error generating session number:', error);
       throw error;
@@ -102,7 +118,7 @@ export class PosSessionsService {
   /**
    * Start a new session
    */
-  async startSession(data: CreateSessionData): Promise<PosSession> {
+  async startSession(data: CreateSessionData, orgId?: string): Promise<PosSession> {
     try {
       // Check if there's already an active session
       const activeSession = await this.getActiveSession();
@@ -110,19 +126,23 @@ export class PosSessionsService {
         throw new Error('An active session already exists. Please close it before starting a new one.');
       }
 
-      const sessionNumber = await this.generateSessionNumber();
+      const sessionNumber = await this.generateSessionNumber(orgId);
 
-      // Get organization_id
-      const { data: org } = await supabase
-        .from('organizations')
-        .select('id')
-        .limit(1)
-        .single();
+      // Get org id - prefer passed orgId, then look up
+      let organizationId = orgId;
+      if (!organizationId) {
+        const { data: org } = await supabase
+          .from('organizations')
+          .select('id')
+          .limit(1)
+          .single();
+        organizationId = org?.id || '00000000-0000-0000-0000-000000000000';
+      }
 
       const { data: session, error } = await supabase
         .from('pos_sessions')
         .insert({
-          organization_id: org?.id || '00000000-0000-0000-0000-000000000000',
+          organization_id: organizationId,
           session_number: sessionNumber,
           register: data.register,
           opened_by: data.opened_by,
@@ -158,6 +178,10 @@ export class PosSessionsService {
         status: 'Closed',
         closing_balance: data.closing_balance,
       };
+
+      if (data.closed_by) {
+        updatePayload.closed_by = data.closed_by;
+      }
 
       if (data.denomination_data && data.denomination_data.length > 0) {
         updatePayload.denomination_data = data.denomination_data;
@@ -259,6 +283,72 @@ export class PosSessionsService {
       return data;
     } catch (error) {
       console.error('Error fetching session:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get session summary — sales breakdown by payment mode
+   */
+  async getSessionSummary(sessionId: string): Promise<any> {
+    try {
+      // Fetch all invoices for this session
+      const { data: invoices, error } = await supabase
+        .from('invoices')
+        .select('id, total_amount, amount_paid, balance_due, status')
+        .eq('pos_session_id', sessionId);
+
+      if (error) throw error;
+
+      const invoiceList = invoices || [];
+
+      let cashSales = 0;
+      let cardSales = 0;
+      let upiSales = 0;
+      let creditSales = 0;
+      let totalSales = 0;
+
+      for (const inv of invoiceList) {
+        const amount = Number(inv.total_amount) || 0;
+        totalSales += amount;
+
+        // Categorize by status/payment mode
+        const status = (inv.status || '').toLowerCase();
+        if (status === 'credit' || (inv.balance_due && Number(inv.balance_due) > 0 && status !== 'paid')) {
+          creditSales += amount;
+        } else if (status === 'card') {
+          cardSales += amount;
+        } else if (status === 'upi') {
+          upiSales += amount;
+        } else {
+          // Default to cash for paid invoices
+          cashSales += amount;
+        }
+      }
+
+      // Get the session for opening balance
+      const { data: session } = await supabase
+        .from('pos_sessions')
+        .select('opening_balance, cash_in, cash_out')
+        .eq('id', sessionId)
+        .single();
+
+      const openingBalance = Number(session?.opening_balance) || 0;
+      const cashIn = Number(session?.cash_in) || 0;
+      const cashOut = Number(session?.cash_out) || 0;
+      const expectedCash = openingBalance + cashSales + cashIn - cashOut;
+
+      return {
+        cashSales: Math.round(cashSales * 100) / 100,
+        cardSales: Math.round(cardSales * 100) / 100,
+        upiSales: Math.round(upiSales * 100) / 100,
+        creditSales: Math.round(creditSales * 100) / 100,
+        totalSales: Math.round(totalSales * 100) / 100,
+        expectedCash: Math.round(expectedCash * 100) / 100,
+        invoiceCount: invoiceList.length,
+      };
+    } catch (error) {
+      console.error('Error getting session summary:', error);
       throw error;
     }
   }

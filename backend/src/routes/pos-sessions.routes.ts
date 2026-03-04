@@ -14,6 +14,9 @@ router.get('/active', posSessionsController.getActiveSession);
 // Get all sessions
 router.get('/', posSessionsController.getAllSessions);
 
+// Get session summary (sales breakdown by payment mode)
+router.get('/:id/summary', posSessionsController.getSessionSummary);
+
 // Get session by ID
 router.get('/:id', posSessionsController.getSessionById);
 

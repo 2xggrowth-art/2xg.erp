@@ -148,6 +148,20 @@ const SessionTab: React.FC<SessionTabProps> = ({ sessionId, activeSession, forma
                 hour: '2-digit',
                 minute: '2-digit',
               })}
+              {activeSession.opened_by && ` by ${activeSession.opened_by}`}
+            </span>
+          )}
+          {activeSession?.status === 'Closed' && activeSession?.closed_at && (
+            <span>
+              {' '}
+              | Closed{' '}
+              {new Date(activeSession.closed_at).toLocaleString('en-IN', {
+                day: '2-digit',
+                month: 'short',
+                hour: '2-digit',
+                minute: '2-digit',
+              })}
+              {activeSession.closed_by && ` by ${activeSession.closed_by}`}
             </span>
           )}
         </p>
